@@ -15,6 +15,22 @@ import { getAllReports } from '../data/report-registry.ts';
 export type UserRole = 'ADMIN' | 'MAKER' | 'CHECKER';
 export type UserStatus = 'ACTIVE' | 'PENDING_APPROVAL' | 'DISABLED';
 
+export interface BiometricCredential {
+  type: 'FINGERPRINT' | 'FACE';
+  credentialId: string;
+  enrolledAt: string;
+  deviceLabel: string;
+  faceHash?: string;
+  publicKey?: string;
+}
+
+export interface OtpRecord {
+  code: string;
+  email: string;
+  purpose: 'REGISTRATION' | 'PASSWORD_RESET';
+  expiresAt: number;
+}
+
 export interface UserAccount {
   id: string;
   name: string;
@@ -27,6 +43,7 @@ export interface UserAccount {
   employeeId: string;
   phoneNumber?: string;
   specialAccessGrants: SpecialAccessGrant[];
+  biometricCredentials?: BiometricCredential[];
   createdAt: string;
   approvedAt?: string;
   approvedBy?: string;
@@ -35,6 +52,7 @@ export interface UserAccount {
 
 class UserServiceClass {
   private users: Map<string, UserAccount> = new Map();
+  private otps: Map<string, OtpRecord> = new Map();
 
   constructor() {
     this.seedUsers();
@@ -323,6 +341,221 @@ class UserServiceClass {
       user: safe as UserAccount,
       redirectTab,
       message: 'Login successful.',
+    };
+  }
+
+  /**
+   * Generates a 6-digit OTP code for registration or password reset
+   */
+  public generateOtp(
+    email: string,
+    purpose: 'REGISTRATION' | 'PASSWORD_RESET'
+  ): { success: boolean; code: string; expiresAt: number; message: string; demoOtp: string } {
+    const normEmail = email.trim().toLowerCase();
+    // Generate a 6-digit verification code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    this.otps.set(`${normEmail}_${purpose}`, {
+      code,
+      email: normEmail,
+      purpose,
+      expiresAt,
+    });
+
+    return {
+      success: true,
+      code,
+      demoOtp: code,
+      expiresAt,
+      message: `Verification code sent to ${email}. (Demo Code: ${code} or universal 123456)`,
+    };
+  }
+
+  /**
+   * Validates an OTP code for a given email and purpose.
+   * Universal test code '123456' is always accepted to support environments without SMS/SMTP gateway.
+   */
+  public verifyOtp(
+    email: string,
+    code: string,
+    purpose: 'REGISTRATION' | 'PASSWORD_RESET'
+  ): { success: boolean; message: string } {
+    const normEmail = email.trim().toLowerCase();
+    const cleanCode = code.trim();
+
+    // Universal bypass for demo/testing without real OTP service provider
+    if (cleanCode === '123456') {
+      return { success: true, message: 'OTP verified successfully.' };
+    }
+
+    const record = this.otps.get(`${normEmail}_${purpose}`);
+    if (!record) {
+      return { success: false, message: 'No verification code found. Please request a new code.' };
+    }
+
+    if (Date.now() > record.expiresAt) {
+      this.otps.delete(`${normEmail}_${purpose}`);
+      return { success: false, message: 'Verification code has expired. Please request a new code.' };
+    }
+
+    if (record.code !== cleanCode) {
+      return { success: false, message: 'Invalid verification code. Enter the code shown or 123456.' };
+    }
+
+    // Single-use code consumed
+    this.otps.delete(`${normEmail}_${purpose}`);
+    return { success: true, message: 'OTP verified successfully.' };
+  }
+
+  /**
+   * End-to-end Password Reset
+   */
+  public resetPassword(
+    email: string,
+    otpCode: string,
+    newPassword: string
+  ): { success: boolean; message: string; user?: UserAccount } {
+    const normEmail = email.trim().toLowerCase();
+    const user = this.getByEmail(normEmail);
+    if (!user) {
+      return { success: false, message: 'User account with this email not found.' };
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, message: 'New password must be at least 6 characters.' };
+    }
+
+    const otpValidation = this.verifyOtp(normEmail, otpCode, 'PASSWORD_RESET');
+    if (!otpValidation.success) {
+      return { success: false, message: otpValidation.message };
+    }
+
+    user.password = newPassword;
+    const { password: pw, ...safe } = user;
+    return {
+      success: true,
+      message: 'Password has been successfully updated. You can now sign in with your new password.',
+      user: safe as UserAccount,
+    };
+  }
+
+  /**
+   * Registers a biometric credential (fingerprint or face) for a user
+   */
+  public registerBiometric(
+    email: string,
+    credential: BiometricCredential
+  ): { success: boolean; user?: UserAccount; message?: string } {
+    const user = this.getByEmail(email);
+    if (!user) {
+      return { success: false, message: 'User not found for biometric enrollment.' };
+    }
+
+    if (!user.biometricCredentials) {
+      user.biometricCredentials = [];
+    }
+
+    // Remove existing credential of same type if re-enrolling
+    user.biometricCredentials = user.biometricCredentials.filter(
+      (c) => c.type !== credential.type
+    );
+    user.biometricCredentials.push(credential);
+
+    const { password: pw, ...safe } = user;
+    return {
+      success: true,
+      user: safe as UserAccount,
+      message: `${credential.type === 'FINGERPRINT' ? 'Fingerprint' : 'Face recognition'} enrolled successfully.`,
+    };
+  }
+
+  /**
+   * Verifies biometric credentials and generates logged-in user session
+   */
+  public verifyBiometric(
+    email: string,
+    type: 'FINGERPRINT' | 'FACE',
+    credentialId?: string,
+    faceHash?: string
+  ): { success: boolean; user?: UserAccount; message?: string; redirectTab?: string } {
+    const user = this.getByEmail(email);
+    if (!user) {
+      return { success: false, message: 'Account not found for biometric login.' };
+    }
+
+    if (user.status === 'PENDING_APPROVAL') {
+      return {
+        success: false,
+        message: 'Account pending authorization by Compliance Administrator.',
+      };
+    }
+
+    if (user.status === 'DISABLED') {
+      return {
+        success: false,
+        message: 'Account disabled. Contact Compliance Administrator.',
+      };
+    }
+
+    const creds = user.biometricCredentials || [];
+    const matched = creds.find((c) => c.type === type);
+
+    if (!matched) {
+      return {
+        success: false,
+        message: `No ${type === 'FINGERPRINT' ? 'fingerprint passkey' : 'face recognition profile'} registered for ${user.email}. Please register your biometric passkey first.`,
+      };
+    }
+
+    if (credentialId && matched.credentialId && matched.credentialId !== credentialId) {
+      // If credential ID was sent, verify it matches
+      const specificMatch = creds.find((c) => c.credentialId === credentialId);
+      if (!specificMatch) {
+        return {
+          success: false,
+          message: 'Biometric passkey identifier does not match enrolled credential.',
+        };
+      }
+    }
+
+    // Verify faceHash consistency if both enrolled and challenge hashes are present
+    if (type === 'FACE' && matched.faceHash && faceHash) {
+      if (matched.faceHash !== faceHash) {
+        return {
+          success: false,
+          message: 'Facial signature does not match enrolled biometric template. Please look directly at the camera.',
+        };
+      }
+    }
+
+    // Update last login
+    user.lastLoginAt = new Date().toISOString();
+
+    let redirectTab = 'MAKER_WORKSPACE';
+    if (user.role === 'ADMIN') redirectTab = 'ADMIN_DASHBOARD';
+    else if (user.role === 'CHECKER') redirectTab = 'CHECKER_INBOX';
+
+    const { password: pw, ...safe } = user;
+    return {
+      success: true,
+      user: safe as UserAccount,
+      redirectTab,
+      message: `Biometric authentication verified (${type}).`,
+    };
+  }
+
+  public getBiometricStatus(email: string): {
+    hasFingerprint: boolean;
+    hasFace: boolean;
+    credentials: BiometricCredential[];
+  } {
+    const user = this.getByEmail(email);
+    const creds = user?.biometricCredentials || [];
+    return {
+      hasFingerprint: creds.some((c) => c.type === 'FINGERPRINT'),
+      hasFace: creds.some((c) => c.type === 'FACE'),
+      credentials: creds,
     };
   }
 

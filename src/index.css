@@ -154,3 +154,49 @@ textarea {
 .dark ::-webkit-scrollbar-thumb:hover {
   background: rgba(136, 146, 211, 0.6);
 }
+
+/* Biometric Hardware Animations & Radar Sweep */
+@keyframes bio-radar-ping {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0.35;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes bio-shimmer-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes bio-aperture-focus {
+  0%, 100% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(45deg) scale(1.08);
+  }
+}
+
+.animate-bio-radar {
+  animation: bio-radar-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.animate-bio-shimmer {
+  animation: bio-shimmer-sweep 2s ease-in-out infinite;
+}
+
+.animate-bio-aperture {
+  animation: bio-aperture-focus 3s ease-in-out infinite;
+}

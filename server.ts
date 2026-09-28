@@ -241,6 +241,113 @@ app.post('/api/auth/register', (req, res) => {
   }
 });
 
+// Send OTP code (for Registration or Password Reset)
+app.post('/api/auth/otp/send', (req, res) => {
+  const { email, purpose } = req.body;
+  if (!email) {
+    res.status(400).json({ success: false, message: 'Email address is required.' });
+    return;
+  }
+  const result = userService.generateOtp(email, purpose || 'REGISTRATION');
+  res.json(result);
+});
+
+// Verify OTP code
+app.post('/api/auth/otp/verify', (req, res) => {
+  const { email, code, purpose } = req.body;
+  if (!email || !code) {
+    res.status(400).json({ success: false, message: 'Email and verification code are required.' });
+    return;
+  }
+  const result = userService.verifyOtp(email, code, purpose || 'REGISTRATION');
+  if (result.success) {
+    res.json(result);
+  } else {
+    res.status(400).json(result);
+  }
+});
+
+// Reset Password
+app.post('/api/auth/reset-password', (req, res) => {
+  const { email, otpCode, newPassword } = req.body;
+  if (!email || !otpCode || !newPassword) {
+    res.status(400).json({ success: false, message: 'Email, OTP code, and new password are required.' });
+    return;
+  }
+  const result = userService.resetPassword(email, otpCode, newPassword);
+  if (result.success && result.user) {
+    auditService.log({
+      actorId: result.user.id,
+      actorName: result.user.name,
+      actorRole: result.user.role,
+      action: 'PASSWORD_RESET',
+      entityType: 'AUTH',
+      entityId: result.user.id,
+      correlationId: `corr_pwd_${Date.now()}`,
+      details: `Password reset successfully via OTP verification for ${result.user.email}`,
+    });
+    res.json(result);
+  } else {
+    res.status(400).json(result);
+  }
+});
+
+// Register biometric credentials on server
+app.post('/api/auth/biometrics/register', (req, res) => {
+  const { email, credential } = req.body;
+  if (!email || !credential || !credential.type) {
+    res.status(400).json({ success: false, message: 'Email and valid credential payload required.' });
+    return;
+  }
+  const result = userService.registerBiometric(email, credential);
+  if (result.success && result.user) {
+    auditService.log({
+      actorId: result.user.id,
+      actorName: result.user.name,
+      actorRole: result.user.role,
+      action: 'BIOMETRIC_ENROLLED',
+      entityType: 'USER',
+      entityId: result.user.id,
+      correlationId: `corr_bio_${Date.now()}`,
+      details: `Enrolled ${credential.type} biometric credential for ${result.user.email}`,
+    });
+    res.json(result);
+  } else {
+    res.status(400).json(result);
+  }
+});
+
+// Verify biometric login on server
+app.post('/api/auth/biometrics/verify', (req, res) => {
+  const { email, type, credentialId, faceHash } = req.body;
+  if (!email || !type) {
+    res.status(400).json({ success: false, message: 'Email and biometric type required.' });
+    return;
+  }
+  const result = userService.verifyBiometric(email, type, credentialId, faceHash);
+  if (result.success && result.user) {
+    auditService.log({
+      actorId: result.user.id,
+      actorName: result.user.name,
+      actorRole: result.user.role,
+      action: 'BIOMETRIC_LOGIN',
+      entityType: 'AUTH',
+      entityId: result.user.id,
+      correlationId: `corr_bio_login_${Date.now()}`,
+      details: `Logged in via ${type} biometric verification (${result.user.role})`,
+    });
+    res.json(result);
+  } else {
+    res.status(401).json(result);
+  }
+});
+
+// Get enrolled biometrics status for email
+app.get('/api/auth/biometrics/status/:email', (req, res) => {
+  const status = userService.getBiometricStatus(req.params.email);
+  res.json(status);
+});
+
 app.get('/api/users', (req, res) => {
   res.json(userService.getAll());
 });
@@ -407,6 +514,32 @@ app.post('/api/nbe-simulator/submit', async (req, res) => {
 app.get('/api/audit-logs', (req, res) => {
   const limit = parseInt(req.query.limit as string || '100', 10);
   res.json(auditService.getLogs(limit));
+});
+
+app.post('/api/audit-logs', (req, res) => {
+  const { actorId, actorName, actorRole, action, entityType, entityId, details, correlationId, newState, oldState } = req.body;
+  if (!action) {
+    res.status(400).json({ error: 'Action is required for audit trail entry' });
+    return;
+  }
+  const entry = auditService.log({
+    actorId: actorId || 'sys_user',
+    actorName: actorName || 'System User',
+    actorRole: actorRole || 'MAKER',
+    action,
+    entityType: entityType || 'REGULATORY',
+    entityId: entityId || 'OB_SYSTEM',
+    correlationId: correlationId || `corr_${Date.now()}`,
+    details: details || `Recorded action ${action}`,
+    newState,
+    oldState,
+  });
+  res.status(201).json(entry);
+});
+
+app.post('/api/audit-logs/biometric', (req, res) => {
+  const entry = auditService.logBiometricEvent(req.body);
+  res.status(201).json(entry);
 });
 
 // -------------------------------------------------------------
