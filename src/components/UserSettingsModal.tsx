@@ -42,6 +42,9 @@ import {
   setBiometricLoginEnabled,
   getDeviceCapabilities,
   DeviceCapabilities,
+  getBiometricSensitivity,
+  setBiometricSensitivity,
+  getBiometricSensitivityProfile,
 } from '../utils/deviceCapabilities.ts';
 import { triggerHaptic, vibrate } from '../utils/haptics.ts';
 
@@ -71,14 +74,34 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
   const [deviceCaps, setDeviceCaps] = useState<DeviceCapabilities | null>(null);
   const [resetNotice, setResetNotice] = useState<string | null>(null);
   const [isResettingBio, setIsResettingBio] = useState<boolean>(false);
+  const [sensitivity, setSensitivity] = useState<number>(() =>
+    getBiometricSensitivity(currentUser.email)
+  );
 
   useEffect(() => {
     if (isOpen) {
       setActiveTab(initialTab);
       setIsBioEnabled(isBiometricLoginEnabled(currentUser.email));
+      setSensitivity(getBiometricSensitivity(currentUser.email));
       getDeviceCapabilities(currentUser.email).then(setDeviceCaps);
     }
   }, [isOpen, initialTab, currentUser.email]);
+
+  const handleSensitivityChange = (newVal: number) => {
+    setSensitivity(newVal);
+    setBiometricSensitivity(newVal, currentUser.email);
+    vibrate(10);
+    triggerHaptic('selection');
+
+    authHistoryService.recordAttempt({
+      method: 'FINGERPRINT',
+      status: 'ENROLLED',
+      userEmail: currentUser.email,
+      userName: currentUser.name,
+      userRole: currentUser.role,
+      failureReason: `Biometric sensitivity threshold adjusted to ${newVal}% (${getBiometricSensitivityProfile(newVal).label})`,
+    });
+  };
 
   useEffect(() => {
     const unsub = authHistoryService.subscribe((allRecords) => {
@@ -349,6 +372,112 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
                   <span>{resetNotice}</span>
                 </div>
               )}
+            </div>
+
+            {/* Biometric Sensitivity & Matching Threshold Slider Card */}
+            <div className="bg-slate-50 dark:bg-[#171B3B] border border-slate-200 dark:border-[#283163] rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center border border-teal-500/30">
+                    <Sliders className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                        Biometric Sensitivity Threshold
+                      </h3>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getBiometricSensitivityProfile(sensitivity).badgeColor}`}>
+                        {sensitivity}% • {getBiometricSensitivityProfile(sensitivity).label}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Adjust matching threshold required for successful Face ID and Fingerprint authentication
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Slider Control */}
+              <div className="space-y-2 p-3 bg-white dark:bg-[#11132B] rounded-xl border border-slate-200 dark:border-[#222852]">
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  <span className="flex items-center gap-1.5">
+                    <span>Matching Threshold:</span>
+                    <span className="text-sm font-mono font-bold text-ob-green-600 dark:text-ob-green-400">{sensitivity}%</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    Range: 60% – 99%
+                  </span>
+                </div>
+
+                <div className="relative py-1">
+                  <input
+                    type="range"
+                    min="60"
+                    max="99"
+                    step="1"
+                    value={sensitivity}
+                    onChange={(e) => handleSensitivityChange(parseInt(e.target.value, 10))}
+                    className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-ob-green-600 touch-press"
+                    aria-label="Biometric Sensitivity Slider"
+                  />
+                  <div className="flex justify-between text-[9px] text-slate-400 font-mono mt-1">
+                    <span>60% (Permissive)</span>
+                    <span className="text-emerald-500 font-bold">85% (NBE Standard)</span>
+                    <span>99% (Strict)</span>
+                  </div>
+                </div>
+
+                {/* Preset Quick Buttons */}
+                <div className="pt-2 border-t border-slate-100 dark:border-[#222852] flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Quick Presets:</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleSensitivityChange(75)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer touch-press ${
+                        sensitivity === 75
+                          ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40 ring-1 ring-amber-400/30'
+                          : 'bg-slate-50 dark:bg-[#181C3D] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-[#283163] hover:bg-slate-100 dark:hover:bg-[#20254D]'
+                      }`}
+                    >
+                      Flexible (75%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSensitivityChange(85)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer touch-press ${
+                        sensitivity === 85
+                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 ring-1 ring-emerald-400/30'
+                          : 'bg-slate-50 dark:bg-[#181C3D] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-[#283163] hover:bg-slate-100 dark:hover:bg-[#20254D]'
+                      }`}
+                    >
+                      Standard (85%)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSensitivityChange(95)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer touch-press ${
+                        sensitivity === 95
+                          ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/40 ring-1 ring-rose-400/30'
+                          : 'bg-slate-50 dark:bg-[#181C3D] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-[#283163] hover:bg-slate-100 dark:hover:bg-[#20254D]'
+                      }`}
+                    >
+                      Strict (95%)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Profile Description */}
+                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#141738] text-[11px] text-slate-600 dark:text-slate-300 space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
+                    <ShieldCheck className="w-3.5 h-3.5 text-ob-green-500" />
+                    <span>{getBiometricSensitivityProfile(sensitivity).directiveAlignment}</span>
+                  </div>
+                  <p className="leading-relaxed text-slate-500 dark:text-slate-400 text-[10px]">
+                    {getBiometricSensitivityProfile(sensitivity).description}
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Hardware Telemetry Summary */}

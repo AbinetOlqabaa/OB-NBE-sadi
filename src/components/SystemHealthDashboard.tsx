@@ -28,6 +28,10 @@ import {
   Info,
   Layers,
   FileCheck,
+  History,
+  Clock,
+  Filter,
+  Search,
 } from 'lucide-react';
 import { UserSession } from '../types/regulatory.ts';
 import {
@@ -44,7 +48,12 @@ import {
 } from '../utils/deviceCapabilities.ts';
 import { useBiometricAuth } from '../hooks/useBiometricAuth.ts';
 import { triggerHaptic, vibrate } from '../utils/haptics.ts';
-import { getHardwareDeviceId, getHardwareDeviceLabel } from '../services/authHistoryService.ts';
+import {
+  authHistoryService,
+  AuthHistoryEntry,
+  getHardwareDeviceId,
+  getHardwareDeviceLabel,
+} from '../services/authHistoryService.ts';
 
 interface SystemHealthDashboardProps {
   currentUser: UserSession;
@@ -98,6 +107,62 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
 
   // Expanded troubleshooting bottleneck item
   const [expandedBottleneck, setExpandedBottleneck] = useState<string | null>(null);
+
+  // Hardware Diagnostics History State
+  const [diagRecords, setDiagRecords] = useState<AuthHistoryEntry[]>(() =>
+    authHistoryService.getHardwareDiagnosticsHistory({ userEmail: currentUser.role === 'ADMIN' ? undefined : currentUser.email })
+  );
+  const [diagFilter, setDiagFilter] = useState<'ALL' | 'FAILED' | 'TIMEOUT'>('ALL');
+  const [diagSearch, setDiagSearch] = useState<string>('');
+
+  useEffect(() => {
+    const unsub = authHistoryService.subscribe(() => {
+      setDiagRecords(
+        authHistoryService.getHardwareDiagnosticsHistory({
+          userEmail: currentUser.role === 'ADMIN' ? undefined : currentUser.email,
+        })
+      );
+    });
+    return unsub;
+  }, [currentUser.email, currentUser.role]);
+
+  const handleSimulateFailedSensorInit = () => {
+    vibrate(20);
+    authHistoryService.recordHardwareDiagnosticEvent({
+      sensor: 'CAMERA',
+      eventType: 'FAILED',
+      userEmail: currentUser.email,
+      userName: currentUser.name,
+      userRole: currentUser.role,
+      failureReason: 'Optical camera sensor initialization failed: Permission denied by browser sandbox policy',
+    });
+    triggerHaptic('selection');
+  };
+
+  const handleSimulateAuthTimeout = () => {
+    vibrate(20);
+    authHistoryService.recordHardwareDiagnosticEvent({
+      sensor: 'FINGERPRINT',
+      eventType: 'TIMEOUT',
+      userEmail: currentUser.email,
+      userName: currentUser.name,
+      userRole: currentUser.role,
+      failureReason: 'Inactivity timer expired (30 seconds auto-cancellation to prevent hardware lock)',
+    });
+    triggerHaptic('selection');
+  };
+
+  const handleExportDiagHistory = () => {
+    const dataStr = JSON.stringify(diagRecords, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `OB_Hardware_Diagnostics_History_${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    triggerHaptic('success');
+  };
 
   const {
     startCameraStream,
@@ -1154,6 +1219,227 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Hardware Diagnostics History Section */}
+      <div className="bg-white dark:bg-[#161A36] border border-slate-200 dark:border-[#272F5E] rounded-3xl p-5 sm:p-6 shadow-md space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                <History className="w-4 h-4" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Hardware Diagnostics History
+              </h3>
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30">
+                Audit Transparency
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Audit log of failed hardware sensor initialization events and 30-second authentication time-outs under NBE Directive BSD/03/2020 Art. 6.4
+            </p>
+          </div>
+
+          {/* Counts & Action Buttons */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={handleSimulateFailedSensorInit}
+              className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800/60 transition-colors flex items-center gap-1 cursor-pointer touch-press"
+              title="Record a simulated sensor initialization failure event for audit verification"
+            >
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>Simulate Failure</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSimulateAuthTimeout}
+              className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800/60 transition-colors flex items-center gap-1 cursor-pointer touch-press"
+              title="Record a simulated 30s timeout event for audit verification"
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Simulate Timeout</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleExportDiagHistory}
+              className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-[#1C224B] dark:hover:bg-[#252C63] text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-[#2F3775] transition-colors flex items-center gap-1 cursor-pointer touch-press"
+              title="Export diagnostics records as JSON"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export JSON</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Filter Controls & Search */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-[#242B59]">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-[#11132B] rounded-xl border border-slate-200 dark:border-[#222852]">
+            <button
+              type="button"
+              onClick={() => setDiagFilter('ALL')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer touch-press ${
+                diagFilter === 'ALL'
+                  ? 'bg-white dark:bg-[#1E244F] text-slate-900 dark:text-white shadow-xs'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              All Events ({diagRecords.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setDiagFilter('FAILED')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer touch-press ${
+                diagFilter === 'FAILED'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300'
+              }`}
+            >
+              <AlertCircle className="w-3 h-3" />
+              <span>Failed Initializations ({diagRecords.filter((r) => r.status === 'FAILED').length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDiagFilter('TIMEOUT')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer touch-press ${
+                diagFilter === 'TIMEOUT'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300'
+              }`}
+            >
+              <Clock className="w-3 h-3" />
+              <span>Time-Outs ({diagRecords.filter((r) => r.status === 'TIMEOUT').length})</span>
+            </button>
+          </div>
+
+          <div className="relative min-w-[220px]">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Filter by reason, device, officer..."
+              value={diagSearch}
+              onChange={(e) => setDiagSearch(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-[#11132B] border border-slate-200 dark:border-[#222852] rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-rose-500"
+            />
+          </div>
+        </div>
+
+        {/* Diagnostics Events List */}
+        <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+          {diagRecords
+            .filter((rec) => {
+              if (diagFilter === 'FAILED' && rec.status !== 'FAILED') return false;
+              if (diagFilter === 'TIMEOUT' && rec.status !== 'TIMEOUT') return false;
+              if (diagSearch.trim()) {
+                const q = diagSearch.toLowerCase();
+                const text = `${rec.userEmail} ${rec.userName} ${rec.method} ${rec.failureReason || ''} ${rec.deviceId} ${rec.deviceLabel}`.toLowerCase();
+                if (!text.includes(q)) return false;
+              }
+              return true;
+            })
+            .map((entry) => {
+              const isFailed = entry.status === 'FAILED';
+              const isTimeout = entry.status === 'TIMEOUT';
+
+              return (
+                <div
+                  key={entry.id}
+                  className={`p-3.5 rounded-2xl border transition-all text-xs space-y-2 ${
+                    isFailed
+                      ? 'bg-rose-500/5 dark:bg-rose-950/20 border-rose-300/80 dark:border-rose-900/50'
+                      : isTimeout
+                      ? 'bg-amber-500/5 dark:bg-amber-950/20 border-amber-300/80 dark:border-amber-900/50'
+                      : 'bg-slate-50 dark:bg-[#12152E] border-slate-200 dark:border-[#222852]'
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-2">
+                      {isFailed ? (
+                        <span className="p-1 rounded-lg bg-rose-500/20 text-rose-600 dark:text-rose-400">
+                          <AlertCircle className="w-4 h-4" />
+                        </span>
+                      ) : (
+                        <span className="p-1 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                          <Clock className="w-4 h-4" />
+                        </span>
+                      )}
+
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                          isFailed
+                            ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
+                            : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                        }`}
+                      >
+                        {isFailed ? 'Hardware Sensor Initialization Failed' : 'Authentication Inactivity Time-Out'}
+                      </span>
+
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                        {entry.method === 'FACE' ? 'Optical Camera (Face ID)' : entry.method === 'FINGERPRINT' ? 'Fingerprint Scanner' : 'Corporate Keystore'}
+                      </span>
+                    </div>
+
+                    <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                      {new Date(entry.timestamp).toLocaleString()}
+                    </span>
+                  </div>
+
+                  {/* Explicit Failure / Timeout Reason Box */}
+                  <div className={`p-2.5 rounded-xl text-xs border ${
+                    isFailed
+                      ? 'bg-rose-100/60 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800/80 text-rose-900 dark:text-rose-200'
+                      : 'bg-amber-100/60 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800/80 text-amber-900 dark:text-amber-200'
+                  }`}>
+                    <div className="font-bold flex items-center justify-between">
+                      <span>Diagnostic Event Details:</span>
+                      {entry.responseTimeMs && (
+                        <span className="font-mono text-[10px]">Latency: {entry.responseTimeMs}ms</span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 leading-relaxed font-medium">
+                      {entry.failureReason || (isFailed ? 'Sensor communication aborted during handshake' : 'Sensor session released after 30 seconds')}
+                    </p>
+                  </div>
+
+                  {/* Device & Correlation Telemetry */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500 dark:text-slate-400 font-mono pt-1">
+                    <div className="flex items-center gap-2 truncate">
+                      <span>Officer: <strong className="text-slate-700 dark:text-slate-300">{entry.userName} ({entry.userRole})</strong></span>
+                      <span>•</span>
+                      <span className="truncate">Device: {entry.deviceLabel}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span>ID: {entry.deviceId.substring(0, 16)}...</span>
+                      <span>•</span>
+                      <span className="text-ob-indigo-600 dark:text-ob-indigo-400">{entry.correlationId}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+          {diagRecords.filter((rec) => {
+            if (diagFilter === 'FAILED' && rec.status !== 'FAILED') return false;
+            if (diagFilter === 'TIMEOUT' && rec.status !== 'TIMEOUT') return false;
+            if (diagSearch.trim()) {
+              const q = diagSearch.toLowerCase();
+              const text = `${rec.userEmail} ${rec.userName} ${rec.method} ${rec.failureReason || ''} ${rec.deviceId} ${rec.deviceLabel}`.toLowerCase();
+              if (!text.includes(q)) return false;
+            }
+            return true;
+          }).length === 0 && (
+            <div className="p-8 text-center bg-slate-50 dark:bg-[#11132B] rounded-2xl border border-dashed border-slate-200 dark:border-[#222852] space-y-2">
+              <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
+              <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                No Diagnostic Failures or Timeouts Found
+              </div>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                All hardware sensors initialized cleanly without timeouts under the current filter criteria.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

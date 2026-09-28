@@ -550,8 +550,10 @@ class UserServiceClass {
     email: string,
     type: 'FINGERPRINT' | 'FACE',
     credentialId?: string,
-    faceHash?: string
-  ): { success: boolean; user?: UserAccount; message?: string; redirectTab?: string } {
+    faceHash?: string,
+    matchScore?: number,
+    requiredThreshold?: number
+  ): { success: boolean; user?: UserAccount; message?: string; redirectTab?: string; matchConfidence?: number } {
     const user = this.getByEmail(email);
     if (!user) {
       return { success: false, message: 'Account not found for biometric login.' };
@@ -590,6 +592,15 @@ class UserServiceClass {
           message: 'Biometric passkey identifier does not match enrolled credential.',
         };
       }
+    }
+
+    // Verify sensitivity threshold if specified
+    if (matchScore !== undefined && requiredThreshold !== undefined && matchScore < requiredThreshold) {
+      return {
+        success: false,
+        message: `Biometric matching confidence (${matchScore}%) did not meet user-configured sensitivity threshold (${requiredThreshold}%).`,
+        matchConfidence: matchScore,
+      };
     }
 
     // Verify faceHash consistency if both enrolled and challenge hashes are present

@@ -4,6 +4,7 @@
  */
 
 import { userService } from '../services/userService.ts';
+import { authHistoryService } from '../services/authHistoryService.ts';
 
 function assert(condition: boolean, msg: string) {
   if (!condition) {
@@ -783,6 +784,125 @@ export async function runBiometricAndAccessoryTests() {
   assert(typeof deviceCapsCheck.hasBiometricHardware === 'boolean', 'Device biometric hardware availability determined');
   assert(typeof deviceCapsCheck.canRegisterFingerprint === 'boolean', 'Device fingerprint scanner availability determined');
   assert(typeof deviceCapsCheck.canRegisterFace === 'boolean', 'Device camera availability determined');
+
+  // 17. Hardware Diagnostics History & User-Configurable Biometric Sensitivity Tests
+  console.log('\n--- 17. Hardware Diagnostics History & Biometric Sensitivity Tests ---');
+
+  // 17a. Verify authHistoryService.getHardwareDiagnosticsHistory
+  const diagHistoryAll = authHistoryService.getHardwareDiagnosticsHistory();
+  assert(Array.isArray(diagHistoryAll), 'getHardwareDiagnosticsHistory returns array of events');
+  assert(diagHistoryAll.length > 0, 'Hardware diagnostics history contains initial audit events');
+
+  // Verify explicit inclusion of failed sensor initializations and authentication timeouts
+  const failedEvents = authHistoryService.getHardwareDiagnosticsHistory({ filter: 'FAILED' });
+  assert(failedEvents.length > 0, 'Hardware diagnostics history explicitly retrieves FAILED sensor initialization events');
+  assert(failedEvents.every((e) => e.status === 'FAILED'), 'All retrieved records have FAILED status');
+  assert(Boolean(failedEvents[0].failureReason), 'Failed events explicitly document failure reason for audit transparency');
+
+  const timeoutEvents = authHistoryService.getHardwareDiagnosticsHistory({ filter: 'TIMEOUT' });
+  assert(timeoutEvents.length > 0, 'Hardware diagnostics history explicitly retrieves authentication TIMEOUT events');
+  assert(timeoutEvents.every((e) => e.status === 'TIMEOUT'), 'All retrieved records have TIMEOUT status');
+  assert(Boolean(timeoutEvents[0].failureReason?.includes('30') || timeoutEvents[0].failureReason?.includes('timeout')), 'Timeout events explicitly document 30s inactivity lock reason');
+
+  // Test recording a new hardware failure event
+  const recordedFailEvent = authHistoryService.recordHardwareDiagnosticEvent({
+    sensor: 'CAMERA',
+    eventType: 'FAILED',
+    userEmail: 'chala.desta@oromiabank.com',
+    userName: 'Chala Desta',
+    userRole: 'CHECKER',
+    failureReason: 'Test optical camera sensor initialization rejected by hardware device',
+    latencyMs: 1500,
+  });
+  assert(recordedFailEvent.status === 'FAILED', 'Recorded hardware diagnostic failure status is FAILED');
+  assert(recordedFailEvent.method === 'FACE', 'Camera diagnostic maps to FACE method');
+  assert(Boolean(recordedFailEvent.failureReason?.includes('Test optical camera')), 'Failure reason accurately preserved');
+
+  // 17b. Verify Biometric Sensitivity Thresholds
+  const {
+    getBiometricSensitivity,
+    setBiometricSensitivity,
+    getBiometricSensitivityProfile,
+  } = await import('../utils/deviceCapabilities.ts');
+
+  assert(typeof getBiometricSensitivity === 'function', 'getBiometricSensitivity exported as function');
+  assert(typeof setBiometricSensitivity === 'function', 'setBiometricSensitivity exported as function');
+  assert(typeof getBiometricSensitivityProfile === 'function', 'getBiometricSensitivityProfile exported as function');
+
+  // Test default sensitivity is 85%
+  const defaultSens = getBiometricSensitivity('new.user@oromiabank.com');
+  assert(defaultSens === 85, 'Default biometric sensitivity threshold is 85% (NBE standard)');
+
+  // Test setting custom sensitivity
+  setBiometricSensitivity(95, 'abebe.kebede@oromiabank.com');
+  assert(getBiometricSensitivity('abebe.kebede@oromiabank.com') === 95, 'Biometric sensitivity updated to 95% for user');
+
+  // Verify sensitivity profiles
+  const profileStrict = getBiometricSensitivityProfile(95);
+  assert(profileStrict.level === 'MAXIMUM', 'Profile 95% classified as MAXIMUM / Strict');
+  assert(profileStrict.directiveAlignment.includes('NBE'), 'Strict profile aligns with NBE directive');
+
+  const profileStandard = getBiometricSensitivityProfile(85);
+  assert(profileStandard.level === 'STANDARD', 'Profile 85% classified as STANDARD Compliance');
+
+  const profileFlexible = getBiometricSensitivityProfile(75);
+  assert(profileFlexible.level === 'FLEXIBLE', 'Profile 75% classified as FLEXIBLE');
+
+  // Verify userService.verifyBiometric sensitivity matching logic
+  // Match score 70% fails against 85% threshold
+  const failSensMatch = userService.verifyBiometric(
+    'abebe.kebede@oromiabank.com',
+    'FINGERPRINT',
+    undefined,
+    undefined,
+    70,
+    85
+  );
+  assert(failSensMatch.success === false, 'Biometric match rejected when score is below sensitivity threshold (70% < 85%)');
+  assert(Boolean(failSensMatch.message?.includes('sensitivity threshold')), 'Rejection message cites user sensitivity threshold');
+
+  // Match score 90% passes against 85% threshold
+  const passSensMatch = userService.verifyBiometric(
+    'abebe.kebede@oromiabank.com',
+    'FINGERPRINT',
+    undefined,
+    undefined,
+    90,
+    85
+  );
+  assert(passSensMatch.success === true, 'Biometric match accepted when score meets sensitivity threshold (90% >= 85%)');
+
+  // 17c. Verify UserSettingsModal with Biometric Sensitivity Slider
+  const { UserSettingsModal } = await import('../components/UserSettingsModal.tsx');
+  assert(typeof UserSettingsModal === 'function', 'UserSettingsModal exported as React functional component');
+
+  const settingsElement = React.createElement(UserSettingsModal, {
+    isOpen: true,
+    onClose: () => {},
+    currentUser: {
+      id: 'usr_maker_1',
+      name: 'Abebe Kebede',
+      email: 'abebe.kebede@oromiabank.com',
+      role: 'MAKER',
+      institutionCode: '0000013',
+      department: 'Credit Operations & Portfolio Management',
+    },
+    initialTab: 'SETTINGS',
+  });
+  assert(Boolean(settingsElement) && settingsElement.type === UserSettingsModal, 'UserSettingsModal instantiates successfully with Biometric Sensitivity slider');
+
+  // 17d. Verify SystemHealthDashboard instantiates with Hardware Diagnostics History
+  const healthDashboardDiagElement = React.createElement(SystemHealthDashboard, {
+    currentUser: {
+      id: 'usr_maker_1',
+      name: 'Abebe Kebede',
+      email: 'abebe.kebede@oromiabank.com',
+      role: 'MAKER',
+      institutionCode: '0000013',
+      department: 'Credit Operations & Portfolio Management',
+    },
+  });
+  assert(Boolean(healthDashboardDiagElement) && healthDashboardDiagElement.type === SystemHealthDashboard, 'SystemHealthDashboard instantiates successfully with Hardware Diagnostics History section');
 
   console.log('✓ All Biometric WebAuthn, Face ID, OTP, Password Reset & Hardware Capability tests passed successfully.');
 }

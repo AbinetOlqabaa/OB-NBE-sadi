@@ -965,3 +965,108 @@ export function triggerHardwareVerificationHaptic(): boolean {
   // Dual-pulse confirmation: 25ms buzz, 40ms pause, 35ms buzz
   return triggerHaptic('success') || vibrate([25, 40, 35]);
 }
+
+export const DEFAULT_BIOMETRIC_SENSITIVITY = 85;
+export const BIOMETRIC_SENSITIVITY_EVENT = 'ob_biometric_sensitivity_changed';
+
+/**
+ * Returns user-configured biometric matching threshold percentage (60% to 99%)
+ */
+export function getBiometricSensitivity(userEmail?: string): number {
+  if (typeof localStorage === 'undefined') return DEFAULT_BIOMETRIC_SENSITIVITY;
+  try {
+    const key = `ob_bio_sensitivity_${(userEmail || 'default').toLowerCase().trim()}`;
+    const raw = localStorage.getItem(key);
+    if (!raw) return DEFAULT_BIOMETRIC_SENSITIVITY;
+    const parsed = parseInt(raw, 10);
+    return isNaN(parsed) || parsed < 60 || parsed > 99 ? DEFAULT_BIOMETRIC_SENSITIVITY : parsed;
+  } catch {
+    return DEFAULT_BIOMETRIC_SENSITIVITY;
+  }
+}
+
+/**
+ * Sets user-configured biometric matching threshold percentage
+ */
+export function setBiometricSensitivity(threshold: number, userEmail?: string): void {
+  if (typeof localStorage === 'undefined') return;
+  const clamped = Math.max(60, Math.min(99, Math.round(threshold)));
+  try {
+    const key = `ob_bio_sensitivity_${(userEmail || 'default').toLowerCase().trim()}`;
+    localStorage.setItem(key, clamped.toString());
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent(BIOMETRIC_SENSITIVITY_EVENT, {
+          detail: { threshold: clamped, userEmail: userEmail?.toLowerCase().trim() },
+        })
+      );
+    }
+  } catch {}
+}
+
+/**
+ * Provides descriptive regulatory profile and security level for a given sensitivity threshold
+ */
+export function getBiometricSensitivityProfile(threshold: number): {
+  level: 'MAXIMUM' | 'STANDARD' | 'FLEXIBLE' | 'TEST';
+  label: string;
+  description: string;
+  badgeColor: string;
+  directiveAlignment: string;
+} {
+  if (threshold >= 95) {
+    return {
+      level: 'MAXIMUM',
+      label: 'Strict Security (Tier 1)',
+      description: 'Requires 95%+ dermal ridge and facial geometry match. Best for high-value authorization; requires clear lighting and clean sensor.',
+      badgeColor: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30',
+      directiveAlignment: 'NBE BSD/03/2020 Art. 6.4 (Tier 1 Large Value Transfers)',
+    };
+  } else if (threshold >= 85) {
+    return {
+      level: 'STANDARD',
+      label: 'Standard Compliance (Recommended)',
+      description: 'Balanced 85% threshold providing high fraud prevention while accommodating natural camera angle variations and touch moisture.',
+      badgeColor: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
+      directiveAlignment: 'NBE BSD/03/2020 Recommended Baseline Standard',
+    };
+  } else if (threshold >= 75) {
+    return {
+      level: 'FLEXIBLE',
+      label: 'Flexible / Low Friction',
+      description: 'Tolerant 75% threshold allowing faster sign-in on low-resolution laptop webcams or older workstation fingerprint hardware.',
+      badgeColor: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
+      directiveAlignment: 'Standard Commercial Banking Operations',
+    };
+  } else {
+    return {
+      level: 'TEST',
+      label: 'Permissive / Testing Only',
+      description: 'Relaxed threshold (60%-74%). Recommended primarily for offline mock simulations or inspection demo tablets.',
+      badgeColor: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/30',
+      directiveAlignment: 'Testing & Diagnostic Sandbox Profile',
+    };
+  }
+}
+
+/**
+ * Subscribes to biometric sensitivity slider changes
+ */
+export function subscribeToBiometricSensitivityChanges(
+  callback: (detail: { threshold: number; userEmail?: string }) => void
+): () => void {
+  if (typeof window === 'undefined') return () => {};
+
+  const handler = (e: Event) => {
+    const custom = e as CustomEvent<{ threshold: number; userEmail?: string }>;
+    if (custom.detail) {
+      callback(custom.detail);
+    }
+  };
+
+  window.addEventListener(BIOMETRIC_SENSITIVITY_EVENT, handler);
+  return () => {
+    window.removeEventListener(BIOMETRIC_SENSITIVITY_EVENT, handler);
+  };
+}

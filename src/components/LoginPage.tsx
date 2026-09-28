@@ -267,6 +267,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       return;
     }
 
+    // The sign in attempters should only be activated for the method selected by users.
+    // If user tries to login with Face ID the attempt should ignore other options (like password) and continue with Face ID.
+    if (authMethod === 'FACE') {
+      handleOpenBiometricModal('AUTHENTICATE', 'FACE');
+      return;
+    }
+
+    if (authMethod === 'FINGERPRINT') {
+      handleOpenBiometricModal('AUTHENTICATE', 'FINGERPRINT');
+      return;
+    }
+
     setLoading(true);
     setErrorMessage(null);
 
