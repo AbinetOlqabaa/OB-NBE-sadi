@@ -1,0 +1,143 @@
+{
+  "ReturnKey": "COL_ACQ_18M_OL001",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-04-01T00:00:00",
+  "EndDate": "2026-06-30T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "95_00001",
+      "Value": "",
+      "_description": "Total Outstanding acquired balance_Principal",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "95_00002",
+      "Value": "",
+      "_description": "Total Outstanding balance_Interest",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "95_00003",
+      "Value": "",
+      "_description": "Asked /reserve Price",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "95_00004",
+      "Value": "",
+      "_description": "Highest offered bid amount ",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "95_00005",
+      "Value": "",
+      "_description": "Average Market Value",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "95_00006",
+      "Value": "",
+      "_description": "Expenses related to the acquisition",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "95_00007",
+      "Value": "",
+      "_description": "Net Market Value",
+      "_dataType": "NUMERIC",
+      "_required": false
+    }
+  ],
+  "DynamicItemsList": [
+    {
+      "Area": 172,
+      "_areaName": "Acquired Properties Inventory",
+      "DynamicItems": [
+        {
+          "Code": "1.1",
+          "Value": "",
+          "_description": "Name of Borrower",
+          "_dataType": "TEXT",
+          "_required": true
+        },
+        {
+          "Code": "1.2",
+          "Value": "",
+          "_description": "Outstanding Principal [A]",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.3",
+          "Value": "",
+          "_description": "Outstanding Interest",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.4",
+          "Value": "",
+          "_description": "Type of Collateral",
+          "_dataType": "TEXT",
+          "_required": false
+        },
+        {
+          "Code": "1.5",
+          "Value": "",
+          "_description": "Reserve Price [B]",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.6",
+          "Value": "",
+          "_description": "Highest Bid Amount [C]",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.7",
+          "Value": "",
+          "_description": "Average Market Value [D = (B+C)/2]",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.8",
+          "Value": "",
+          "_description": "Date acquired",
+          "_dataType": "DATE",
+          "_required": false
+        },
+        {
+          "Code": "1.9",
+          "Value": "",
+          "_description": "Date re-evaluated",
+          "_dataType": "DATE",
+          "_required": false
+        },
+        {
+          "Code": "1.10",
+          "Value": "",
+          "_description": "Expenses related to acquisition [E]",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.11",
+          "Value": "",
+          "_description": "Net Market Value [F = D - E]",
+          "_dataType": "NUMERIC",
+          "_required": false
+        }
+      ]
+    }
+  ]
+}

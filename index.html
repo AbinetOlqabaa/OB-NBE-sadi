@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#5962AB" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#121428" media="(prefers-color-scheme: dark)" />
+    <title>Oromia Bank NBE Regulatory Reporting & Simulation Platform</title>
+    <link rel="icon" type="image/png" href="/brand/oromia-logo-mark-transparent.png" />
+    <link rel="apple-touch-icon" href="/brand/oromia-logo-mark-transparent.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <meta name="description" content="Comprehensive regulatory reporting, validation, simulation, and data integration platform for National Bank of Ethiopia (NBE) returns with Maker-Checker workflow." />
+    <meta property="og:title" content="Oromia Bank NBE Regulatory Reporting & Simulation Platform" />
+    <meta property="og:description" content="Comprehensive regulatory reporting, validation, simulation, and data integration platform for National Bank of Ethiopia (NBE) returns with Maker-Checker workflow." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      (function() {
+        try {
+          const stored = localStorage.getItem('oromia_nbe_theme_preference');
+          const mode = (stored === 'light' || stored === 'dark' || stored === 'system') ? stored : 'system';
+          const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          const isDark = mode === 'dark' || (mode === 'system' && prefersDark);
+          const themeVal = isDark ? 'dark' : 'light';
+          
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+            document.documentElement.classList.remove('light');
+          } else {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.classList.add('light');
+          }
+          document.documentElement.setAttribute('data-theme', themeVal);
+          document.documentElement.setAttribute('data-theme-mode', mode);
+          document.documentElement.style.colorScheme = themeVal;
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

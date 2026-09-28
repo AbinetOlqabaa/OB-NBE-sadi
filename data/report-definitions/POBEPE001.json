@@ -1,0 +1,304 @@
+{
+  "ReturnKey": "POBEPE001",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-04-01T00:00:00",
+  "EndDate": "2026-06-30T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "153_00001",
+      "Value": "",
+      "_description": "1. Guarantee (sum1.1-1.2)_Amount (A)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00002",
+      "Value": "",
+      "_description": "1. Guarantee (sum1.1-1.2)_Provisioning Rate (B)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00003",
+      "Value": "",
+      "_description": "1. Guarantee (sum1.1-1.2)_NPL's Amount (C)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00004",
+      "Value": "",
+      "_description": "1. Guarantee (sum1.1-1.2)_Additional Provisioning Rate (2%)* (D)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00005",
+      "Value": "",
+      "_description": "1. Guarantee (sum1.1-1.2)_Amount Under litigation (E)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00006",
+      "Value": "",
+      "_description": "1. Guarantee (sum1.1-1.2)_Additional Provisioning rate (5%)**(F)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00007",
+      "Value": "",
+      "_description": "1. Guarantee (sum1.1-1.2)_Required Provisions (G)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00008",
+      "Value": "",
+      "_description": "1. Guarantee (sum1.1-1.2)_Accumulated provision held in the Previous Period (H)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00009",
+      "Value": "",
+      "_description": "1. Guarantee (sum1.1-1.2)_Excess/Shortfall in Provisions (I)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00010",
+      "Value": "",
+      "_description": "1.1 With no counter guarantee_Amount (A)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00011",
+      "Value": "",
+      "_description": "1.1 With no counter guarantee_Provisioning rate (B)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00012",
+      "Value": "",
+      "_description": "1.1 With no counter guarantee_NPL's amount (C)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00016",
+      "Value": "",
+      "_description": "1.1 With no counter guarantee_Required Provisions (G)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00017",
+      "Value": "",
+      "_description": "1.1 With no counter guarantee_Accumulated provision held in the Previous Period (H)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00018",
+      "Value": "",
+      "_description": "1.1 With no counter guarantee_Excess/Shortfall in Provisions (I)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00019",
+      "Value": "",
+      "_description": "1.2 With counter guarantee by foreign bank or insurance company with an A rating _Amount (A)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00020",
+      "Value": "",
+      "_description": "1.2 With counter guarantee by foreign bank or insurance company with an A rating _Provisioning rate (B)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00025",
+      "Value": "",
+      "_description": "1.2 With counter guarantee by foreign bank or insurance company with an A rating _Required Provisions (G)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00026",
+      "Value": "",
+      "_description": "1.2 With counter guarantee by foreign bank or insurance company with an A rating _Accumulated provision held in the Previous Period (H)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00027",
+      "Value": "",
+      "_description": "1.2 With counter guarantee by foreign bank or insurance company with an A rating _Excess/Shortfall in Provisions (I)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00028",
+      "Value": "",
+      "_description": "2 Commitment to provide Loan and Advance_Amount (A)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00029",
+      "Value": "",
+      "_description": "2 Commitment to provide Loan and Advance_Provisioning rate (B)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00034",
+      "Value": "",
+      "_description": "2 Commitment to provide Loan and Advance_Required provisions (G)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00035",
+      "Value": "",
+      "_description": "2 Commitment to provide Loan and Advance_Accumulated provision held in the Previous Period (H)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00036",
+      "Value": "",
+      "_description": "2 Commitment to provide Loan and Advance_Excess/Shortfall in Provisions (I)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00037",
+      "Value": "",
+      "_description": "3 Letter of Credit_Amount (A)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00038",
+      "Value": "",
+      "_description": "3 Letter of Credit_Provisioning rate (B)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00043",
+      "Value": "",
+      "_description": "3 Letter of Credit_Required Provisions (G)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00044",
+      "Value": "",
+      "_description": "3 Letter of Credit_Accumulated provision held in the Previous Period (H)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00045",
+      "Value": "",
+      "_description": "3 Letter of Credit_Excess/Shortfall in Provisions (I)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00046",
+      "Value": "",
+      "_description": "4 Others_Amount (A)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00047",
+      "Value": "",
+      "_description": "4 Others_Provisioning rate (B)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00052",
+      "Value": "",
+      "_description": "4 Others_Required Provisions (G)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00053",
+      "Value": "",
+      "_description": "4 Others_Accumulated provision held in the Previous Period (H)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00054",
+      "Value": "",
+      "_description": "4 Others_Excess/Shortfall in Provisions (I)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00055",
+      "Value": "",
+      "_description": "5 Total Off Balance Sheet Item (Sum 1-4)_Amount (A)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00056",
+      "Value": "",
+      "_description": "5 Total Off Balance Sheet Item (Sum 1-4)_Provisioning rate (B)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00057",
+      "Value": "",
+      "_description": "5 Total Off Balance Sheet Item (Sum 1-4)_NPL's Amount (C)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00061",
+      "Value": "",
+      "_description": "5 Total Off Balance Sheet Item (Sum 1-4)_ Required Provisions (G)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00062",
+      "Value": "",
+      "_description": "5 Total Off Balance Sheet Item (Sum 1-4)_Accumulated provision held in the Previous Period (H)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00063",
+      "Value": "",
+      "_description": "5 Total Off Balance Sheet Item (Sum 1-4)_ Excess/Shortfall in Provisions (I)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "153_00064",
+      "Value": "",
+      "_description": "Total_Accumulated provision held",
+      "_dataType": "NUMERIC",
+      "_required": false
+    }
+  ],
+  "DynamicItemsList": []
+}

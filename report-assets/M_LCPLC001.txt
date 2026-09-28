@@ -1,0 +1,339 @@
+{
+  "ReturnKey": "M_LCPLC001",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-07-01T00:00:00",
+  "EndDate": "2026-07-31T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "122_00001",
+      "Value": "",
+      "_description": "Pass (Sum 1.1-1.4)_Amount (A)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00002",
+      "Value": "",
+      "_description": "Pass (Sum 1.1-1.4)_Deductible collateral_Cash/cash substitute_(B)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00003",
+      "Value": "",
+      "_description": "Pass (Sum 1.1-1.4)_Deductible collateral_Net recoverable value_(C)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00004",
+      "Value": "",
+      "_description": "Pass (Sum 1.1-1.4)_Deductible collateral_Total _(D=B+C)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00005",
+      "Value": "",
+      "_description": "Pass (Sum 1.1-1.4)_Deductible collateral_Net loans and advances_(E=A-D)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00006",
+      "Value": "",
+      "_description": "Pass (Sum 1.1-1.4)_Provisioning rate_(F)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00007",
+      "Value": "",
+      "_description": "Pass (Sum 1.1-1.4)_Required provision_(G=ExF)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00008",
+      "Value": "",
+      "_description": "Pass (Sum 1.1-1.4)_Accumulated provision held_(H)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00009",
+      "Value": "",
+      "_description": "Pass (Sum 1.1-1.4)_Excess/shortfall in provisions_(I=H-G)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00046",
+      "Value": "",
+      "_description": "Special mention (Sum 2.1-2.4)_Amount (A)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00049",
+      "Value": "",
+      "_description": "Special mention (Sum 2.1-2.4)_Deductible collateral_Total _(D=B+C)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00050",
+      "Value": "",
+      "_description": "Special mention (Sum 2.1-2.4)_Deductible collateral_Net loans and advances_(E=A-D)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00051",
+      "Value": "",
+      "_description": "Special mention (Sum 2.1-2.4)_Provisioning rate_(F)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00052",
+      "Value": "",
+      "_description": "Special mention (Sum 2.1-2.4)_Required provision_(G=ExF)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00053",
+      "Value": "",
+      "_description": "Special mention (Sum 2.1-2.4)_Accumulated provision held_(H)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00054",
+      "Value": "",
+      "_description": "Special mention (Sum 2.1-2.4)_Excess/shortfall in provisions_(I=H-G)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00091",
+      "Value": "",
+      "_description": "Substandard (3.1+3.2)_Amount (A)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00094",
+      "Value": "",
+      "_description": "Substandard (3.1+3.2)_Deductible collateral_Total _(D=B+C)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00095",
+      "Value": "",
+      "_description": "Substandard (3.1+3.2)_Deductible collateral_Net loans and advances_(E=A-D)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00096",
+      "Value": "",
+      "_description": "Substandard (3.1+3.2)_Provisioning rate_(F)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00097",
+      "Value": "",
+      "_description": "Substandard (3.1+3.2)_Required provision_(G=ExF)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00098",
+      "Value": "",
+      "_description": "Substandard (3.1+3.2)_Accumulated provision held_(H)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00099",
+      "Value": "",
+      "_description": "Substandard (3.1+3.2)_Excess/shortfall in provisions_(I=H-G)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00190",
+      "Value": "",
+      "_description": "Doubtful (Sum 4.1-4.4)_Amount (A)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00193",
+      "Value": "",
+      "_description": "Doubtful (Sum 4.1-4.4)_Deductible collateral_Total _(D=B+C)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00194",
+      "Value": "",
+      "_description": "Doubtful (Sum 4.1-4.4)_Deductible collateral_Net loans and advances_(E=A-D)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00195",
+      "Value": "",
+      "_description": "Doubtful (Sum 4.1-4.4)_Provisioning rate_(F)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00196",
+      "Value": "",
+      "_description": "Doubtful (Sum 4.1-4.4)_Required provision_(G=ExF)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00197",
+      "Value": "",
+      "_description": "Doubtful (Sum 4.1-4.4)_Accumulated provision held in the previous period_(H)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00198",
+      "Value": "",
+      "_description": "Doubtful (Sum 4.1-4.4)_Excess/shortfall in provisions_(I=H-G)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00235",
+      "Value": "",
+      "_description": "Loss loans (Sum 5.1-5.4)_Amount (A)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00238",
+      "Value": "",
+      "_description": "Loss loans (Sum 5.1-5.4)_Deductible collateral_Total _(D=B+C)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00239",
+      "Value": "",
+      "_description": "Loss loans (Sum 5.1-5.4)_Deductible collateral_Net loans and advances_(E=A-D)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00240",
+      "Value": "",
+      "_description": "Loss loans (Sum 5.1-5.4)_Provisioning rate_(F)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00241",
+      "Value": "",
+      "_description": "Loss loans (Sum 5.1-5.4)_Required provision_(G=ExF)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00242",
+      "Value": "",
+      "_description": "Loss loans (Sum 5.1-5.4)_Accumulated provision held in the previous period_(H)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00243",
+      "Value": "",
+      "_description": "Loss loans (Sum 5.1-5.4)_Excess/shortfall in provisions_(I=H-G)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00280",
+      "Value": "",
+      "_description": "Total (Sum 1-5)_Amount (A)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00283",
+      "Value": "",
+      "_description": "Total (Sum 1-5)_Deductible collateral_Total _(D=B+C)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00284",
+      "Value": "",
+      "_description": "Total (Sum 1-5)_Deductible collateral_Net loans and advances_(E=A-D)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00286",
+      "Value": "",
+      "_description": "Total (Sum 1-5)_Required provision_(G=ExF)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00287",
+      "Value": "",
+      "_description": "Total (Sum 1-5)_Accumulated provision held in the previous period_(H)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00288",
+      "Value": "",
+      "_description": "Total (Sum 1-5)_Excess/shortfall in provisions_(I=H-G)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00289",
+      "Value": "",
+      "_description": "Total Non Performing (Sum 3-5)_Amount (A)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00295",
+      "Value": "",
+      "_description": "Total Non Performing (Sum 3-5)_Required provision_(G=ExF)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00298",
+      "Value": "",
+      "_description": "NPLs to Total Loans Ratio(7/6)_Amount (A)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "122_00307",
+      "Value": "",
+      "_description": "Total_Accumulated provision held",
+      "_dataType": "NUMERIC",
+      "_required": false
+    }
+  ],
+  "DynamicItemsList": []
+}

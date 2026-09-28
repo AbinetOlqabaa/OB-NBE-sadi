@@ -1,0 +1,129 @@
+{
+  "ReturnKey": "NPL_ECPOMNE001",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-04-01T00:00:00",
+  "EndDate": "2026-06-30T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "92_00001",
+      "Value": "",
+      "_description": "Agriculture_Substandard Term loan",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "92_00007",
+      "Value": "",
+      "_description": "Agriculture_Total",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "92_00008",
+      "Value": "",
+      "_description": "Manufacturing_Substandard Term loan",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "92_00014",
+      "Value": "",
+      "_description": "Manufacturing_Total",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "92_00015",
+      "Value": "",
+      "_description": "Domestic Trade & Service_Substandard Term loan",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "92_00021",
+      "Value": "",
+      "_description": "Domestic Trade & Service_Total",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "92_00112",
+      "Value": "",
+      "_description": "Total (Economic Sector)_Total",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "92_00119",
+      "Value": "",
+      "_description": "Total (Branch)_Total",
+      "_dataType": "NUMERIC",
+      "_required": false
+    }
+  ],
+  "DynamicItemsList": [
+    {
+      "Area": 179,
+      "_areaName": "Top 6 Branches by NPL",
+      "DynamicItems": [
+        {
+          "Code": "1.1",
+          "Value": "",
+          "_description": "Branch Name",
+          "_dataType": "TEXT",
+          "_required": true
+        },
+        {
+          "Code": "1.2",
+          "Value": "",
+          "_description": "Substandard Term Loan",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.3",
+          "Value": "",
+          "_description": "Substandard O/D",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.4",
+          "Value": "",
+          "_description": "Doubtful Term Loan",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.5",
+          "Value": "",
+          "_description": "Doubtful O/D",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.6",
+          "Value": "",
+          "_description": "Loss Term Loan",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.7",
+          "Value": "",
+          "_description": "Loss O/D",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.8",
+          "Value": "",
+          "_description": "Total Branch NPL",
+          "_dataType": "NUMERIC",
+          "_required": false
+        }
+      ]
+    }
+  ]
+}

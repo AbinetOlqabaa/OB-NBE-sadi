@@ -1,0 +1,52 @@
+{
+  "ReturnKey": "ANARN001",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-04-01T00:00:00",
+  "EndDate": "2026-06-30T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "149_00001",
+      "Value": "",
+      "_description": "Loans and Advance Re-Categorized from Non-Accrual To Accrual Status at the end of the previous quarter_Number* of  Loans and Advances Re-Categorized from Non-Accrual To Accrual Status",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "149_00002",
+      "Value": "",
+      "_description": "Loans and Advance Re-Categorized from Non-Accrual To Accrual Status at the end of the previous quarter_Amount of  Loans and Advance Re-Categorized from Non-Accrual To Accrual Status",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "149_00003",
+      "Value": "",
+      "_description": "Loans and Advance Re-Categorized from Non-Accrual To Accrual Status during the quarter_Number* of  Loans and Advances Re-Categorized from Non-Accrual To Accrual Status",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "149_00004",
+      "Value": "",
+      "_description": "Loans and Advance Re-Categorized from Non-Accrual To Accrual Status during the quarter_Amount of  Loans and Advance Re-Categorized from Non-Accrual To Accrual Status",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "149_00005",
+      "Value": "",
+      "_description": "Total  Loans and Advances Re-Categorized from Non-Accrual To Accrual Status_Number* of  Loans and Advances Re-Categorized from Non-Accrual To Accrual Status",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "149_00006",
+      "Value": "",
+      "_description": "Total  Loans and Advances Re-Categorized from Non-Accrual To Accrual Status_Amount of  Loans and Advance Re-Categorized from Non-Accrual To Accrual Status",
+      "_dataType": "NUMERIC",
+      "_required": false
+    }
+  ],
+  "DynamicItemsList": []
+}

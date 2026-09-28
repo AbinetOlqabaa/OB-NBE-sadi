@@ -1,0 +1,213 @@
+{
+  "ReturnKey": "BUIL_CONSTXW002",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-04-01T00:00:00",
+  "EndDate": "2026-06-30T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "157_00001",
+      "Value": "",
+      "_description": "Real_Estate_Sub Total_Outstanding Balance",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00002",
+      "Value": "",
+      "_description": "Real_Estate_Sub Total_Collateral Value",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00003",
+      "Value": "",
+      "_description": "Real_Estate_Sub Total_Provision Held",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00004",
+      "Value": "",
+      "_description": "Commercial Building_Sub Total_Outstanding Balance",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00005",
+      "Value": "",
+      "_description": "Commercial Building_Sub Total_Collateral Value",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00006",
+      "Value": "",
+      "_description": "Commercial Building_Sub Total_Provision Held",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00007",
+      "Value": "",
+      "_description": "Residential building(total)_Outstanding Balance",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00008",
+      "Value": "",
+      "_description": "Residential building(total)_Collateral Value",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00009",
+      "Value": "",
+      "_description": "Residential building(total)_Provision Held",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00010",
+      "Value": "",
+      "_description": "Sub Grand total(1+2+3)_Outstanding Balance",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00011",
+      "Value": "",
+      "_description": "Sub Grand total(1+2+3)_Collateral Value",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00012",
+      "Value": "",
+      "_description": "Sub Grand total(1+2+3)_Provision held",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00013",
+      "Value": "",
+      "_description": "Other construction sector(total)_Outstanding Balance",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00014",
+      "Value": "",
+      "_description": "Other construction sector(total)_Collateral Value",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00015",
+      "Value": "",
+      "_description": "Other construction sector(total)_Provision Held",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00016",
+      "Value": "",
+      "_description": "Total construction loans(4+5)_Outstanding Balance",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00017",
+      "Value": "",
+      "_description": "Total construction loans(4+5)_Collateral Value",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00018",
+      "Value": "",
+      "_description": "Total construction loans(4+5)_Provision Held",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00019",
+      "Value": "",
+      "_description": "Total loans & advance and Bonds_Outstanding Balance",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00020",
+      "Value": "",
+      "_description": "Total loans & advance and Bonds_Collateral Value",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "157_00021",
+      "Value": "",
+      "_description": "Total loans & advance and Bonds_Provision Held",
+      "_dataType": "NUMERIC",
+      "_required": false
+    }
+  ],
+  "DynamicItemsList": [
+    {
+      "Area": 196,
+      "_areaName": "Commercial Construction Projects",
+      "DynamicItems": [
+        {
+          "Code": "1.1",
+          "Value": "",
+          "_description": "Name of borrower",
+          "_dataType": "TEXT",
+          "_required": true
+        },
+        {
+          "Code": "1.2",
+          "Value": "",
+          "_description": "Loan Type",
+          "_dataType": "TEXT",
+          "_required": false
+        },
+        {
+          "Code": "1.3",
+          "Value": "",
+          "_description": "Outstanding balance",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.4",
+          "Value": "",
+          "_description": "Loan status",
+          "_dataType": "TEXT",
+          "_required": false
+        },
+        {
+          "Code": "1.5",
+          "Value": "",
+          "_description": "Collateral Type",
+          "_dataType": "TEXT",
+          "_required": false
+        },
+        {
+          "Code": "1.6",
+          "Value": "",
+          "_description": "Collateral Value",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.7",
+          "Value": "",
+          "_description": "Provision held",
+          "_dataType": "NUMERIC",
+          "_required": false
+        }
+      ]
+    }
+  ]
+}

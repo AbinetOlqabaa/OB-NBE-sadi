@@ -1,0 +1,164 @@
+{
+  "ReturnKey": "NPL&PRO_NL001",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-04-01T00:00:00",
+  "EndDate": "2026-06-30T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "9_00001",
+      "Value": "",
+      "_description": "1-Total non-performing loans (sum 2-4)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00002",
+      "Value": "",
+      "_description": "2-Total substandard loans",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00003",
+      "Value": "",
+      "_description": "2,1- Realizable security",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00004",
+      "Value": "",
+      "_description": "2,2-Net substandard loans (2-2.1)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00005",
+      "Value": "",
+      "_description": "2,3-Specific provisions required (20% of 2.2)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00006",
+      "Value": "",
+      "_description": "2,4-Specific provisions held",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00007",
+      "Value": "",
+      "_description": "2,5-Excess/shortfall (2.4-2.3)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00008",
+      "Value": "",
+      "_description": "2,6-Number of classified loans",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00009",
+      "Value": "",
+      "_description": "3-Total doubtful loans",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00010",
+      "Value": "",
+      "_description": "3,1-Realizable security",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00011",
+      "Value": "",
+      "_description": "3,2-Net doubtful loans (3-3.1)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00012",
+      "Value": "",
+      "_description": "3,3-Specific provisions required (50% of 3.2)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00013",
+      "Value": "",
+      "_description": "3,4-Specific provisions held",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00014",
+      "Value": "",
+      "_description": "3,5-Excess/shortfall (3.4 – 3.3)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00015",
+      "Value": "",
+      "_description": "3,6-Number of classified loans",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00016",
+      "Value": "",
+      "_description": "4-Total loss loans",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00017",
+      "Value": "",
+      "_description": "4,1-Realizable security",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00018",
+      "Value": "",
+      "_description": "4,2-Net loss loans (4-4.1)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00019",
+      "Value": "",
+      "_description": "4,3-Specific provisions required (100% of 4.2)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00020",
+      "Value": "",
+      "_description": "4,4-Specific provisions held",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00021",
+      "Value": "",
+      "_description": "4,5-Excess/shortfall (4.4-4.3)",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "9_00022",
+      "Value": "",
+      "_description": "4,6-Number of classified loans",
+      "_dataType": "NUMERIC",
+      "_required": false
+    }
+  ],
+  "DynamicItemsList": []
+}

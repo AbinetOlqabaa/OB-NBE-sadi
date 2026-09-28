@@ -1,0 +1,52 @@
+{
+  "ReturnKey": "LOAN_SEC&REG_SE002",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-04-01T00:00:00",
+  "EndDate": "2026-06-30T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "SE002_39092",
+      "Value": "",
+      "_description": "Addis Ababa_Public Enterprise_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "SE002_39095",
+      "Value": "",
+      "_description": "Addis Ababa_Private & Coop._Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "SE002_39107",
+      "Value": "",
+      "_description": "Addis Ababa_Total_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "SE002_40619",
+      "Value": "",
+      "_description": "Total Amount_Total_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "SE002_40620",
+      "Value": "",
+      "_description": "Total Amount_Total_  # of Borrowers",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "SE002_40621",
+      "Value": "",
+      "_description": "Total Amount_ Total_# of Accounts  ",
+      "_dataType": "NUMERIC",
+      "_required": false
+    }
+  ],
+  "DynamicItemsList": []
+}

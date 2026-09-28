@@ -1,0 +1,52 @@
+{
+  "ReturnKey": "RLAFCRC001",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-04-01T00:00:00",
+  "EndDate": "2026-06-30T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "152_00001",
+      "Value": "",
+      "_description": "Original Amount of Loans and Advance",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "152_00002",
+      "Value": "",
+      "_description": "Amount of Loans and Advance after Latest Restructuring",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "152_00003",
+      "Value": "",
+      "_description": "Value of Collateral",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "152_00004",
+      "Value": "",
+      "_description": "Loan and Advance as a percentage of Bank's Total Capital",
+      "_dataType": "NUMERIC",
+      "_required": false
+    }
+  ],
+  "DynamicItemsList": [
+    {
+      "Area": 195,
+      "_areaName": "Counterparties with Concessions",
+      "DynamicItems": [
+        {
+          "Code": "1.1",
+          "Value": "",
+          "_description": "Name of the Counterparty/Borrower*",
+          "_dataType": "TEXT",
+          "_required": true
+        }
+      ]
+    }
+  ]
+}

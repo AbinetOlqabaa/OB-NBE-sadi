@@ -1,0 +1,73 @@
+{
+  "ReturnKey": "LOAN_RAN & REGRL002",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-07-01T00:00:00",
+  "EndDate": "2026-07-31T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "RL002_48782",
+      "Value": "",
+      "_description": "Addis Ababa_<= 100,000_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "RL002_48783",
+      "Value": "",
+      "_description": "Addis Ababa_  <= 100,000_# of Borrowers",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "RL002_48784",
+      "Value": "",
+      "_description": "Addis Ababa_<= 100,000_ # of Accounts  ",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "RL002_48803",
+      "Value": "",
+      "_description": "Addis Ababa_Total_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "RL002_48804",
+      "Value": "",
+      "_description": "Addis Ababa_  Total_# of Borrowers",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "RL002_48805",
+      "Value": "",
+      "_description": "Addis Ababa_Total_ # of Accounts  ",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "RL002_50819",
+      "Value": "",
+      "_description": "Total Amount_Total_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "RL002_50820",
+      "Value": "",
+      "_description": "Total Amount_  Total_# of Borrowers",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "RL002_50821",
+      "Value": "",
+      "_description": "Total Amount_Total_ # of Accounts  ",
+      "_dataType": "NUMERIC",
+      "_required": false
+    }
+  ],
+  "DynamicItemsList": []
+}

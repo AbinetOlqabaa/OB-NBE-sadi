@@ -1,0 +1,45 @@
+{
+  "ReturnKey": "DigitalLendingDL001",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-04-01T00:00:00",
+  "EndDate": "2026-06-30T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "161_00001",
+      "Value": "",
+      "_description": "Total_ Disbursement",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "161_00002",
+      "Value": "",
+      "_description": "Total_ Collection",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "161_00003",
+      "Value": "",
+      "_description": "Total_ Outstanding",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "161_00004",
+      "Value": "",
+      "_description": "Total_ # of Borrowers accounts",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "161_00005",
+      "Value": "",
+      "_description": "Total_ # of Borrowers",
+      "_dataType": "NUMERIC",
+      "_required": false
+    }
+  ],
+  "DynamicItemsList": []
+}

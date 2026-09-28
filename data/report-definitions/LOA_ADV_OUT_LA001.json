@@ -1,0 +1,136 @@
+{
+  "ReturnKey": "LOA_ADV_OUT_LA001",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-07-01T00:00:00",
+  "EndDate": "2026-07-31T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "67_00001",
+      "Value": "",
+      "_description": "Agriculture_Public Enterprise_Disbursement",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00002",
+      "Value": "",
+      "_description": "Agriculture_Public Enterprise_Collection",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00003",
+      "Value": "",
+      "_description": "Agriculture_Public Enterprise_Outstanding",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00010",
+      "Value": "",
+      "_description": "Agriculture_Total_Disbursement",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00011",
+      "Value": "",
+      "_description": "Agriculture_Total_Collection",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00012",
+      "Value": "",
+      "_description": "Agriculture_Total_Outstanding",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00022",
+      "Value": "",
+      "_description": "Manufacturing_Total_Disbursement",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00023",
+      "Value": "",
+      "_description": "Manufacturing_Total_Collection",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00024",
+      "Value": "",
+      "_description": "Manufacturing_Total_Outstanding",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00034",
+      "Value": "",
+      "_description": "Domestic Trade_Total_Disbursement",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00035",
+      "Value": "",
+      "_description": "Domestic Trade_Total_Collection",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00036",
+      "Value": "",
+      "_description": "Domestic Trade_Total_Outstanding",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00178",
+      "Value": "",
+      "_description": "Total_Total_Disbursement",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00179",
+      "Value": "",
+      "_description": "Total_Total_Collection",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00180",
+      "Value": "",
+      "_description": "Total_Total_Outstanding",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00286",
+      "Value": "",
+      "_description": "Grand Total_Disbursement",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00287",
+      "Value": "",
+      "_description": "Grand Total_Collection",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "67_00288",
+      "Value": "",
+      "_description": "Grand Total_Outstanding",
+      "_dataType": "NUMERIC",
+      "_required": false
+    }
+  ],
+  "DynamicItemsList": []
+}

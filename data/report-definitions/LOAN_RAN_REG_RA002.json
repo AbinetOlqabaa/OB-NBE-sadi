@@ -1,0 +1,52 @@
+{
+  "ReturnKey": "LOAN_RAN&REG_RA002",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-04-01T00:00:00",
+  "EndDate": "2026-06-30T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "RA002_40622",
+      "Value": "",
+      "_description": "Addis Ababa_<= 100,000_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "RA002_40623",
+      "Value": "",
+      "_description": "Addis Ababa_  <= 100,000_# of Borrowers",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "RA002_40643",
+      "Value": "",
+      "_description": "Addis Ababa_Total_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "RA002_42659",
+      "Value": "",
+      "_description": "Total Amount_Total_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "RA002_42660",
+      "Value": "",
+      "_description": "Total Amount_  Total_# of Borrowers",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "RA002_42661",
+      "Value": "",
+      "_description": "Total Amount_Total_ # of Accounts  ",
+      "_dataType": "NUMERIC",
+      "_required": false
+    }
+  ],
+  "DynamicItemsList": []
+}

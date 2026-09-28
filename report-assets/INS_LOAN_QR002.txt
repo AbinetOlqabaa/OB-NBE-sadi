@@ -1,0 +1,170 @@
+{
+  "ReturnKey": "INS_LOAN_QR002",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-04-01T00:00:00",
+  "EndDate": "2026-06-30T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "158_00001",
+      "Value": "",
+      "_description": "Sub total (loans to Directors)_Outstanding Balance",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "158_00002",
+      "Value": "",
+      "_description": "Sub total (loans to Directors)_Security Value",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "158_00003",
+      "Value": "",
+      "_description": "Sub total (mid- level management and above)_Outstanding Balance",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "158_00004",
+      "Value": "",
+      "_description": "Sub total (mid- level management and above)_Security Value",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "158_00005",
+      "Value": "",
+      "_description": "Loans to other staffs_Outstanding Balance",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "158_00006",
+      "Value": "",
+      "_description": "Loans to other staffs_Security Value",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "158_00007",
+      "Value": "",
+      "_description": "No. of staff_Security Value",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "158_00010",
+      "Value": "",
+      "_description": "Grand Total_Outstanding Balance",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "158_00011",
+      "Value": "",
+      "_description": "Grand Total_Security Value",
+      "_dataType": "NUMERIC",
+      "_required": false
+    }
+  ],
+  "DynamicItemsList": [
+    {
+      "Area": 198,
+      "_areaName": "Directors Loans Schedule",
+      "DynamicItems": [
+        {
+          "Code": "1.1",
+          "Value": "",
+          "_description": "Director's Name",
+          "_dataType": "TEXT",
+          "_required": true
+        },
+        {
+          "Code": "1.2",
+          "Value": "",
+          "_description": "Facility Type",
+          "_dataType": "TEXT",
+          "_required": false
+        },
+        {
+          "Code": "1.3",
+          "Value": "",
+          "_description": "Outstanding Balance",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.4",
+          "Value": "",
+          "_description": "Security Value",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.5",
+          "Value": "",
+          "_description": "Security Type",
+          "_dataType": "TEXT",
+          "_required": false
+        },
+        {
+          "Code": "1.6",
+          "Value": "",
+          "_description": "Loan Status",
+          "_dataType": "TEXT",
+          "_required": false
+        }
+      ]
+    },
+    {
+      "Area": 199,
+      "_areaName": "Management Loans Schedule",
+      "DynamicItems": [
+        {
+          "Code": "1.1",
+          "Value": "",
+          "_description": "Manager's Name",
+          "_dataType": "TEXT",
+          "_required": true
+        },
+        {
+          "Code": "1.2",
+          "Value": "",
+          "_description": "Facility Type",
+          "_dataType": "TEXT",
+          "_required": false
+        },
+        {
+          "Code": "1.3",
+          "Value": "",
+          "_description": "Outstanding Balance",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.4",
+          "Value": "",
+          "_description": "Security Value",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.5",
+          "Value": "",
+          "_description": "Security Type",
+          "_dataType": "TEXT",
+          "_required": false
+        },
+        {
+          "Code": "1.6",
+          "Value": "",
+          "_description": "Loan Status",
+          "_dataType": "TEXT",
+          "_required": false
+        }
+      ]
+    }
+  ]
+}

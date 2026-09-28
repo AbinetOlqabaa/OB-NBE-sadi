@@ -1,0 +1,255 @@
+{
+  "ReturnKey": "BOR_TEN_PER_LB002",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-07-01T00:00:00",
+  "EndDate": "2026-07-31T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "LB002_00001",
+      "Value": "",
+      "_description": "Name of Counterparty_20",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00002",
+      "Value": "",
+      "_description": "Name of Counterparty_19",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00003",
+      "Value": "",
+      "_description": "Name of Counterparty_18",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00004",
+      "Value": "",
+      "_description": "Name of Counterparty_17",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00005",
+      "Value": "",
+      "_description": "Name of Counterparty_16",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00006",
+      "Value": "",
+      "_description": "Name of Counterparty_15",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00007",
+      "Value": "",
+      "_description": "Name of Counterparty_14",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00008",
+      "Value": "",
+      "_description": "Name of Counterparty_13",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00009",
+      "Value": "",
+      "_description": "Name of Counterparty_12",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00010",
+      "Value": "",
+      "_description": "Name of Counterparty_11",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00011",
+      "Value": "",
+      "_description": "Name of Counterparty_10",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00012",
+      "Value": "",
+      "_description": "Name of Counterparty_9",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00013",
+      "Value": "",
+      "_description": "Name of Counterparty_8",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00014",
+      "Value": "",
+      "_description": "Name of Counterparty_7",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00015",
+      "Value": "",
+      "_description": "Name of Counterparty_6",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00016",
+      "Value": "",
+      "_description": "Name of Counterparty_5",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00017",
+      "Value": "",
+      "_description": "Name of Counterparty_4",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00018",
+      "Value": "",
+      "_description": "Name of Counterparty_3",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00019",
+      "Value": "",
+      "_description": "Name of Counterparty_2",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00020",
+      "Value": "",
+      "_description": "Name of Counterparty_1",
+      "_dataType": "NUMERIC",
+      "_required": true
+    },
+    {
+      "Code": "LB002_00061",
+      "Value": "",
+      "_description": "Aggregate _Total Outstanding Balance",
+      "_dataType": "NUMERIC",
+      "_required": true
+    }
+  ],
+  "DynamicItemsList": [
+    {
+      "Area": 226,
+      "_areaName": "Large Exposures Register",
+      "DynamicItems": [
+        {
+          "Code": "1.1",
+          "Value": "",
+          "_description": "Name of Counterparty*",
+          "_dataType": "TEXT",
+          "_required": true
+        },
+        {
+          "Code": "1.2",
+          "Value": "",
+          "_description": "Type of Exposure",
+          "_dataType": "TEXT",
+          "_required": true
+        },
+        {
+          "Code": "1.3",
+          "Value": "",
+          "_description": "Sector of Exposure",
+          "_dataType": "TEXT",
+          "_required": true
+        },
+        {
+          "Code": "1.4",
+          "Value": "",
+          "_description": "Approved Limit/Facility",
+          "_dataType": "NUMERIC",
+          "_required": true
+        },
+        {
+          "Code": "1.5",
+          "Value": "",
+          "_description": "Exposure Amount (on-balance sheet) A",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.6",
+          "Value": "",
+          "_description": "Off-balance Sheet Exposure B",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.7",
+          "Value": "",
+          "_description": "Total Outstanding Balance C=A+B",
+          "_dataType": "NUMERIC",
+          "_required": true
+        },
+        {
+          "Code": "1.8",
+          "Value": "",
+          "_description": "Maturity Date",
+          "_dataType": "DATE",
+          "_required": true
+        },
+        {
+          "Code": "1.9",
+          "Value": "",
+          "_description": "Capital",
+          "_dataType": "NUMERIC",
+          "_required": true
+        },
+        {
+          "Code": "1.10",
+          "Value": "",
+          "_description": "Exposure as Percent of Total Capital (C/Capital*100)",
+          "_dataType": "NUMERIC",
+          "_required": true
+        },
+        {
+          "Code": "1.11",
+          "Value": "",
+          "_description": "Status (classification)",
+          "_dataType": "TEXT",
+          "_required": true
+        },
+        {
+          "Code": "1.12",
+          "Value": "",
+          "_description": "Collateral Type",
+          "_dataType": "TEXT",
+          "_required": true
+        },
+        {
+          "Code": "1.13",
+          "Value": "",
+          "_description": "Collateral Estimated Value",
+          "_dataType": "NUMERIC",
+          "_required": false
+        }
+      ]
+    }
+  ]
+}

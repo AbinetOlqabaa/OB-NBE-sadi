@@ -1,0 +1,122 @@
+{
+  "ReturnKey": "TOP_20_NPLs_TN001",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-04-01T00:00:00",
+  "EndDate": "2026-06-30T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "10_00001",
+      "Value": "",
+      "_description": "Sub total top ten (10) NPLs_Loans Outstanding",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "10_00002",
+      "Value": "",
+      "_description": "Sub total top ten (10) NPLs_Provision Held",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "10_00003",
+      "Value": "",
+      "_description": "Grand total top twenty (20) NPLs_Loans Approved",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "10_00004",
+      "Value": "",
+      "_description": "Sub total top ten (10) NPLs_Collateral value",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "10_00005",
+      "Value": "",
+      "_description": "Sub total top ten (10) NPLs_Loans Approved",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "10_00006",
+      "Value": "",
+      "_description": "Grand total top twenty (20) NPLs_Loans Outstanding",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "10_00007",
+      "Value": "",
+      "_description": "Grand total top twenty (20) NPLs_Collateral value",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "10_00008",
+      "Value": "",
+      "_description": "Grand total top twenty (20) NPLs_Provision held",
+      "_dataType": "NUMERIC",
+      "_required": false
+    }
+  ],
+  "DynamicItemsList": [
+    {
+      "Area": 171,
+      "_areaName": "Top 20 NPLs Itemized Schedule",
+      "DynamicItems": [
+        {
+          "Code": "1.1",
+          "Value": "",
+          "_description": "S.No.",
+          "_dataType": "TEXT",
+          "_required": true
+        },
+        {
+          "Code": "1.2",
+          "Value": "",
+          "_description": "Name of Borrower",
+          "_dataType": "TEXT",
+          "_required": true
+        },
+        {
+          "Code": "1.3",
+          "Value": "",
+          "_description": "Loans Approved",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.4",
+          "Value": "",
+          "_description": "Loans Outstanding",
+          "_dataType": "NUMERIC",
+          "_required": true
+        },
+        {
+          "Code": "1.5",
+          "Value": "",
+          "_description": "Collateral Value",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.6",
+          "Value": "",
+          "_description": "Provision held",
+          "_dataType": "NUMERIC",
+          "_required": false
+        },
+        {
+          "Code": "1.7",
+          "Value": "",
+          "_description": "Loan Status",
+          "_dataType": "TEXT",
+          "_required": true
+        }
+      ]
+    }
+  ]
+}

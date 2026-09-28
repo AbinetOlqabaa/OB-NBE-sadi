@@ -1,0 +1,108 @@
+{
+  "ReturnKey": "LOA_PORT_EP001",
+  "InstCode": "0000013",
+  "FinYear": 2026,
+  "StartDate": "2026-07-01T00:00:00",
+  "EndDate": "2026-07-31T00:00:00",
+  "ReturnItemsList": [
+    {
+      "Code": "34_00001",
+      "Value": "",
+      "_description": "Advance on import bills_Disbursement in the month_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "34_00003",
+      "Value": "",
+      "_description": "Advance on import bills_Outstanding Loans and Advances_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "34_00006",
+      "Value": "",
+      "_description": "Pre-shipment export loans_Disbursement in the month_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "34_00008",
+      "Value": "",
+      "_description": "Pre-shipment export loans_Outstanding Loans and Advances_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "34_00011",
+      "Value": "",
+      "_description": "Overdraft facilities_Disbursement in the month_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "34_00013",
+      "Value": "",
+      "_description": "Overdraft facilities_Outstanding Loans and Advances_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "34_00016",
+      "Value": "",
+      "_description": "Merchandise _Disbursement in the Month_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "34_00018",
+      "Value": "",
+      "_description": "Merchandise_Outstanding Loans and Advances_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "34_00019",
+      "Value": "",
+      "_description": "Term Loans_Disbursement in the Month_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "34_00045",
+      "Value": "",
+      "_description": "Term Loans_Outstanding Loans and Advance_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "34_00026",
+      "Value": "",
+      "_description": "Total(sum 1.1-1.5)_Disbursement in the Month_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "34_00028",
+      "Value": "",
+      "_description": "Total(sum 1.1-1.5)_Outstanding Loans and Advances_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "34_00041",
+      "Value": "",
+      "_description": "Total(sum 2.1-2.2)_Disbursement in the month_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    },
+    {
+      "Code": "34_00043",
+      "Value": "",
+      "_description": "Total(sum 2.1-2.2)_Outstanding Loans and Advances_Amount",
+      "_dataType": "NUMERIC",
+      "_required": false
+    }
+  ],
+  "DynamicItemsList": []
+}
