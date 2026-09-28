@@ -12,6 +12,7 @@ import {
 } from './types/regulatory';
 import { getAllReports, getReportByKey, subscribeReports } from './data/report-registry';
 import { submissionService, DEMO_USERS } from './services/submissionService';
+import { indexedDbStorage } from './services/indexedDbStorage';
 import { userService } from './services/userService';
 import { departmentService } from './services/departmentService';
 import { Navbar } from './components/Navbar';
@@ -25,6 +26,7 @@ import { NbeSimulatorView } from './components/NbeSimulatorView';
 import { Phase2SSOTView } from './components/Phase2SSOTView';
 import { AuditTrailView } from './components/AuditTrailView';
 import { DocumentationView } from './components/DocumentationView';
+import { SystemHealthDashboard } from './components/SystemHealthDashboard';
 import { LoginPage } from './components/LoginPage';
 import { RegisterPage } from './components/RegisterPage';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
@@ -34,6 +36,28 @@ import { BottomNavigation } from './components/BottomNavigation';
 import { InputAccessoryView } from './components/InputAccessoryView';
 import { useSwipeGesture } from './hooks/useSwipeGesture';
 import { vibrate, haptics } from './utils/haptics';
+import {
+  getVerifiedHardwareSummary,
+  triggerHardwareVerificationHaptic,
+} from './utils/deviceCapabilities';
+import {
+  Fingerprint,
+  Camera,
+  ShieldCheck,
+  CheckCircle2,
+  X,
+} from 'lucide-react';
+
+export interface ToastNotification {
+  message: string;
+  title?: string;
+  type?: 'default' | 'hardware' | 'success' | 'warning' | 'error';
+  badgeLabel?: string;
+  sensorDetails?: string;
+  iconType?: 'dual' | 'fingerprint' | 'camera' | 'hardware';
+  userName?: string;
+  userRole?: string;
+}
 
 export default function App() {
   // First visitor starts on the Login Page
@@ -63,7 +87,8 @@ export default function App() {
   const [templates, setTemplates] = useState<ReportMetadata[]>(getAllReports());
   const [submissions, setSubmissions] = useState<ReportSubmission[]>(submissionService.getAll());
   const [editingSubmission, setEditingSubmission] = useState<ReportSubmission | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastNotification, setToastNotification] = useState<ToastNotification | null>(null);
+  const toastTimeoutRef = React.useRef<any>(null);
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
@@ -202,6 +227,15 @@ export default function App() {
         showToast('Navigated to NBE Specifications & Documentation (Ctrl+Shift+D)');
         return;
       }
+
+      // 11. Ctrl+Shift+H / Cmd+Shift+H: Jump to System Health
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'h') {
+        e.preventDefault();
+        setActiveTab('SYSTEM_HEALTH');
+        setEditingSubmission(null);
+        showToast('Navigated to System Health Telemetry Dashboard (Ctrl+Shift+H)');
+        return;
+      }
     };
 
     window.addEventListener('keydown', handleGlobalKeyDown);
@@ -263,21 +297,39 @@ export default function App() {
     const unsubDepts = departmentService.subscribe(() => {
       setTemplates(getAllReports());
     });
+    const unsubStorage = indexedDbStorage.subscribe(() => {
+      setSubmissions(submissionService.getAll());
+    });
     return () => {
       unsubReports();
       unsubDepts();
+      unsubStorage();
     };
   }, []);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 4500);
+  const showToast = (toastInput: string | ToastNotification, duration = 4500) => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    if (typeof toastInput === 'string') {
+      setToastNotification({
+        message: toastInput,
+        type: 'default',
+      });
+    } else {
+      setToastNotification(toastInput);
+    }
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastNotification(null);
+    }, duration);
   };
 
-  // Login handler
-  const handleLoginSuccess = (user: UserSession, redirectTab?: string) => {
+  // Login handler with subtle haptic feedback & device hardware verification toast alert
+  const handleLoginSuccess = async (user: UserSession, redirectTab?: string) => {
+    // 1. Trigger subtle tactile haptic feedback confirming login & verified hardware
+    triggerHardwareVerificationHaptic();
+
+    // 2. Set current authenticated user & persist
     setCurrentUser(user);
     try {
       localStorage.setItem('ob_logged_in_user', JSON.stringify(user));
@@ -286,7 +338,24 @@ export default function App() {
     const targetTab = (redirectTab as ViewTab) || getInitialTabForRole(user.role);
     setActiveTab(targetTab);
     setEditingSubmission(null);
-    showToast(`Welcome, ${user.name}! Logged in as ${user.role}.`);
+
+    // 3. Obtain verified hardware summary from internal diagnostics
+    const hwSummary = await getVerifiedHardwareSummary();
+
+    // 4. Present subtle confirmation toast alert verifying device hardware
+    showToast(
+      {
+        type: 'hardware',
+        title: hwSummary.title,
+        message: hwSummary.message,
+        badgeLabel: hwSummary.badgeLabel,
+        sensorDetails: hwSummary.sensorDetails,
+        iconType: hwSummary.iconType,
+        userName: user.name,
+        userRole: user.role,
+      },
+      6000
+    );
   };
 
   // Logout handler
@@ -625,6 +694,10 @@ export default function App() {
 
               {activeTab === 'AUDIT_TRAIL' && <AuditTrailView />}
 
+              {activeTab === 'SYSTEM_HEALTH' && (
+                <SystemHealthDashboard currentUser={currentUser} />
+              )}
+
               {activeTab === 'DOCUMENTATION' && <DocumentationView templates={templates} />}
             </>
           )}
@@ -672,11 +745,96 @@ export default function App() {
       {/* Global Mobile Input Accessory View that listens for document focus events */}
       {!editingSubmission && <InputAccessoryView />}
 
-      {/* Global Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-[#121428] text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-2xl border border-ob-indigo-800/80 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
-          <span className="w-2 h-2 rounded-full bg-ob-green-400 animate-pulse"></span>
-          <span>{toastMessage}</span>
+      {/* Global Toast / Hardware Verification Notification */}
+      {toastNotification && (
+        <div
+          role="alert"
+          aria-live="polite"
+          className="fixed bottom-5 right-4 sm:right-6 z-50 max-w-sm sm:max-w-md w-full animate-in fade-in slide-in-from-bottom-3 duration-300 pointer-events-auto"
+        >
+          {toastNotification.type === 'hardware' ? (
+            <div className="bg-[#121428]/95 dark:bg-[#0E1022]/98 backdrop-blur-md text-white rounded-2xl p-4 shadow-2xl border border-emerald-500/40 ring-1 ring-emerald-500/20 relative overflow-hidden transition-all">
+              {/* Subtle ambient decorative accents */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none -mr-10 -mt-10" />
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-ob-indigo-500/10 rounded-full blur-xl pointer-events-none -ml-8 -mb-8" />
+
+              <div className="flex items-start gap-3 relative z-10">
+                {/* Hardware Verification Icon */}
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-ob-indigo-500/20 border border-emerald-400/30 flex items-center justify-center shrink-0 text-emerald-400 shadow-inner">
+                  {toastNotification.iconType === 'dual' ? (
+                    <div className="relative flex items-center justify-center">
+                      <Fingerprint className="w-5 h-5 text-emerald-400" />
+                      <span className="absolute -bottom-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-[#121428]" />
+                    </div>
+                  ) : toastNotification.iconType === 'camera' ? (
+                    <Camera className="w-5 h-5 text-emerald-400" />
+                  ) : toastNotification.iconType === 'fingerprint' ? (
+                    <Fingerprint className="w-5 h-5 text-emerald-400" />
+                  ) : (
+                    <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                  )}
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0 pr-1">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="text-xs font-bold text-white tracking-tight">
+                      {toastNotification.title || 'Device Hardware Verified'}
+                    </span>
+                    {toastNotification.badgeLabel && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        {toastNotification.badgeLabel}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-slate-200 leading-relaxed font-normal">
+                    {toastNotification.message}
+                  </p>
+
+                  {toastNotification.sensorDetails && (
+                    <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-400 font-mono">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span className="truncate">{toastNotification.sensorDetails}</span>
+                    </div>
+                  )}
+
+                  {toastNotification.userName && (
+                    <div className="mt-1 text-[10px] text-slate-400">
+                      Authenticated session: <span className="font-medium text-slate-300">{toastNotification.userName}</span>{' '}
+                      <span className="opacity-70">({toastNotification.userRole})</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Dismiss button */}
+                <button
+                  onClick={() => setToastNotification(null)}
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors shrink-0"
+                  title="Dismiss alert"
+                  aria-label="Dismiss alert"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Standard toast */
+            <div className="bg-[#121428] text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-2xl border border-ob-indigo-800/80 flex items-center gap-2 justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-ob-green-400 animate-pulse" />
+                <span>{toastNotification.message}</span>
+              </div>
+              <button
+                onClick={() => setToastNotification(null)}
+                className="text-slate-400 hover:text-white p-0.5 ml-2 rounded hover:bg-white/10"
+                aria-label="Dismiss"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

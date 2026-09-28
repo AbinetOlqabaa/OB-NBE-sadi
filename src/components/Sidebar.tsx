@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   FileText,
   Inbox,
@@ -18,8 +18,25 @@ import {
   Search,
   X,
   Network,
+  Fingerprint,
+  ScanFace,
+  Sliders,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle,
+  Activity,
 } from 'lucide-react';
 import { UserSession } from '../types/regulatory';
+import {
+  isBiometricLoginEnabled,
+  setBiometricLoginEnabled,
+  subscribeToBiometricPreferenceChanges,
+  getDeviceCapabilities,
+  DeviceCapabilities,
+} from '../utils/deviceCapabilities.ts';
+import { recordBiometricAuditLog } from './AuditTrailView.tsx';
+import { triggerHaptic, vibrate } from '../utils/haptics.ts';
+import { UserSettingsModal } from './UserSettingsModal.tsx';
 
 export type ViewTab =
   | 'ADMIN_DASHBOARD'
@@ -29,7 +46,8 @@ export type ViewTab =
   | 'NBE_SIMULATOR'
   | 'PHASE2_SSOT'
   | 'AUDIT_TRAIL'
-  | 'DOCUMENTATION';
+  | 'DOCUMENTATION'
+  | 'SYSTEM_HEALTH';
 
 interface SidebarProps {
   activeTab: ViewTab;
@@ -60,6 +78,62 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const isMac = typeof window !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
   const modKey = isMac ? '⌘' : 'Ctrl';
+
+  // User Biometric Login Preference (individual setting per user)
+  const [isBiometricEnabled, setIsBiometricEnabled] = useState<boolean>(() =>
+    isBiometricLoginEnabled(currentUser.email)
+  );
+  const [deviceCaps, setDeviceCaps] = useState<DeviceCapabilities | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'SETTINGS' | 'HISTORY'>('SETTINGS');
+
+  // Sync preference state if user changes or external preference event is fired
+  useEffect(() => {
+    setIsBiometricEnabled(isBiometricLoginEnabled(currentUser.email));
+  }, [currentUser.email]);
+
+  useEffect(() => {
+    const unsub = subscribeToBiometricPreferenceChanges((detail) => {
+      if (!detail.userEmail || detail.userEmail.toLowerCase() === currentUser.email.toLowerCase()) {
+        setIsBiometricEnabled(detail.enabled);
+      }
+    });
+    return unsub;
+  }, [currentUser.email]);
+
+  // Load hardware status to display sensor feedback next to toggle
+  useEffect(() => {
+    let isMounted = true;
+    getDeviceCapabilities(currentUser.email)
+      .then((caps) => {
+        if (isMounted) setDeviceCaps(caps);
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser.email, isBiometricEnabled]);
+
+  const handleToggleBiometric = useCallback(() => {
+    const nextState = !isBiometricEnabled;
+    setIsBiometricEnabled(nextState);
+    setBiometricLoginEnabled(nextState, currentUser.email);
+    triggerHaptic('selection');
+    vibrate(20);
+
+    // Record regulatory audit trail event
+    recordBiometricAuditLog({
+      actorId: currentUser.email,
+      actorName: currentUser.name,
+      actorRole: currentUser.role,
+      action: nextState ? 'BIOMETRIC_PREFERENCE_ENABLED' : 'BIOMETRIC_PREFERENCE_DISABLED',
+      type: 'FINGERPRINT',
+      entityId: currentUser.email,
+      details: `[User Settings] Biometric Login hardware authentication was ${
+        nextState ? 'ENABLED' : 'DISABLED'
+      } by user for account ${currentUser.email}.`,
+    }).catch(() => {});
+  }, [isBiometricEnabled, currentUser]);
 
   // Listen for Ctrl+B or Cmd+B to toggle sidebar collapse
   useEffect(() => {
@@ -170,6 +244,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       roles: ['ADMIN', 'CHECKER', 'MAKER', 'NBE_OFFICER'],
     },
     {
+      id: 'SYSTEM_HEALTH' as ViewTab,
+      label: 'System Health',
+      shortLabel: 'Hardware',
+      icon: Activity,
+      description: 'Real-time sensors & enclave telemetry',
+      badge: null,
+      shortcut: `${modKey}+⇧+H`,
+      roles: ['ADMIN', 'MAKER', 'CHECKER', 'NBE_OFFICER'],
+    },
+    {
       id: 'DOCUMENTATION' as ViewTab,
       label: 'NBE Specifications',
       shortLabel: 'Docs',
@@ -275,8 +359,81 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </nav>
             </div>
 
-            {/* Drawer Footer User Profile */}
+            {/* Drawer Footer User Settings & Profile */}
             <div className="p-4 border-t border-[#22284D] bg-[#0E1020] space-y-3 pb-safe">
+              {/* User Settings: Biometric Login Toggle */}
+              <div className="p-2.5 rounded-xl bg-black/40 border border-[#262D55] space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Fingerprint className="w-3.5 h-3.5 text-ob-green-400" />
+                    <span className="text-[11px] font-bold text-slate-200">Biometric Login</span>
+                  </div>
+
+                  {/* Toggle Switch */}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isBiometricEnabled}
+                    onClick={handleToggleBiometric}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-1 focus:ring-ob-green-400 touch-press ${
+                      isBiometricEnabled ? 'bg-emerald-600' : 'bg-slate-700'
+                    }`}
+                    title={
+                      isBiometricEnabled
+                        ? 'Disable hardware authentication'
+                        : 'Enable hardware authentication'
+                    }
+                  >
+                    <span className="sr-only">Toggle Biometric Login</span>
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                        isBiometricEnabled ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <p className="text-[10px] text-slate-400 leading-tight">
+                  {isBiometricEnabled
+                    ? 'Hardware authentication active for one-touch sign-in.'
+                    : 'Disabled. Password will be required on sign-in.'}
+                </p>
+
+                {/* Hardware Readiness Status Badges */}
+                {isBiometricEnabled && deviceCaps && (
+                  <div className="pt-1.5 border-t border-[#22284D]/60 flex items-center justify-between text-[9px] text-slate-400">
+                    <div className="flex items-center gap-1">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          deviceCaps.isFingerprintSupported ? 'bg-emerald-400' : 'bg-slate-500'
+                        }`}
+                      />
+                      <span>Fingerprint: {deviceCaps.isFingerprintSupported ? 'Ready' : 'Unavailable'}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          deviceCaps.cameraStatus.statusLevel === 'PERMISSION_DENIED'
+                            ? 'bg-rose-400'
+                            : deviceCaps.isCameraSupported
+                            ? 'bg-teal-400'
+                            : 'bg-slate-500'
+                        }`}
+                      />
+                      <span>
+                        Face ID:{' '}
+                        {deviceCaps.cameraStatus.statusLevel === 'PERMISSION_DENIED'
+                          ? 'Denied'
+                          : deviceCaps.isCameraSupported
+                          ? 'Ready'
+                          : 'Unavailable'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="flex items-center gap-2.5 p-2 rounded-xl bg-black/30 border border-[#262D55]">
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold text-white truncate">{currentUser.name}</div>
@@ -286,6 +443,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <span className="text-slate-400 truncate">{currentUser.department || 'Oromia Bank'}</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Authentication History & Hardware Settings Buttons */}
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSettingsTab('HISTORY');
+                    setIsSettingsOpen(true);
+                  }}
+                  className="min-h-[40px] flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-semibold text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-[#2B3369] transition-colors"
+                  title="View hardware authentication audit history"
+                >
+                  <History className="w-3.5 h-3.5 text-ob-indigo-400" />
+                  <span>Auth History</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSettingsTab('SETTINGS');
+                    setIsSettingsOpen(true);
+                  }}
+                  className="min-h-[40px] flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-semibold text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-[#2B3369] transition-colors"
+                  title="Configure biometric preferences"
+                >
+                  <Sliders className="w-3.5 h-3.5 text-ob-green-400" />
+                  <span>Settings</span>
+                </button>
               </div>
 
               {onLogout && (
@@ -445,6 +630,79 @@ export const Sidebar: React.FC<SidebarProps> = ({
               )}
             </div>
 
+            {/* User Settings: Biometric Login Toggle Switch */}
+            <div className="p-2.5 rounded-xl bg-black/40 border border-[#262D55] space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Fingerprint className="w-3.5 h-3.5 text-ob-green-400" />
+                  <span className="text-[11px] font-bold text-slate-200">Biometric Login</span>
+                </div>
+
+                {/* Toggle Switch */}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={isBiometricEnabled}
+                  onClick={handleToggleBiometric}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-1 focus:ring-ob-green-400 touch-press ${
+                    isBiometricEnabled ? 'bg-emerald-600' : 'bg-slate-700'
+                  }`}
+                  title={
+                    isBiometricEnabled
+                      ? 'Disable hardware authentication'
+                      : 'Enable hardware authentication'
+                  }
+                >
+                  <span className="sr-only">Toggle Biometric Login</span>
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      isBiometricEnabled ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <p className="text-[10px] text-slate-400 leading-tight">
+                {isBiometricEnabled
+                  ? 'Hardware authentication active for one-touch sign-in.'
+                  : 'Disabled. Password will be required on sign-in.'}
+              </p>
+
+              {/* Hardware Readiness Status Badges */}
+              {isBiometricEnabled && deviceCaps && (
+                <div className="pt-1.5 border-t border-[#22284D]/60 flex items-center justify-between text-[9px] text-slate-400">
+                  <div className="flex items-center gap-1">
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        deviceCaps.isFingerprintSupported ? 'bg-emerald-400' : 'bg-slate-500'
+                      }`}
+                    />
+                    <span>Fingerprint: {deviceCaps.isFingerprintSupported ? 'Ready' : 'Unavailable'}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        deviceCaps.cameraStatus.statusLevel === 'PERMISSION_DENIED'
+                          ? 'bg-rose-400'
+                          : deviceCaps.isCameraSupported
+                          ? 'bg-teal-400'
+                          : 'bg-slate-500'
+                      }`}
+                    />
+                    <span>
+                      Face ID:{' '}
+                      {deviceCaps.cameraStatus.statusLevel === 'PERMISSION_DENIED'
+                        ? 'Denied'
+                        : deviceCaps.isCameraSupported
+                        ? 'Ready'
+                        : 'Unavailable'}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center gap-2.5 p-2 rounded-xl bg-black/30 border border-[#262D55]">
               <div className="w-8 h-8 rounded-lg bg-white p-1 flex items-center justify-center shrink-0 shadow-xs">
                 <img
@@ -463,6 +721,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             </div>
 
+            {/* Authentication History & User Settings Quick Actions */}
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsTab('HISTORY');
+                  setIsSettingsOpen(true);
+                }}
+                className="min-h-[36px] flex items-center justify-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-[#2B3369] transition-colors cursor-pointer"
+                title="View hardware authentication audit history"
+              >
+                <History className="w-3.5 h-3.5 text-ob-indigo-400" />
+                <span>Auth History</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsTab('SETTINGS');
+                  setIsSettingsOpen(true);
+                }}
+                className="min-h-[36px] flex items-center justify-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-[#2B3369] transition-colors cursor-pointer"
+                title="Configure biometric preferences"
+              >
+                <Sliders className="w-3.5 h-3.5 text-ob-green-400" />
+                <span>Settings</span>
+              </button>
+            </div>
+
             {onLogout && (
               <button
                 type="button"
@@ -477,6 +763,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
+            {/* Quick Biometric Toggle Button in Collapsed Sidebar */}
+            <button
+              type="button"
+              onClick={handleToggleBiometric}
+              className={`p-2 rounded-lg transition-colors cursor-pointer relative ${
+                isBiometricEnabled
+                  ? 'text-ob-green-400 hover:bg-white/10'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+              }`}
+              title={`Biometric Login: ${
+                isBiometricEnabled ? 'Enabled' : 'Disabled'
+              } (Click to toggle)`}
+              aria-label={`Biometric Login ${isBiometricEnabled ? 'Enabled' : 'Disabled'}`}
+            >
+              <Fingerprint className="w-4 h-4" />
+              <span
+                className={`absolute top-1 right-1 w-2 h-2 rounded-full ${
+                  isBiometricEnabled
+                    ? 'bg-emerald-400 ring-1 ring-[#121428]'
+                    : 'bg-slate-600'
+                }`}
+              />
+            </button>
+
+            {/* Quick Auth History in Collapsed Sidebar */}
+            <button
+              type="button"
+              onClick={() => {
+                setSettingsTab('HISTORY');
+                setIsSettingsOpen(true);
+              }}
+              className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              title="Authentication History"
+            >
+              <History className="w-4 h-4 text-ob-indigo-400" />
+            </button>
+
             {onOpenShortcutsModal && (
               <button
                 type="button"
@@ -491,6 +814,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div
               className="w-8 h-8 rounded-lg bg-white p-1 flex items-center justify-center shadow-xs cursor-pointer"
               title={`${currentUser.name} (${currentUser.role})`}
+              onClick={() => {
+                setSettingsTab('SETTINGS');
+                setIsSettingsOpen(true);
+              }}
             >
               <img
                 src="/brand/oromia-logo-mark-transparent.png"
@@ -512,6 +839,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
     </aside>
+
+    {/* Centralized User Settings & Hardware Authentication History Modal */}
+    <UserSettingsModal
+      isOpen={isSettingsOpen}
+      onClose={() => setIsSettingsOpen(false)}
+      currentUser={currentUser}
+      initialTab={settingsTab}
+    />
     </>
   );
 };

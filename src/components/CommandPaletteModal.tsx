@@ -22,6 +22,7 @@ import {
   Moon,
   Laptop,
   Network,
+  Activity,
 } from 'lucide-react';
 import { ViewTab } from './Sidebar.tsx';
 import { ReportMetadata, UserSession } from '../types/regulatory.ts';
@@ -127,6 +128,15 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       subtitle: 'Immutable event history & regulatory CSV export',
       icon: History,
       shortcut: `${modKey}+Shift+L`,
+      category: 'Views',
+      allowedRoles: ['ADMIN', 'MAKER', 'CHECKER', 'NBE_OFFICER'],
+    },
+    {
+      id: 'SYSTEM_HEALTH' as ViewTab,
+      title: 'Authentication Hardware & System Health',
+      subtitle: 'Real-time sensors (Camera, Fingerprint, Secure Enclave) status & diagnostics',
+      icon: Activity,
+      shortcut: `${modKey}+Shift+H`,
       category: 'Views',
       allowedRoles: ['ADMIN', 'MAKER', 'CHECKER', 'NBE_OFFICER'],
     },

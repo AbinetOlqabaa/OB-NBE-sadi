@@ -27,6 +27,7 @@ import {
 import { AuditLogEntry } from '../types/regulatory';
 import { Pagination } from './Pagination';
 import { exportGeneralAuditTrailPDF } from '../utils/regulatoryReportPdfExport';
+import { indexedDbStorage } from '../services/indexedDbStorage';
 
 export interface BiometricLogPayload {
   actorId?: string;
@@ -38,7 +39,10 @@ export interface BiometricLogPayload {
     | 'BIOMETRIC_AUTH_TIMEOUT'
     | 'BIOMETRIC_LOGIN'
     | 'BIOMETRIC_ENROLLED'
-    | 'BIOMETRIC_PROBE';
+    | 'BIOMETRIC_REVOKED'
+    | 'BIOMETRIC_PROBE'
+    | 'BIOMETRIC_PREFERENCE_ENABLED'
+    | 'BIOMETRIC_PREFERENCE_DISABLED';
   type?: 'FINGERPRINT' | 'FACE' | 'WEBAUTHN_PLATFORM';
   entityId?: string;
   details?: string;
@@ -90,11 +94,15 @@ export async function recordBiometricAuditLog(payload: BiometricLogPayload): Pro
     });
     if (res.ok) {
       const serverEntry = await res.json();
+      indexedDbStorage.saveAuditLog(serverEntry, { syncStatus: 'SYNCED', isOffline: false }).catch(() => {});
       return serverEntry;
     }
   } catch (err) {
     // Graceful offline fallback
   }
+
+  // Persist locally in IndexedDB storage for guaranteed offline durability
+  indexedDbStorage.saveAuditLog(entry, { syncStatus: 'PENDING_SYNC', isOffline: true }).catch(() => {});
 
   // Cache locally in browser storage for persistence across reloads
   try {
@@ -124,11 +132,30 @@ export const AuditTrailView: React.FC = () => {
   const fetchLogs = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/audit-logs?limit=300');
-      const data = await res.json();
-      
-      // Merge with any client-side cached biometric logs if available
-      let mergedLogs: AuditLogEntry[] = data || [];
+      let serverLogs: AuditLogEntry[] = [];
+      try {
+        const res = await fetch('/api/audit-logs?limit=300');
+        if (res.ok) {
+          serverLogs = await res.json();
+        }
+      } catch (err) {
+        // Offline
+      }
+
+      // Merge with IndexedDB persistent records (preserves offline remote site visit actions)
+      let mergedLogs: AuditLogEntry[] = [...serverLogs];
+      try {
+        const storedLogs = await indexedDbStorage.getAllAuditLogs();
+        const idSet = new Set(mergedLogs.map((l) => l.id));
+        for (const log of storedLogs) {
+          if (!idSet.has(log.id)) {
+            mergedLogs.push(log);
+            idSet.add(log.id);
+          }
+        }
+      } catch {}
+
+      // Fallback merge with legacy cache if needed
       try {
         const localBio = JSON.parse(localStorage.getItem('ob_biometric_audit_cache') || '[]');
         if (Array.isArray(localBio) && localBio.length > 0) {
@@ -138,14 +165,13 @@ export const AuditTrailView: React.FC = () => {
         }
       } catch {}
 
+      mergedLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       setLogs(mergedLogs);
     } catch (e) {
       console.warn('Failed to load audit logs from API', e);
       try {
-        const localBio = JSON.parse(localStorage.getItem('ob_biometric_audit_cache') || '[]');
-        if (Array.isArray(localBio)) {
-          setLogs(localBio);
-        }
+        const storedLogs = await indexedDbStorage.getAllAuditLogs();
+        setLogs(storedLogs);
       } catch {}
     } finally {
       setLoading(false);
@@ -187,6 +213,11 @@ export const AuditTrailView: React.FC = () => {
     'INGESTION_COMPLETED',
     'GENERATE_REPORT_FROM_SSOT',
     'SYSTEM_BOOTSTRAP',
+    'OFFLINE_INDEXEDDB_BATCH_SYNC',
+    'OFFLINE_SYNC_SUBMISSION',
+    'REMOTE_SITE_VISIT_MODE_ENABLED',
+    'REMOTE_SITE_VISIT_MODE_DISABLED',
+    'OFFLINE_VAULT_EXPORTED',
   ];
 
   const distinctActions = Array.from(
@@ -315,6 +346,9 @@ export const AuditTrailView: React.FC = () => {
     }
     if (action === 'BIOMETRIC_PROBE') {
       return 'bg-cyan-50 text-cyan-800 border-cyan-300 dark:bg-cyan-950/60 dark:text-cyan-300 dark:border-cyan-800';
+    }
+    if (action === 'BIOMETRIC_REVOKED') {
+      return 'bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800';
     }
     if (action.includes('APPROVE')) return 'bg-emerald-50 text-emerald-800 border-emerald-300';
     if (action.includes('REJECT')) return 'bg-rose-50 text-rose-800 border-rose-300';

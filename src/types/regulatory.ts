@@ -171,6 +171,22 @@ export interface ReportSubmission {
   finalSubmittedBy?: string;
   nbeReferenceNumber?: string;
   idempotencyKey?: string;
+  syncStatus?: OfflineSyncStatus;
+  isOfflineDraft?: boolean;
+  offlineSavedAt?: string;
+}
+
+export type OfflineSyncStatus = "SYNCED" | "PENDING_SYNC" | "LOCAL_DRAFT";
+
+export interface OfflineStorageStats {
+  draftCount: number;
+  auditCount: number;
+  pendingDrafts: number;
+  pendingAuditLogs: number;
+  isIndexedDBSupported: boolean;
+  storageName: string;
+  lastSyncTimestamp: string | null;
+  estimatedSizeBytes?: number;
 }
 
 export interface SubmissionComment {
@@ -210,6 +226,9 @@ export interface AuditLogEntry {
   oldState?: any;
   newState?: any;
   details: string;
+  syncStatus?: 'SYNCED' | 'PENDING_SYNC';
+  isOfflineRecord?: boolean;
+  persistedAt?: string;
 }
 
 export interface UserSession {

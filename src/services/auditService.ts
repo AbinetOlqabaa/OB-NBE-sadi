@@ -4,6 +4,7 @@
  */
 
 import type { AuditLogEntry } from '../types/regulatory.ts';
+import { indexedDbStorage } from './indexedDbStorage.ts';
 
 class AuditServiceClass {
   private logs: AuditLogEntry[] = [];
@@ -20,22 +21,58 @@ class AuditServiceClass {
       correlationId: 'boot_' + Date.now(),
       details: 'Oromia Bank NBE Platform initialized with 24 canonical returns',
     });
+
+    // Hydrate existing audit logs from IndexedDB if in browser
+    this.hydrateFromIndexedDB().catch(() => {});
   }
 
-  public log(entry: Omit<AuditLogEntry, 'id' | 'timestamp'>): AuditLogEntry {
+  public async hydrateFromIndexedDB(): Promise<void> {
+    try {
+      const stored = await indexedDbStorage.getAllAuditLogs();
+      if (stored && stored.length > 0) {
+        const idSet = new Set(this.logs.map((l) => l.id));
+        for (const item of stored) {
+          if (!idSet.has(item.id)) {
+            this.logs.push(item);
+            idSet.add(item.id);
+          }
+        }
+        this.logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      }
+    } catch {
+      // Ignored in non-browser runtimes
+    }
+  }
+
+  public log(entry: Omit<AuditLogEntry, 'id' | 'timestamp'> & { isOffline?: boolean; syncStatus?: 'SYNCED' | 'PENDING_SYNC' }): AuditLogEntry {
+    const isOnline = typeof navigator !== 'undefined' ? Boolean(navigator.onLine) : true;
+    const syncStatus = entry.syncStatus || (isOnline ? 'SYNCED' : 'PENDING_SYNC');
+    const isOfflineRecord = entry.isOffline !== undefined ? entry.isOffline : !isOnline;
+
     const fullEntry: AuditLogEntry = {
       ...entry,
       id: 'aud_' + Math.random().toString(36).substring(2, 10),
       timestamp: new Date().toISOString(),
+      syncStatus,
+      isOfflineRecord,
+      persistedAt: new Date().toISOString(),
     };
 
-    // Immutable append
+    // Immutable append to in-memory active list
     this.logs.unshift(fullEntry);
 
     // Keep up to 1000 entries in active memory
     if (this.logs.length > 1000) {
       this.logs.pop();
     }
+
+    // Persist to IndexedDB asynchronously for permanent offline preservation
+    indexedDbStorage.saveAuditLog(fullEntry, {
+      syncStatus,
+      isOffline: isOfflineRecord,
+    }).catch((err) => {
+      console.warn('[AuditService] IndexedDB save warning:', err);
+    });
 
     return fullEntry;
   }
@@ -44,7 +81,7 @@ class AuditServiceClass {
     actorId?: string;
     actorName?: string;
     actorRole?: string;
-    action: 'BIOMETRIC_AUTH_SUCCESS' | 'BIOMETRIC_AUTH_FAILURE' | 'BIOMETRIC_AUTH_TIMEOUT' | 'BIOMETRIC_LOGIN' | 'BIOMETRIC_ENROLLED' | 'BIOMETRIC_PROBE';
+    action: 'BIOMETRIC_AUTH_SUCCESS' | 'BIOMETRIC_AUTH_FAILURE' | 'BIOMETRIC_AUTH_TIMEOUT' | 'BIOMETRIC_LOGIN' | 'BIOMETRIC_ENROLLED' | 'BIOMETRIC_REVOKED' | 'BIOMETRIC_PROBE';
     type?: 'FINGERPRINT' | 'FACE' | 'WEBAUTHN_PLATFORM';
     entityId?: string;
     details?: string;

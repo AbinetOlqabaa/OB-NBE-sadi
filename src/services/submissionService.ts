@@ -24,6 +24,7 @@ import { nbeAdapter } from './nbeAdapter.ts';
 import type { DeliveryResult } from './nbeAdapter.ts';
 import { auditService } from './auditService.ts';
 import { userService } from './userService.ts';
+import { indexedDbStorage } from './indexedDbStorage.ts';
 
 // Default Demo User Accounts with verified Oromia Bank departments
 export const DEMO_USERS: UserSession[] = [
@@ -92,6 +93,40 @@ class SubmissionServiceClass {
 
   constructor() {
     this.seedInitialSubmissions();
+    this.hydrateFromIndexedDB().catch(() => {});
+    this.seedIndexedDB().catch(() => {});
+  }
+
+  public async hydrateFromIndexedDB(): Promise<void> {
+    try {
+      const storedDrafts = await indexedDbStorage.getAllDrafts();
+      for (const draft of storedDrafts) {
+        if (!this.submissions.has(draft.id)) {
+          this.submissions.set(draft.id, draft);
+        } else {
+          // If stored draft is newer, take precedence
+          const existing = this.submissions.get(draft.id)!;
+          if (new Date(draft.updatedAt).getTime() > new Date(existing.updatedAt).getTime()) {
+            this.submissions.set(draft.id, draft);
+          }
+        }
+      }
+    } catch (err) {
+      // Ignored in non-browser environments
+    }
+  }
+
+  private async seedIndexedDB(): Promise<void> {
+    try {
+      for (const sub of this.submissions.values()) {
+        const existing = await indexedDbStorage.getDraft(sub.id);
+        if (!existing) {
+          await indexedDbStorage.saveDraft(sub, { syncStatus: 'SYNCED', isOffline: false });
+        }
+      }
+    } catch {
+      // Ignored
+    }
   }
 
   private createTemplateSnapshot(report: ReportMetadata): ReportMetadata {
@@ -639,7 +674,20 @@ class SubmissionServiceClass {
       idempotencyKey: 'idemp_' + id + '_v1',
     };
 
+    const isOnline = typeof navigator !== 'undefined' ? Boolean(navigator.onLine) : true;
+    submission.syncStatus = isOnline ? 'SYNCED' : 'PENDING_SYNC';
+    submission.isOfflineDraft = !isOnline;
+    submission.offlineSavedAt = now;
+
     this.submissions.set(id, submission);
+
+    // Persist to IndexedDB for offline persistence during remote site visits
+    indexedDbStorage.saveDraft(submission, {
+      syncStatus: submission.syncStatus,
+      isOffline: submission.isOfflineDraft,
+    }).catch((err) => {
+      console.warn('[SubmissionService] IndexedDB saveDraft warning:', err);
+    });
 
     auditService.log({
       actorId: user.id,
@@ -771,6 +819,7 @@ class SubmissionServiceClass {
       integrityHash,
     };
 
+    const isOnline = typeof navigator !== 'undefined' ? Boolean(navigator.onLine) : true;
     const updated: ReportSubmission = {
       ...sub,
       version: nextVersion,
@@ -785,9 +834,21 @@ class SubmissionServiceClass {
       integrityHash,
       historicalSnapshots: [...(sub.historicalSnapshots || []), newSnapshot],
       revisionHistory: [...(sub.revisionHistory || []), revisionEntry],
+      syncStatus: isOnline ? 'SYNCED' : 'PENDING_SYNC',
+      isOfflineDraft: !isOnline,
+      offlineSavedAt: now,
     };
 
     this.submissions.set(id, updated);
+
+    // Asynchronously persist to IndexedDB
+    indexedDbStorage.saveDraft(updated, {
+      syncStatus: updated.syncStatus,
+      isOffline: updated.isOfflineDraft,
+    }).catch((err) => {
+      console.warn('[SubmissionService] IndexedDB updateDraft save warning:', err);
+    });
+
     return updated;
   }
 
@@ -862,6 +923,9 @@ class SubmissionServiceClass {
     };
 
     this.submissions.set(id, finalSubWithSnapshot);
+
+    // Save to IndexedDB
+    indexedDbStorage.saveDraft(finalSubWithSnapshot).catch(() => {});
 
     auditService.log({
       actorId: user.id,
@@ -946,6 +1010,9 @@ class SubmissionServiceClass {
     };
 
     this.submissions.set(id, finalSubWithSnapshot);
+
+    // Save to IndexedDB
+    indexedDbStorage.saveDraft(finalSubWithSnapshot).catch(() => {});
 
     auditService.log({
       actorId: user.id,
@@ -1065,6 +1132,9 @@ class SubmissionServiceClass {
     };
 
     this.submissions.set(id, updatedSub);
+
+    // Save to IndexedDB
+    indexedDbStorage.saveDraft(updatedSub).catch(() => {});
 
     auditService.log({
       actorId: user.id,
@@ -1200,6 +1270,8 @@ class SubmissionServiceClass {
     }
 
     this.submissions.delete(id);
+    indexedDbStorage.deleteDraft(id).catch(() => {});
+
     auditService.log({
       actorId: user.id,
       actorName: user.name,
@@ -1211,6 +1283,44 @@ class SubmissionServiceClass {
       details: `${user.role} ${user.name} deleted draft ${sub.reportKey}`,
     });
     return true;
+  }
+
+  /**
+   * Synchronizes all locally persisted drafts in IndexedDB with the central server.
+   */
+  public async syncPendingDraftsWithServer(): Promise<{ syncedCount: number; error?: string }> {
+    try {
+      const pending = await indexedDbStorage.getPendingDrafts();
+      if (pending.length === 0) {
+        return { syncedCount: 0 };
+      }
+
+      const res = await fetch('/api/regulatory/submissions/batch-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ submissions: pending }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Sync failed' }));
+        return { syncedCount: 0, error: err.error || 'Server rejected batch sync' };
+      }
+
+      const data = await res.json();
+      const syncedIds = pending.map((p) => p.id);
+      await indexedDbStorage.markDraftsAsSynced(syncedIds);
+
+      // Re-hydrate local cache from server response
+      if (Array.isArray(data.submissions)) {
+        for (const sub of data.submissions) {
+          this.submissions.set(sub.id, sub);
+        }
+      }
+
+      return { syncedCount: pending.length };
+    } catch (err: any) {
+      return { syncedCount: 0, error: err.message };
+    }
   }
 
   public renameDepartment(oldName: string, newName: string): number {

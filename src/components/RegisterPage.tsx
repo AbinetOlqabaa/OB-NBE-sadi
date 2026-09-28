@@ -33,7 +33,13 @@ import { ThemeToggle } from './ThemeToggle.tsx';
 import { DepartmentDefinition } from '../data/organizationHierarchy.ts';
 import { departmentService } from '../services/departmentService.ts';
 import { useBiometricAuth } from '../hooks/useBiometricAuth.ts';
+import {
+  checkHardwareCapabilities,
+  HardwareCapabilitiesResult,
+  subscribeToDeviceChanges,
+} from '../utils/deviceCapabilities.ts';
 import { BiometricPromptModal } from './BiometricPromptModal.tsx';
+import { BiometricRecoveryModal } from './BiometricRecoveryModal.tsx';
 import { HardwareDiagnosticsModal } from './HardwareDiagnosticsModal.tsx';
 import { BiometricStatusIndicator } from './BiometricStatusIndicator.tsx';
 import { vibrate, haptics } from '../utils/haptics.ts';
@@ -67,14 +73,58 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [enrollBiometricsOnRegister, setEnrollBiometricsOnRegister] = useState(true);
 
+  // Hardware capability detection state
+  const [hardwareCapabilities, setHardwareCapabilities] = useState<HardwareCapabilitiesResult | null>(null);
+  const [isCheckingHardware, setIsCheckingHardware] = useState<boolean>(true);
+
   // OTP Verification state
   const [otpCode, setOtpCode] = useState('');
   const [demoOtpCode, setDemoOtpCode] = useState<string>('123456');
   const [resendTimer, setResendTimer] = useState<number>(60);
 
-  // Biometric registration modal
+  // Biometric registration modal & recovery fallback
   const [isBiometricModalOpen, setIsBiometricModalOpen] = useState(false);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
+  const [recoveryFailedMethod, setRecoveryFailedMethod] = useState<'FINGERPRINT' | 'FACE'>('FINGERPRINT');
+  const [recoveryFailureReason, setRecoveryFailureReason] = useState<string>('');
+
+  // Run hardware capability check before displaying biometric registration options
+  useEffect(() => {
+    let isMounted = true;
+
+    const evaluateHardware = async () => {
+      try {
+        const caps = await checkHardwareCapabilities();
+        if (isMounted) {
+          setHardwareCapabilities(caps);
+          // If no biometric hardware is detected, definitively toggle off biometric enrollment
+          if (!caps.hasBiometricHardware || (!caps.canRegisterFingerprint && !caps.canRegisterFace)) {
+            setEnrollBiometricsOnRegister(false);
+          }
+        }
+      } catch {
+        if (isMounted) {
+          setEnrollBiometricsOnRegister(false);
+        }
+      } finally {
+        if (isMounted) {
+          setIsCheckingHardware(false);
+        }
+      }
+    };
+
+    evaluateHardware();
+
+    const unsubscribe = subscribeToDeviceChanges(() => {
+      evaluateHardware();
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   // Subscribe to dynamic department additions / updates / removals
   useEffect(() => {
@@ -295,8 +345,14 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
       vibrate([25, 45, 30]);
       haptics.success();
 
-      // 3. If biometric enrollment was selected and device supports biometrics, prompt modal
-      if (enrollBiometricsOnRegister && hasAnyBiometric) {
+      // 3. If biometric enrollment was selected and device supports biometrics, verify dynamically before prompting
+      const hwCheck = await checkHardwareCapabilities();
+      const canEnroll =
+        enrollBiometricsOnRegister &&
+        hwCheck.hasBiometricHardware &&
+        (hwCheck.canRegisterFingerprint || hwCheck.canRegisterFace);
+
+      if (canEnroll) {
         setIsBiometricModalOpen(true);
       } else {
         setStep('SUCCESS');
@@ -322,7 +378,13 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
           employeeId: localResult.user.employeeId,
         });
 
-        if (enrollBiometricsOnRegister && hasAnyBiometric) {
+        const hwCheck = await checkHardwareCapabilities();
+        const canEnroll =
+          enrollBiometricsOnRegister &&
+          hwCheck.hasBiometricHardware &&
+          (hwCheck.canRegisterFingerprint || hwCheck.canRegisterFace);
+
+        if (canEnroll) {
           setIsBiometricModalOpen(true);
         } else {
           setStep('SUCCESS');
@@ -338,8 +400,32 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
   /**
    * Biometric prompt callback during registration
    */
-  const handleBiometricModalSuccess = () => {
+  const handleBiometricModalSuccess = async (
+    method?: 'FINGERPRINT' | 'FACE',
+    faceData?: { imageBase64?: string; faceHash?: string }
+  ) => {
     setIsBiometricModalOpen(false);
+    const chosenMethod = method || (hardwareCapabilities?.canRegisterFace && !hardwareCapabilities?.canRegisterFingerprint ? 'FACE' : 'FINGERPRINT');
+
+    // Persist registered biometric credential to backend and userService
+    const normEmail = email.trim().toLowerCase();
+    const credPayload = {
+      type: chosenMethod,
+      credentialId: `cred_reg_${Date.now()}`,
+      faceHash: faceData?.faceHash || (chosenMethod === 'FACE' ? `face_hash_${Date.now()}` : undefined),
+      enrolledAt: new Date().toISOString(),
+      deviceLabel: chosenMethod === 'FACE' ? 'Face ID Optical Profile' : 'Device Biometric Touch Passkey',
+    };
+
+    try {
+      await fetch('/api/auth/biometrics/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normEmail, credential: credPayload }),
+      });
+      userService.registerBiometric(normEmail, credPayload);
+    } catch {}
+
     setStep('SUCCESS');
   };
 
@@ -736,7 +822,13 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                 </div>
 
                 {/* Biometric Passkey Enrollment Option & Hardware Signals */}
-                {hasAnyBiometric ? (
+                {isCheckingHardware ? (
+                  <div className="p-3 rounded-xl bg-slate-100/70 dark:bg-[#101226]/60 border border-slate-200 dark:border-[#22284D] text-xs text-slate-500 dark:text-slate-400 flex items-center justify-center gap-2 animate-pulse">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-ob-indigo-500" />
+                    <span>Checking device hardware capabilities...</span>
+                  </div>
+                ) : hardwareCapabilities?.hasBiometricHardware &&
+                  (hardwareCapabilities.canRegisterFingerprint || hardwareCapabilities.canRegisterFace) ? (
                   <div className="space-y-2.5 p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/30">
                     <label className="flex items-center gap-2.5 text-xs font-semibold text-slate-800 dark:text-emerald-200 cursor-pointer min-h-[36px] touch-press">
                       <input
@@ -746,11 +838,15 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                         className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
                       />
                       <div className="flex items-center gap-1.5 flex-1">
-                        <Fingerprint className="w-4 h-4 text-emerald-400 shrink-0" />
+                        {hardwareCapabilities.canRegisterFace && !hardwareCapabilities.canRegisterFingerprint ? (
+                          <ScanFace className="w-4 h-4 text-teal-400 shrink-0" />
+                        ) : (
+                          <Fingerprint className="w-4 h-4 text-emerald-400 shrink-0" />
+                        )}
                         <span>
-                          {isCameraSupported && !isFingerprintSupported
+                          {hardwareCapabilities.canRegisterFace && !hardwareCapabilities.canRegisterFingerprint
                             ? 'Register Face ID (Camera) passkey on completion'
-                            : isFingerprintSupported && !isCameraSupported
+                            : hardwareCapabilities.canRegisterFingerprint && !hardwareCapabilities.canRegisterFace
                             ? 'Register Fingerprint passkey on completion'
                             : 'Register Biometric Passkey (Fingerprint / Face ID) on completion'}
                         </span>
@@ -759,23 +855,49 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
 
                     {/* Dynamic Biometric Sensor Status Indicator */}
                     <BiometricStatusIndicator
-                      isFingerprintSupported={isFingerprintSupported}
-                      fingerprintLabel={fingerprintStatus.label}
-                      fingerprintReason={fingerprintStatus.reason}
-                      isCameraSupported={isCameraSupported}
-                      cameraLabel={cameraStatus.label}
-                      cameraReason={cameraStatus.reason}
+                      isFingerprintSupported={hardwareCapabilities.canRegisterFingerprint}
+                      fingerprintLabel={hardwareCapabilities.fingerprintStatus.label}
+                      fingerprintReason={hardwareCapabilities.fingerprintStatus.reason}
+                      isCameraSupported={hardwareCapabilities.canRegisterFace}
+                      cameraLabel={hardwareCapabilities.cameraStatus.label}
+                      cameraReason={hardwareCapabilities.cameraStatus.reason}
                       onOpenDiagnostics={() => setIsDiagnosticsOpen(true)}
                       showDiagnosticsButton={true}
                     />
+
+                    {/* Biometric Recovery Fallback Link */}
+                    <div className="flex items-center justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRecoveryFailedMethod(
+                            hardwareCapabilities.canRegisterFace && !hardwareCapabilities.canRegisterFingerprint
+                              ? 'FACE'
+                              : 'FINGERPRINT'
+                          );
+                          setRecoveryFailureReason('Manual biometric setup requested by user');
+                          setIsRecoveryModalOpen(true);
+                        }}
+                        className="text-[11px] font-semibold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <ShieldAlert className="w-3.5 h-3.5" />
+                        <span>Biometric Recovery / Manual Setup</span>
+                      </button>
+                    </div>
                   </div>
                 ) : (
-                  <BiometricStatusIndicator
-                    isFingerprintSupported={false}
-                    isCameraSupported={false}
-                    onOpenDiagnostics={() => setIsDiagnosticsOpen(true)}
-                    showDiagnosticsButton={true}
-                  />
+                  /* Standard Credentials Fallback: All 'Register Fingerprint' prompts removed */
+                  <div className="p-3 rounded-xl bg-slate-100 dark:bg-[#101226]/80 border border-slate-200 dark:border-[#22284D] text-xs text-slate-600 dark:text-slate-400 flex items-start gap-2.5">
+                    <Lock className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 block">
+                        Standard Credentials Active
+                      </span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                        Biometric hardware is unavailable on this device. Registration will proceed with corporate password and supervisor four-eyes approval.
+                      </span>
+                    </div>
+                  </div>
                 )}
 
                 <button
@@ -807,9 +929,38 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
             userName={name || 'Bank Officer'}
             userEmail={email}
             userRole={role}
+            initialMethod={
+              hardwareCapabilities?.canRegisterFace && !hardwareCapabilities?.canRegisterFingerprint
+                ? 'FACE'
+                : 'FINGERPRINT'
+            }
             onSuccess={handleBiometricModalSuccess}
             onCancel={() => {
               setIsBiometricModalOpen(false);
+              setStep('SUCCESS');
+            }}
+            onTriggerRecovery={(failedMethod, reason) => {
+              setIsBiometricModalOpen(false);
+              setRecoveryFailedMethod(failedMethod);
+              setRecoveryFailureReason(reason || 'Biometric hardware test failed during registration');
+              setIsRecoveryModalOpen(true);
+            }}
+          />
+
+          {/* Biometric Recovery Fallback Modal */}
+          <BiometricRecoveryModal
+            isOpen={isRecoveryModalOpen}
+            userEmail={email}
+            userName={name || 'Bank Officer'}
+            userRole={role}
+            failedMethod={recoveryFailedMethod}
+            initialFailureReason={recoveryFailureReason}
+            onRecoverySuccess={(token, method) => {
+              setIsRecoveryModalOpen(false);
+              setStep('SUCCESS');
+            }}
+            onClose={() => {
+              setIsRecoveryModalOpen(false);
               setStep('SUCCESS');
             }}
           />

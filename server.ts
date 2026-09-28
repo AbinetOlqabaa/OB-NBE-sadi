@@ -175,6 +175,49 @@ app.post('/api/regulatory/submissions/:id/deliver', async (req, res) => {
   }
 });
 
+// Batch synchronize drafts from IndexedDB (remote NBE site visits)
+app.post('/api/regulatory/submissions/batch-sync', (req, res) => {
+  const { submissions } = req.body;
+  if (!Array.isArray(submissions)) {
+    res.status(400).json({ error: 'Expected submissions array' });
+    return;
+  }
+
+  let syncedCount = 0;
+  for (const incoming of submissions) {
+    if (!incoming || !incoming.id) continue;
+    const existing = submissionService.getById(incoming.id);
+    if (!existing) {
+      (submissionService as any).submissions.set(incoming.id, incoming);
+      syncedCount++;
+    } else {
+      const incomingTime = new Date(incoming.updatedAt || 0).getTime();
+      const existingTime = new Date(existing.updatedAt || 0).getTime();
+      if (incomingTime >= existingTime) {
+        (submissionService as any).submissions.set(incoming.id, incoming);
+        syncedCount++;
+      }
+    }
+
+    auditService.log({
+      actorId: incoming.makerId || 'mkr_site_visit',
+      actorName: incoming.makerName || 'Field Examiner',
+      actorRole: 'MAKER',
+      action: 'OFFLINE_SYNC_SUBMISSION',
+      entityType: 'REPORT_SUBMISSION',
+      entityId: incoming.id,
+      correlationId: `corr_sync_${Date.now()}`,
+      details: `[NBE Remote Site Visit] Synchronized draft return ${incoming.reportKey} (v${incoming.version}) from field IndexedDB storage`,
+    });
+  }
+
+  res.json({
+    success: true,
+    syncedCount,
+    submissions: submissionService.getAll(),
+  });
+});
+
 // Export submission to XLSX
 app.get('/api/regulatory/submissions/:id/export/xlsx', (req, res) => {
   const sub = submissionService.getById(req.params.id);
@@ -339,6 +382,31 @@ app.post('/api/auth/biometrics/verify', (req, res) => {
     res.json(result);
   } else {
     res.status(401).json(result);
+  }
+});
+
+// Reset / revoke biometric credentials on server
+app.post('/api/auth/biometrics/reset', (req, res) => {
+  const { email, type } = req.body;
+  if (!email) {
+    res.status(400).json({ success: false, message: 'Email is required to reset biometric credentials.' });
+    return;
+  }
+  const result = userService.resetBiometrics(email, type);
+  if (result.success && result.user) {
+    auditService.log({
+      actorId: result.user.id,
+      actorName: result.user.name,
+      actorRole: result.user.role,
+      action: 'BIOMETRIC_REVOKED',
+      entityType: 'USER',
+      entityId: result.user.id,
+      correlationId: `corr_bio_reset_${Date.now()}`,
+      details: `Revoked biometric credentials (${type || 'ALL'}) for ${result.user.email}`,
+    });
+    res.json(result);
+  } else {
+    res.status(400).json(result);
   }
 });
 
@@ -540,6 +608,37 @@ app.post('/api/audit-logs', (req, res) => {
 app.post('/api/audit-logs/biometric', (req, res) => {
   const entry = auditService.logBiometricEvent(req.body);
   res.status(201).json(entry);
+});
+
+// Batch synchronize offline audit logs from IndexedDB
+app.post('/api/audit-logs/batch', (req, res) => {
+  const { logs } = req.body;
+  if (!Array.isArray(logs)) {
+    res.status(400).json({ error: 'Expected logs array' });
+    return;
+  }
+
+  let appendedCount = 0;
+  const existingIds = new Set(auditService.getLogs(1000).map((l) => l.id));
+
+  for (const log of logs) {
+    if (!log || !log.id) continue;
+    if (!existingIds.has(log.id)) {
+      (auditService as any).logs.unshift({
+        ...log,
+        syncStatus: 'SYNCED',
+        persistedAt: new Date().toISOString(),
+      });
+      existingIds.add(log.id);
+      appendedCount++;
+    }
+  }
+
+  res.json({
+    success: true,
+    count: appendedCount,
+    totalLogs: auditService.getLogs(1000).length,
+  });
 });
 
 // -------------------------------------------------------------

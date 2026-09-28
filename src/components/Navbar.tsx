@@ -17,6 +17,7 @@ import {
   Menu,
 } from 'lucide-react';
 import { NbeHealthIndicator } from './NbeHealthIndicator.tsx';
+import { OfflineStatusIndicator } from './OfflineStatusIndicator.tsx';
 import { ThemeToggle } from './ThemeToggle.tsx';
 
 interface NavbarProps {
@@ -114,8 +115,11 @@ export const Navbar: React.FC<NavbarProps> = ({
         )}
       </div>
 
-      {/* Zone 3: Health Indicator + Theme Switcher + User Profile + Logout */}
+      {/* Zone 3: Health Indicator + Offline Indicator + Theme Switcher + User Profile + Logout */}
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+        {/* NBE Remote Regulatory Site Visit & IndexedDB Offline Indicator */}
+        <OfflineStatusIndicator />
+
         {/* Dedicated NBE API Gateway Health Indicator */}
         <NbeHealthIndicator onOpenSimulator={onNavigateToSimulator} />
 

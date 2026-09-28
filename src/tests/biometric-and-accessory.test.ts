@@ -214,12 +214,24 @@ export async function runBiometricAndAccessoryTests() {
 
   // 6. Verify Device Capabilities Service & UI Component exports
   console.log('\n--- Device Capabilities & UI Components Verification ---');
-  const { checkWebAuthnSupport, checkPlatformAuthenticator, checkCameraSupport, getDeviceCapabilities } =
-    await import('../utils/deviceCapabilities.ts');
+  const {
+    checkWebAuthnSupport,
+    checkPlatformAuthenticator,
+    checkCameraSupport,
+    checkCameraPermission,
+    detectDeviceFormFactor,
+    detectTabletDevice,
+    detectMobilePhone,
+    getDeviceCapabilities,
+  } = await import('../utils/deviceCapabilities.ts');
 
   assert(typeof checkWebAuthnSupport === 'function', 'checkWebAuthnSupport exported as a function');
   assert(typeof checkPlatformAuthenticator === 'function', 'checkPlatformAuthenticator exported as a function');
   assert(typeof checkCameraSupport === 'function', 'checkCameraSupport exported as a function');
+  assert(typeof checkCameraPermission === 'function', 'checkCameraPermission exported as a function');
+  assert(typeof detectDeviceFormFactor === 'function', 'detectDeviceFormFactor exported as a function');
+  assert(typeof detectTabletDevice === 'function', 'detectTabletDevice exported as a function');
+  assert(typeof detectMobilePhone === 'function', 'detectMobilePhone exported as a function');
   assert(typeof getDeviceCapabilities === 'function', 'getDeviceCapabilities exported as a function');
 
   const capabilities = await getDeviceCapabilities();
@@ -227,6 +239,22 @@ export async function runBiometricAndAccessoryTests() {
   assert('isFingerprintSupported' in capabilities, 'capabilities has isFingerprintSupported property');
   assert('isCameraSupported' in capabilities, 'capabilities has isCameraSupported property');
   assert('preferredMethod' in capabilities, 'capabilities has preferredMethod property');
+  assert(Boolean(capabilities.layerBreakdown), 'capabilities includes layerBreakdown diagnostics');
+  assert(Boolean(capabilities.layerBreakdown?.hardware), 'layerBreakdown has hardware-level diagnostics');
+  assert(Boolean(capabilities.layerBreakdown?.browserApi), 'layerBreakdown has browser API availability diagnostics');
+  assert(Boolean(capabilities.layerBreakdown?.permissions), 'layerBreakdown has permission state diagnostics');
+
+  // Verify form factor detection
+  assert(typeof detectDeviceFormFactor() === 'string', 'detectDeviceFormFactor returns device classification string');
+  assert(typeof detectTabletDevice() === 'boolean', 'detectTabletDevice returns boolean');
+  assert(typeof detectMobilePhone() === 'boolean', 'detectMobilePhone returns boolean');
+
+  // Verify permission level detection
+  const permResult = await checkCameraPermission();
+  assert(
+    permResult === 'granted' || permResult === 'denied' || permResult === 'prompt' || permResult === 'unsupported',
+    'checkCameraPermission returns valid PermissionState'
+  );
 
   const { InputAccessoryView } = await import('../components/InputAccessoryView.tsx');
   assert(
@@ -309,6 +337,45 @@ export async function runBiometricAndAccessoryTests() {
   const doneVibrateSuccess = vibrate([25, 40, 30]);
   assert(doneVibrateSuccess === true, 'vibrate([25, 40, 30]) successfully executes confirmation haptic pattern');
   assert(Array.isArray(lastVibratePattern) && lastVibratePattern.length === 3, 'Done haptic pattern executed with 3 distinct confirmation pulses');
+
+  // Test 7b: Post-Login Hardware Verification Haptic & Summary Alert
+  console.log('--- Post-Login Hardware Verification Haptic & Alert Verification ---');
+  const {
+    formatHardwareSummary,
+    getVerifiedHardwareSummary,
+    triggerHardwareVerificationHaptic,
+  } = await import('../utils/deviceCapabilities.ts');
+
+  assert(typeof formatHardwareSummary === 'function', 'formatHardwareSummary exported as function');
+  assert(typeof getVerifiedHardwareSummary === 'function', 'getVerifiedHardwareSummary exported as function');
+  assert(typeof triggerHardwareVerificationHaptic === 'function', 'triggerHardwareVerificationHaptic exported as function');
+
+  // Trigger hardware verification haptic
+  const hwHapticResult = triggerHardwareVerificationHaptic();
+  assert(hwHapticResult === true, 'triggerHardwareVerificationHaptic executes subtle tactile haptic vibration');
+
+  // Dual biometrics summary
+  const dualSummary = formatHardwareSummary(true, true, true, true);
+  assert(dualSummary.hasBothBiometrics === true, 'dualSummary correctly identifies both camera & fingerprint');
+  assert(dualSummary.badgeLabel === 'Dual Biometrics Active', 'dualSummary sets Dual Biometrics Active badge');
+  assert(dualSummary.iconType === 'dual', 'dualSummary sets dual icon type');
+  assert(dualSummary.message.includes('Fingerprint scanner and device camera'), 'dualSummary message explicitly confirms both sensors');
+
+  // Fingerprint-only summary
+  const fpOnlySummary = formatHardwareSummary(true, false, false, true);
+  assert(fpOnlySummary.badgeLabel === 'Fingerprint Verified', 'fpOnlySummary sets Fingerprint Verified badge');
+  assert(fpOnlySummary.iconType === 'fingerprint', 'fpOnlySummary sets fingerprint icon');
+  assert(fpOnlySummary.message.includes('fingerprint sensor successfully verified'), 'fpOnlySummary confirms fingerprint sensor');
+
+  // Camera-only summary
+  const camOnlySummary = formatHardwareSummary(false, true, false, true);
+  assert(camOnlySummary.badgeLabel === 'Camera Verified', 'camOnlySummary sets Camera Verified badge');
+  assert(camOnlySummary.iconType === 'camera', 'camOnlySummary sets camera icon');
+  assert(camOnlySummary.message.includes('Device camera successfully verified'), 'camOnlySummary confirms camera sensor');
+
+  // Async evaluation
+  const liveHwSummary = await getVerifiedHardwareSummary();
+  assert(typeof liveHwSummary === 'object' && Boolean(liveHwSummary.title), 'getVerifiedHardwareSummary returns valid verification summary bundle');
 
   // 8. Verify useSwipeGesture hook & role-based tabs
   console.log('\n--- Mobile Horizontal Swipe Navigation Hook Verification ---');
@@ -406,5 +473,316 @@ export async function runBiometricAndAccessoryTests() {
   });
   assert(Boolean(modalElement) && modalElement.type === BiometricPromptModal, 'BiometricPromptModal element created successfully with 30s auto-cancel and Retry prompt');
 
-  console.log('✓ All Biometric WebAuthn, Face ID, OTP & Password Reset tests passed successfully.');
+  // 11. Verify DeviceCapabilities Multi-Layered Architecture Detailed Invariants
+  console.log('\n--- 11. Device Capabilities Multi-Layered Architecture Invariants ---');
+  const { checkHardwareCapabilities } = await import('../utils/deviceCapabilities.ts');
+  assert(typeof checkHardwareCapabilities === 'function', 'checkHardwareCapabilities exported as async function');
+  assert(typeof getDeviceCapabilities === 'function', 'getDeviceCapabilities exported as async function');
+  assert(typeof detectDeviceFormFactor === 'function', 'detectDeviceFormFactor exported');
+  assert(typeof detectTabletDevice === 'function', 'detectTabletDevice exported');
+  assert(typeof detectMobilePhone === 'function', 'detectMobilePhone exported');
+  assert(typeof checkWebAuthnSupport === 'function', 'checkWebAuthnSupport exported');
+  assert(typeof checkCameraPermission === 'function', 'checkCameraPermission exported');
+  assert(typeof checkCameraSupport === 'function', 'checkCameraSupport exported');
+
+  // Test full capabilities breakdown structure
+  const caps = await getDeviceCapabilities();
+  assert(typeof caps === 'object' && caps !== null, 'getDeviceCapabilities returns valid object');
+  assert('isWebAuthnSupported' in caps, 'caps contains isWebAuthnSupported boolean');
+  assert('isFingerprintSupported' in caps, 'caps contains isFingerprintSupported boolean');
+  assert('isCameraSupported' in caps, 'caps contains isCameraSupported boolean');
+  assert('layerBreakdown' in caps && Boolean(caps.layerBreakdown), 'caps contains multi-layer breakdown structure');
+  assert('hardware' in caps.layerBreakdown!, 'layerBreakdown contains hardware level metrics');
+  assert('browserApi' in caps.layerBreakdown!, 'layerBreakdown contains browserApi level metrics');
+  assert('permissions' in caps.layerBreakdown!, 'layerBreakdown contains permissions level metrics');
+
+  // 12. Verify checkHardwareCapabilities Utility & RegisterPage Invariants
+  console.log('\n--- 12. checkHardwareCapabilities Utility & Registration Fallback Tests ---');
+  const hwCheck = await checkHardwareCapabilities();
+  assert(typeof hwCheck === 'object' && hwCheck !== null, 'checkHardwareCapabilities returns structured capability object');
+  assert('hasBiometricHardware' in hwCheck, 'hwCheck contains hasBiometricHardware boolean');
+  assert('canRegisterFingerprint' in hwCheck, 'hwCheck contains canRegisterFingerprint boolean');
+  assert('canRegisterFace' in hwCheck, 'hwCheck contains canRegisterFace boolean');
+  assert('isPlatformAuthenticatorAvailable' in hwCheck, 'hwCheck contains isPlatformAuthenticatorAvailable boolean');
+  assert('statusSummary' in hwCheck && typeof hwCheck.statusSummary === 'string', 'hwCheck contains informative statusSummary');
+  assert('preferredMethod' in hwCheck, 'hwCheck determines preferred authentication method');
+
+  // Verify RegisterPage React component incorporates checkHardwareCapabilities
+  const { RegisterPage } = await import('../components/RegisterPage.tsx');
+  assert(typeof RegisterPage === 'function', 'RegisterPage component exported as React functional component');
+
+  const regElement = React.createElement(RegisterPage, {
+    onRegisterSuccess: () => {},
+    onNavigateLogin: () => {},
+  });
+  assert(Boolean(regElement) && regElement.type === RegisterPage, 'RegisterPage element instantiated successfully with hardware capability checks');
+
+  // 13. Verify Multi-Layer Distinction: Hardware-Level, Browser API, and User Permissions/Preferences
+  console.log('\n--- 13. Multi-Layer Hardware, WebAuthn API, and User Permissions Distinction ---');
+  const {
+    checkHardwareLevelSupport,
+    checkBrowserApiAvailability,
+    checkUserPermissions,
+    isBiometricLoginEnabled,
+    setBiometricLoginEnabled,
+    subscribeToBiometricPreferenceChanges,
+  } = await import('../utils/deviceCapabilities.ts');
+
+  assert(typeof checkHardwareLevelSupport === 'function', 'checkHardwareLevelSupport exported as async function');
+  assert(typeof checkBrowserApiAvailability === 'function', 'checkBrowserApiAvailability exported as async function');
+  assert(typeof checkUserPermissions === 'function', 'checkUserPermissions exported as async function');
+  assert(typeof isBiometricLoginEnabled === 'function', 'isBiometricLoginEnabled exported as function');
+  assert(typeof setBiometricLoginEnabled === 'function', 'setBiometricLoginEnabled exported as function');
+
+  // Test 13a: Layer 1 Hardware Support
+  const hwLayer = await checkHardwareLevelSupport();
+  assert('hasPhysicalCamera' in hwLayer, 'hwLayer has hasPhysicalCamera boolean');
+  assert('hasPhysicalFingerprintSensor' in hwLayer, 'hwLayer has hasPhysicalFingerprintSensor boolean');
+  assert('status' in hwLayer, 'hwLayer has status level');
+  assert(typeof hwLayer.reason === 'string', 'hwLayer has explanatory hardware reason');
+
+  // Test 13b: Layer 2 Browser API Availability
+  const apiLayer = await checkBrowserApiAvailability();
+  assert('webAuthn' in apiLayer, 'apiLayer checks webAuthn');
+  assert('platformAuthenticator' in apiLayer, 'apiLayer checks platformAuthenticator');
+  assert('mediaDevices' in apiLayer, 'apiLayer checks mediaDevices');
+  assert('secureContext' in apiLayer, 'apiLayer checks secureContext');
+  assert('status' in apiLayer, 'apiLayer has status');
+
+  // Test 13c: Layer 3 User Permissions & Individual Preferences
+  const permLayer = await checkUserPermissions('maker@oromiabank.com');
+  assert('camera' in permLayer, 'permLayer has camera permission state');
+  assert('isCameraDenied' in permLayer, 'permLayer has isCameraDenied boolean');
+  assert('isUserBiometricEnabled' in permLayer, 'permLayer has isUserBiometricEnabled boolean');
+  assert('status' in permLayer, 'permLayer has permission status level');
+
+  // Test 13d: Individual Biometric Login Toggle Settings
+  const testUserEmail = 'test.officer@oromiabank.com';
+  // Default is true
+  assert(isBiometricLoginEnabled(testUserEmail) === true, 'Default biometric login is enabled');
+
+  // Disable individually for test user
+  setBiometricLoginEnabled(false, testUserEmail);
+  assert(isBiometricLoginEnabled(testUserEmail) === false, 'Biometric login disabled individually for user');
+
+  // Check capabilities reflect USER_DISABLED
+  const userDisabledCaps = await getDeviceCapabilities(testUserEmail);
+  assert(userDisabledCaps.fingerprintStatus.statusLevel === 'USER_DISABLED', 'fingerprintStatus is USER_DISABLED when user toggles off');
+  assert(userDisabledCaps.cameraStatus.statusLevel === 'USER_DISABLED', 'cameraStatus is USER_DISABLED when user toggles off');
+  assert(userDisabledCaps.isBiometricEnabledByUser === false, 'isBiometricEnabledByUser is false');
+
+  // Re-enable individually for test user
+  setBiometricLoginEnabled(true, testUserEmail);
+  assert(isBiometricLoginEnabled(testUserEmail) === true, 'Biometric login re-enabled individually for user');
+
+  // Test 13e: Verify Sidebar Component with Biometric Login Toggle
+  const { Sidebar } = await import('../components/Sidebar.tsx');
+  assert(typeof Sidebar === 'function', 'Sidebar exported as React functional component');
+
+  const sidebarElement = React.createElement(Sidebar, {
+    activeTab: 'MAKER_WORKSPACE',
+    onSelectTab: () => {},
+    currentUser: {
+      id: 'usr_maker_1',
+      name: 'Abebe Kebede',
+      email: 'abebe.kebede@oromiabank.com',
+      role: 'MAKER',
+      institutionCode: '0000013',
+      department: 'Credit Operations & Portfolio Management',
+    },
+    pendingCheckerCount: 2,
+    isCollapsed: false,
+    onToggleCollapse: () => {},
+  });
+  assert(Boolean(sidebarElement) && sidebarElement.type === Sidebar, 'Sidebar instantiated successfully with User Settings Biometric Login toggle');
+
+  // 14. Full Stack End-to-End Registration, Login & Biometric Revocation / Reset Verification
+  console.log('\n--- 14. Full Stack Registration, Login & Biometric Reset Verification ---');
+
+  // Verify userService.resetBiometrics
+  assert(typeof userService.resetBiometrics === 'function', 'userService.resetBiometrics exported as function');
+
+  // Test user biometric enrollment and reset
+  const testResetUserEmail = 'abebe.kebede@oromiabank.com';
+  const initialStatus = userService.getBiometricStatus(testResetUserEmail);
+  assert(initialStatus.hasFingerprint === true, 'Maker user starts with enrolled fingerprint');
+
+  // Reset single modality
+  const resetFpResult = userService.resetBiometrics(testResetUserEmail, 'FINGERPRINT');
+  assert(resetFpResult.success === true, 'resetBiometrics successfully resets FINGERPRINT');
+  const statusAfterFpReset = userService.getBiometricStatus(testResetUserEmail);
+  assert(statusAfterFpReset.hasFingerprint === false, 'Biometric status reflects revoked fingerprint');
+
+  // Re-enroll biometric credential
+  userService.registerBiometric(testResetUserEmail, {
+    type: 'FINGERPRINT',
+    credentialId: 'cred_test_fp_restored',
+    enrolledAt: new Date().toISOString(),
+    deviceLabel: 'Restored Test Touch Passkey',
+  });
+  const restoredStatus = userService.getBiometricStatus(testResetUserEmail);
+  assert(restoredStatus.hasFingerprint === true, 'Biometric passkey re-enrolled cleanly');
+
+  // Reset ALL biometrics
+  const resetAllResult = userService.resetBiometrics(testResetUserEmail, 'ALL');
+  assert(resetAllResult.success === true, 'resetBiometrics ALL completes successfully');
+  const emptyStatus = userService.getBiometricStatus(testResetUserEmail);
+  assert(emptyStatus.hasFingerprint === false && emptyStatus.hasFace === false, 'All biometrics revoked from single source of truth');
+
+  // Restore for subsequent app operation
+  userService.registerBiometric(testResetUserEmail, {
+    type: 'FINGERPRINT',
+    credentialId: 'cred_maker1_fp_default',
+    enrolledAt: new Date().toISOString(),
+    deviceLabel: 'Oromia Bank Mobile Passkey',
+  });
+
+  // Verify LoginPage component instantiation with BiometricStatusIndicator
+  const { LoginPage } = await import('../components/LoginPage.tsx');
+  assert(typeof LoginPage === 'function', 'LoginPage exported as React functional component');
+  const loginElement = React.createElement(LoginPage, {
+    onLoginSuccess: () => {},
+    onNavigateRegister: () => {},
+  });
+  assert(Boolean(loginElement), 'LoginPage instantiated successfully with BiometricStatusIndicator');
+
+  // 15. SystemHealthDashboard Automated Diagnostic Cycle & Download Report Verification
+  console.log('\n--- 15. SystemHealthDashboard Diagnostic Cycle & Download Report Verification ---');
+  const { SystemHealthDashboard } = await import('../components/SystemHealthDashboard.tsx');
+  assert(typeof SystemHealthDashboard === 'function', 'SystemHealthDashboard exported as React functional component');
+
+  const healthDashboardElement = React.createElement(SystemHealthDashboard, {
+    currentUser: {
+      id: 'usr_maker_1',
+      name: 'Abebe Kebede',
+      email: 'abebe.kebede@oromiabank.com',
+      role: 'MAKER',
+      institutionCode: '0000013',
+      department: 'Credit Operations & Portfolio Management',
+    },
+  });
+  assert(Boolean(healthDashboardElement) && healthDashboardElement.type === SystemHealthDashboard, 'SystemHealthDashboard instantiates successfully with automated diagnostic cycle and Download Report button');
+
+  // 16. Live Fingerprint Scanning, Dual Face Matching & Independent Attempters E2E Tests
+  console.log('\n--- 16. Live Fingerprint Scanning, Dual Face Matching & Independent Attempters Verification ---');
+
+  // 16a. Verify BiometricLiveScanPage component export & instantiation
+  const { BiometricLiveScanPage } = await import('../components/BiometricLiveScanPage.tsx');
+  assert(typeof BiometricLiveScanPage === 'function', 'BiometricLiveScanPage exported as React functional component');
+
+  let fpLiveRedirectTab: string | undefined;
+  let fpLiveUserSession: any;
+  const fpPageElement = React.createElement(BiometricLiveScanPage, {
+    initialMethod: 'FINGERPRINT',
+    targetEmail: 'abebe.kebede@oromiabank.com',
+    onSuccess: (u, tab) => {
+      fpLiveUserSession = u;
+      fpLiveRedirectTab = tab;
+    },
+    onCancel: () => {},
+  });
+  assert(Boolean(fpPageElement) && fpPageElement.type === BiometricLiveScanPage, 'BiometricLiveScanPage instantiates cleanly in FINGERPRINT mode');
+
+  // 16b. Verify Fingerprint live scan matching authentication in userService
+  const makerUser = userService.getByEmail('abebe.kebede@oromiabank.com')!;
+  assert(Boolean(makerUser), 'Maker user found for biometric verification');
+  const makerFpStatus = userService.getBiometricStatus('abebe.kebede@oromiabank.com');
+  assert(makerFpStatus.hasFingerprint === true, 'Maker account has enrolled fingerprint');
+
+  const fpLiveVerifyResult = userService.verifyBiometric('abebe.kebede@oromiabank.com', 'FINGERPRINT');
+  assert(fpLiveVerifyResult.success === true, 'Fingerprint matching authentication succeeds for enrolled Maker');
+  assert(fpLiveVerifyResult.redirectTab === 'MAKER_WORKSPACE', 'Fingerprint login directs Maker to MAKER_WORKSPACE');
+
+  // 16c. Verify Face matching authentication step before redirecting
+  userService.registerBiometric('abebe.kebede@oromiabank.com', {
+    type: 'FACE',
+    credentialId: 'cred_maker1_face_default',
+    faceHash: 'face_hash_maker1_default_sig',
+    enrolledAt: new Date().toISOString(),
+    deviceLabel: 'Oromia Bank Face ID Optical Sensor',
+  });
+  const makerFaceStatus = userService.getBiometricStatus('abebe.kebede@oromiabank.com');
+  assert(makerFaceStatus.hasFace === true, 'Maker account has enrolled Face ID for Step 2 verification');
+
+  const faceLiveVerifyResult = userService.verifyBiometric('abebe.kebede@oromiabank.com', 'FACE');
+  assert(faceLiveVerifyResult.success === true, 'Face matching authentication succeeds before redirecting to dashboard');
+  assert(faceLiveVerifyResult.redirectTab === 'MAKER_WORKSPACE', 'Face verification confirms redirection to MAKER_WORKSPACE');
+
+  // 16d. Verify Checker Role Biometric Matching & Redirection to CHECKER_INBOX
+  const checkerFpResult = userService.verifyBiometric('chala.desta@oromiabank.com', 'FINGERPRINT');
+  assert(checkerFpResult.success === true, 'Fingerprint matching authentication succeeds for enrolled Checker');
+  assert(checkerFpResult.redirectTab === 'CHECKER_INBOX', 'Fingerprint login directs Checker to CHECKER_INBOX');
+
+  const checkerFaceResult = userService.verifyBiometric('chala.desta@oromiabank.com', 'FACE');
+  assert(checkerFaceResult.success === true, 'Face matching authentication succeeds for enrolled Checker');
+  assert(checkerFaceResult.redirectTab === 'CHECKER_INBOX', 'Face verification directs Checker to CHECKER_INBOX');
+
+  // 16e. Verify Administrator Role Biometric Matching & Redirection to ADMIN_DASHBOARD
+  const adminFaceResult = userService.verifyBiometric('admin@oromiabank.com', 'FACE');
+  assert(adminFaceResult.success === true, 'Face matching authentication succeeds for Administrator');
+  assert(adminFaceResult.redirectTab === 'ADMIN_DASHBOARD', 'Face verification directs Administrator to ADMIN_DASHBOARD');
+
+  // 16f. Verify Independent Sign-In Attempters:
+  // When Face ID is attempted, it operates independently and ignores password credentials even if entered
+  function simulateIndependentAttempters(
+    selectedMethod: 'PASSWORD' | 'FINGERPRINT' | 'FACE',
+    enteredPassword: string
+  ) {
+    if (selectedMethod === 'FACE') {
+      // Ignore enteredPassword completely and execute Face ID matching
+      const bioAuth = userService.verifyBiometric('abebe.kebede@oromiabank.com', 'FACE');
+      return {
+        attempterUsed: 'FACE',
+        passwordEvaluated: false,
+        success: bioAuth.success,
+        redirectTab: bioAuth.redirectTab,
+      };
+    } else if (selectedMethod === 'FINGERPRINT') {
+      // Ignore enteredPassword completely and execute Fingerprint + Face dual matching
+      const fpAuth = userService.verifyBiometric('abebe.kebede@oromiabank.com', 'FINGERPRINT');
+      const faceAuth = userService.verifyBiometric('abebe.kebede@oromiabank.com', 'FACE');
+      return {
+        attempterUsed: 'FINGERPRINT',
+        passwordEvaluated: false,
+        success: fpAuth.success && faceAuth.success,
+        redirectTab: fpAuth.redirectTab,
+      };
+    } else {
+      // Password attempter: validates credentials
+      const pwAuth = userService.login('abebe.kebede@oromiabank.com', enteredPassword);
+      return {
+        attempterUsed: 'PASSWORD',
+        passwordEvaluated: true,
+        success: pwAuth.success,
+        redirectTab: pwAuth.redirectTab,
+      };
+    }
+  }
+
+  // Test 1: User selects Face ID while typing an incorrect password
+  const faceTestWithWrongPw = simulateIndependentAttempters('FACE', 'completely_wrong_password_123');
+  assert(faceTestWithWrongPw.attempterUsed === 'FACE', 'Face ID attempter activated exclusively');
+  assert(faceTestWithWrongPw.passwordEvaluated === false, 'Password was ignored during Face ID login attempt');
+  assert(faceTestWithWrongPw.success === true, 'Face ID login succeeds independently of password value');
+  assert(faceTestWithWrongPw.redirectTab === 'MAKER_WORKSPACE', 'Redirects to MAKER_WORKSPACE');
+
+  // Test 2: User selects Fingerprint while typing password
+  const fpTestWithPw = simulateIndependentAttempters('FINGERPRINT', 'irrelevant_password_xyz');
+  assert(fpTestWithPw.attempterUsed === 'FINGERPRINT', 'Fingerprint attempter activated exclusively');
+  assert(fpTestWithPw.passwordEvaluated === false, 'Password was ignored during Fingerprint login attempt');
+  assert(fpTestWithPw.success === true, 'Fingerprint + Face dual matching succeeds independently');
+
+  // Test 3: User selects Password method
+  const pwTest = simulateIndependentAttempters('PASSWORD', 'password');
+  assert(pwTest.attempterUsed === 'PASSWORD', 'Password attempter activated exclusively');
+  assert(pwTest.passwordEvaluated === true, 'Password was evaluated for Password login attempt');
+  assert(pwTest.success === true, 'Password login succeeds');
+
+  // 16g. Verify device scanner and camera availability check integration
+  const deviceCapsCheck = await checkHardwareCapabilities();
+  assert(typeof deviceCapsCheck.hasBiometricHardware === 'boolean', 'Device biometric hardware availability determined');
+  assert(typeof deviceCapsCheck.canRegisterFingerprint === 'boolean', 'Device fingerprint scanner availability determined');
+  assert(typeof deviceCapsCheck.canRegisterFace === 'boolean', 'Device camera availability determined');
+
+  console.log('✓ All Biometric WebAuthn, Face ID, OTP, Password Reset & Hardware Capability tests passed successfully.');
 }

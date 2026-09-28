@@ -35,6 +35,7 @@ import {
   Table as TableIcon,
   FileText,
   FileCheck,
+  Database,
 } from 'lucide-react';
 
 interface DynamicReportFormProps {
@@ -278,7 +279,7 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
     setValues(calculated);
     onSave(calculated, dynamicRows);
     setHasUnsavedChanges(false);
-    setSaveFeedback(`Draft changes saved successfully (${new Date().toLocaleTimeString()})`);
+    setSaveFeedback(`Draft persisted to local IndexedDB (Protected for remote NBE site visits) at ${new Date().toLocaleTimeString()}`);
     setTimeout(() => setSaveFeedback(null), 4000);
   };
 
@@ -362,9 +363,15 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
               <span>/</span>
               <span className="font-mono font-bold text-ob-indigo-700 dark:text-ob-indigo-400">{metadata.Code}</span>
             </div>
-            <h1 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white tracking-tight leading-tight truncate max-w-md sm:max-w-xl">
-              {metadata.Title}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white tracking-tight leading-tight truncate max-w-md sm:max-w-xl">
+                {metadata.Title}
+              </h1>
+              <span className="hidden md:inline-flex items-center gap-1 text-[10px] font-mono text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 shrink-0" title="IndexedDB persistent offline storage enabled for NBE remote site visits">
+                <Database className="w-2.5 h-2.5" />
+                IndexedDB Active
+              </span>
+            </div>
           </div>
         </div>
 
