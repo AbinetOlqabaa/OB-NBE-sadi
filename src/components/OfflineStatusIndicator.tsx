@@ -41,7 +41,7 @@ export const OfflineStatusIndicator: React.FC<OfflineStatusIndicatorProps> = ({ 
         <button
           type="button"
           onClick={() => setIsModalOpen(true)}
-          className={`min-h-[44px] px-2.5 sm:px-3 rounded-xl border flex items-center gap-2 text-xs font-semibold transition-all shadow-2xs touch-manipulation cursor-pointer ${
+          className={`min-h-[44px] px-2 sm:px-3 rounded-xl border flex items-center justify-center gap-1.5 sm:gap-2 text-xs font-semibold transition-all shadow-2xs touch-manipulation cursor-pointer ${
             isEffectiveOffline
               ? isRemoteSiteVisitMode
                 ? 'bg-amber-500/10 border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20'
@@ -60,8 +60,8 @@ export const OfflineStatusIndicator: React.FC<OfflineStatusIndicatorProps> = ({ 
             <Wifi className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
           )}
 
-          {/* Status Label */}
-          <div className="flex flex-col text-left leading-none">
+          {/* Status Label (Hidden on mobile and tablets < 1024px to preserve header space) */}
+          <div className="hidden lg:flex flex-col text-left leading-none">
             <span className="text-[11px] font-bold tracking-tight">
               {isEffectiveOffline
                 ? isRemoteSiteVisitMode
@@ -77,7 +77,7 @@ export const OfflineStatusIndicator: React.FC<OfflineStatusIndicatorProps> = ({ 
           {/* Pending Sync Badge */}
           {hasPending && (
             <span
-              className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold font-mono shrink-0 flex items-center gap-1 ${
+              className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold font-mono shrink-0 flex items-center gap-1 ${
                 isEffectiveOffline
                   ? 'bg-amber-200 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200'
                   : 'bg-blue-200 dark:bg-blue-900/80 text-blue-900 dark:text-blue-200'

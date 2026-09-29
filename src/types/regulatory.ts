@@ -235,7 +235,7 @@ export interface UserSession {
   id: string;
   name: string;
   email: string;
-  role: "MAKER" | "CHECKER" | "ADMIN" | "NBE_OFFICER";
+  role: "MAKER" | "CHECKER" | "ADMIN" | "NBE_OFFICER" | "AUDITOR";
   institutionCode: string;
   status?: "ACTIVE" | "PENDING_APPROVAL" | "DISABLED";
   department?: string;
@@ -258,3 +258,104 @@ export interface Phase2DataSource {
   recordCount: number;
   qualityScore: number;
 }
+
+export type AuditFindingSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFORMATIONAL';
+export type AuditFindingStatus = 'OPEN' | 'UNDER_REVIEW' | 'REMEDIATION_PENDING' | 'RESOLVED' | 'CLOSED' | 'ACCEPTED_RISK';
+export type AuditNoteCategory = 'OBSERVATION' | 'METHODOLOGY' | 'RISK_NOTE' | 'INQUIRY';
+export type RemediationStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'OVERDUE' | 'VERIFIED_BY_AUDITOR';
+
+export interface AuditFinding {
+  id: string;
+  submissionId: string;
+  reportKey: string;
+  department: string;
+  title: string;
+  description: string;
+  severity: AuditFindingSeverity;
+  status: AuditFindingStatus;
+  regulatoryReference?: string;
+  affectedField?: string;
+  financialVariance?: number;
+  auditorId: string;
+  auditorName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuditEvidence {
+  id: string;
+  submissionId: string;
+  reportKey: string;
+  findingId?: string;
+  title: string;
+  fileName: string;
+  fileType: string;
+  fileSizeBytes: number;
+  sha256Checksum: string;
+  tamperSeal: string;
+  verificationStatus: 'VERIFIED' | 'PENDING_REVIEW' | 'FLAGGED';
+  uploadedBy: string;
+  uploadedAt: string;
+  notes?: string;
+}
+
+export interface AuditWorkingNote {
+  id: string;
+  submissionId: string;
+  reportKey: string;
+  category: AuditNoteCategory;
+  authorId: string;
+  authorName: string;
+  content: string;
+  isPrivate: boolean;
+  createdAt: string;
+}
+
+export interface RemediationAction {
+  id: string;
+  findingId: string;
+  actionPlan: string;
+  assignedDepartment: string;
+  assignedTo: string;
+  targetDate: string;
+  status: RemediationStatus;
+  remediationProof?: string;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  createdAt: string;
+}
+
+export interface AuditReportPackage {
+  id: string;
+  title: string;
+  period: string;
+  scopeDepartments: string[];
+  generatedBy: string;
+  findingsCount: number;
+  criticalCount: number;
+  highCount: number;
+  executiveSummary: string;
+  tamperSeal: string;
+  createdAt: string;
+}
+
+export interface AuditWorkQueueItem {
+  submissionId: string;
+  reportKey: string;
+  department: string;
+  makerName: string;
+  version: number;
+  submissionStatus: SubmissionStatus;
+  submittedAt?: string;
+  nbeReference?: string;
+  auditStatus: 'IN_DRAFTING' | 'IN_CHECKER_REVIEW' | 'CHECKER_APPROVED' | 'NBE_DELIVERED_PENDING_AUDIT' | 'FINDINGS_OPEN' | 'FLAGGED_HIGH_RISK';
+  totalFindings: number;
+  openFindings: number;
+  criticalFindings: number;
+  highFindings: number;
+  evidenceCount: number;
+  notesCount: number;
+  pendingRemediations: number;
+  updatedAt: string;
+}
+

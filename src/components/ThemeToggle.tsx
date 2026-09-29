@@ -71,8 +71,8 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
             aria-label={`Theme selector: Currently ${activeOption.label}. Click to expand options.`}
             className={`group flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl border text-xs font-semibold transition-all duration-150 cursor-pointer shadow-xs focus:outline-none focus:ring-2 focus:ring-ob-indigo-500/30 ${
               open
-                ? 'bg-slate-100 dark:bg-[#1B2042] border-ob-indigo-400 dark:border-ob-indigo-500 ring-2 ring-ob-indigo-500/20 text-slate-900 dark:text-white'
-                : 'bg-white hover:bg-slate-50 dark:bg-[#151933] dark:hover:bg-[#1C2144] border-slate-200 dark:border-[#28305A] text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-[#38437A]'
+                ? 'bg-slate-100 dark:bg-slate-800 border-ob-indigo-400 dark:border-ob-indigo-500 ring-2 ring-ob-indigo-500/20 text-slate-900 dark:text-white'
+                : 'bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700'
             }`}
           >
             {/* Active Themed Icon Indicator */}
@@ -93,7 +93,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
               </span>
               {theme === 'system' && (
                 <span
-                  className={`text-[10px] font-mono font-medium px-1 py-0.2 rounded bg-slate-100 dark:bg-[#202750] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-[#2E3770] ${
+                  className={`text-[10px] font-mono font-medium px-1 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 ${
                     showLabelOnMobile ? 'inline' : 'hidden sm:inline'
                   }`}
                 >
@@ -124,10 +124,10 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
               id="theme-dropdown-menu"
               className={`absolute ${
                 align === 'right' ? 'right-0' : 'left-0'
-              } top-full mt-2 w-60 bg-white dark:bg-[#151933] border border-slate-200 dark:border-[#28305A] rounded-2xl shadow-2xl p-1.5 z-50 backdrop-blur-lg focus:outline-none`}
+              } top-full mt-2 w-60 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-1.5 z-50 backdrop-blur-lg focus:outline-none`}
             >
               {/* Header Title */}
-              <div className="px-2.5 py-1.5 border-b border-slate-100 dark:border-[#22284D] mb-1 flex items-center justify-between">
+              <div className="px-2.5 py-1.5 border-b border-slate-100 dark:border-slate-800 mb-1 flex items-center justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                   Appearance Theme
                 </span>
@@ -154,8 +154,8 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
                             isSelected
                               ? 'bg-ob-indigo-50/90 dark:bg-ob-indigo-950/70 border border-ob-indigo-200 dark:border-ob-indigo-700/80 text-slate-900 dark:text-white shadow-2xs'
                               : focus
-                              ? 'bg-slate-100 dark:bg-[#1F254D] border border-slate-200 dark:border-[#333D73] text-slate-900 dark:text-white'
-                              : 'border border-transparent text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#1A2044]'
+                              ? 'bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white'
+                              : 'border border-transparent text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
                           }`}
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
@@ -163,7 +163,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
                               className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
                                 isSelected
                                   ? opt.bgAccent
-                                  : 'bg-slate-100 dark:bg-[#1B2042] border-slate-200 dark:border-[#2C3566] text-slate-500 dark:text-slate-400'
+                                  : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
                               }`}
                             >
                               <Icon className={`w-4 h-4 ${isSelected ? opt.accentColor : ''}`} />
@@ -173,7 +173,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
                               <div className="flex items-center gap-1.5">
                                 <span className="text-xs font-bold truncate">{opt.label}</span>
                                 {opt.key === 'system' && (
-                                  <span className="text-[9px] px-1 py-0.2 rounded bg-slate-200 dark:bg-[#222B59] text-slate-600 dark:text-slate-300 font-mono">
+                                  <span className="text-[9px] px-1 py-0.2 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono">
                                     Auto
                                   </span>
                                 )}
@@ -198,7 +198,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
               </div>
 
               {/* Bottom Status Footer displaying Active Resolved Theme */}
-              <div className="mt-1.5 pt-1.5 border-t border-slate-100 dark:border-[#22284D] px-2.5 py-1 text-[10px] text-slate-500 dark:text-slate-300 flex items-center justify-between">
+              <div className="mt-1.5 pt-1.5 border-t border-slate-100 dark:border-slate-800 px-2.5 py-1 text-[10px] text-slate-500 dark:text-slate-300 flex items-center justify-between">
                 <span>Active Output:</span>
                 <span className="font-semibold text-slate-800 dark:text-slate-200 capitalize flex items-center gap-1">
                   <span

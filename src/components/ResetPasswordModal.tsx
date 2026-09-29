@@ -194,7 +194,7 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-md bg-white dark:bg-[#121428] border border-slate-200 dark:border-[#262D55] rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 transition-all animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-2 duration-250">
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 transition-all animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-2 duration-250">
         {/* Header */}
         <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800/80">
           <div className="flex items-center gap-2">
@@ -298,7 +298,7 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
                   placeholder="username@oromiabank.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full min-h-[44px] pl-9 pr-3 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-[#181C3B] border border-slate-200 dark:border-[#2B3369] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-ob-indigo-500 font-medium"
+                  className="w-full min-h-[44px] pl-9 pr-3 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-ob-indigo-500 font-medium"
                 />
               </div>
             </div>
@@ -352,7 +352,7 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
                 placeholder="123456"
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                className="w-full min-h-[46px] text-center tracking-[0.4em] font-mono font-bold text-lg bg-slate-50 dark:bg-[#181C3B] border border-slate-200 dark:border-[#2B3369] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-ob-indigo-500"
+                className="w-full min-h-[46px] text-center tracking-[0.4em] font-mono font-bold text-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-ob-indigo-500"
               />
             </div>
 
@@ -394,7 +394,7 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
                   placeholder="At least 6 characters"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full min-h-[44px] pl-9 pr-10 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-[#181C3B] border border-slate-200 dark:border-[#2B3369] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-ob-indigo-500 font-medium"
+                  className="w-full min-h-[44px] pl-9 pr-10 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-ob-indigo-500 font-medium"
                 />
                 {/* Password Visibility Eye Button */}
                 <button
@@ -420,7 +420,7 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
                   placeholder="Re-enter new password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full min-h-[44px] pl-9 pr-10 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-[#181C3B] border border-slate-200 dark:border-[#2B3369] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-ob-indigo-500 font-medium"
+                  className="w-full min-h-[44px] pl-9 pr-10 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-ob-indigo-500 font-medium"
                 />
                 {/* Password Visibility Eye Button */}
                 <button

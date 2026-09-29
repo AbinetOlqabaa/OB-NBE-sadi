@@ -513,7 +513,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       </div>
 
       {/* 2. Top Metrics Ribbon */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 shrink-0">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2.5 shrink-0">
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 shadow-2xs flex items-center justify-between transition-colors">
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-ob-indigo-700 dark:text-ob-indigo-400 block">NBE Returns</span>
@@ -608,7 +608,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
             <span>Reports Oversight Center</span>
-            <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-ob-indigo-700 text-white">
+            <span className="ml-1 px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold bg-ob-indigo-700 text-white">
               {submissions.length}
             </span>
           </button>
@@ -636,7 +636,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <Clock className="w-3.5 h-3.5" />
             <span>Pending Authorizations</span>
             <span
-              className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+              className={`ml-1 px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
                 pendingUsers.length > 0 ? 'bg-rose-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
               }`}
             >
@@ -676,7 +676,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <FolderTree className="w-3.5 h-3.5" />
             <span>Departments & Reports</span>
-            <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-ob-indigo-200 dark:bg-ob-indigo-800 text-ob-indigo-900 dark:text-ob-indigo-200">
+            <span className="ml-1 px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold bg-ob-indigo-200 dark:bg-ob-indigo-800 text-ob-indigo-900 dark:text-ob-indigo-200">
               {departments.length}
             </span>
           </button>
@@ -755,7 +755,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </p>
               </div>
             ) : (
-              <table className="w-full text-left border-collapse text-xs">
+              <div className="overflow-x-auto min-w-full touch-scroll-x">
+                <table className="min-w-[700px] w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-semibold sticky top-0 z-10">
                     <th className="py-2.5 px-3">Return Code</th>
@@ -811,7 +812,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   })}
                 </tbody>
               </table>
-            )}
+            </div>
+          )}
           </div>
 
           <div className="p-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
@@ -952,7 +954,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </p>
               </div>
             ) : (
-              <table className="w-full text-left border-collapse text-xs">
+              <div className="overflow-x-auto min-w-full touch-scroll-x">
+                <table className="min-w-[650px] w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-semibold sticky top-0 z-10">
                     <th className="py-2 px-3">Applicant Name & Email</th>
@@ -992,7 +995,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   ))}
                 </tbody>
               </table>
-            )}
+            </div>
+          )}
           </div>
 
           <div className="shrink-0 p-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850">
@@ -1012,7 +1016,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {activeSubTab === 'ALL_USERS' && (
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xs">
           <div className="flex-1 min-h-0 overflow-y-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <div className="overflow-x-auto min-w-full touch-scroll-x">
+              <table className="min-w-[650px] w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-semibold sticky top-0 z-10">
                   <th className="py-2 px-3">User & Email</th>
@@ -1030,9 +1035,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">{user.email}</div>
                     </td>
                     <td className="py-2.5 px-3">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          user.role === 'AUDITOR'
+                            ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200'
+                        }`}
+                      >
                         {user.role}
                       </span>
+                      {user.role === 'AUDITOR' && (user as any).auditScope && (
+                        <div className="text-[9px] text-slate-500 font-mono mt-0.5">Scope: {(user as any).auditScope}</div>
+                      )}
+                      {user.role === 'AUDITOR' && (user as any).auditorJustification && (
+                        <div className="text-[10px] text-slate-600 dark:text-slate-400 italic max-w-xs truncate mt-0.5" title={(user as any).auditorJustification}>
+                          "{(user as any).auditorJustification}"
+                        </div>
+                      )}
                     </td>
                     <td className="py-2.5 px-3">
                       <span
@@ -1095,6 +1114,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
 
           <div className="shrink-0 p-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850">
@@ -1276,8 +1296,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* 10. Grant Special Access Modal */}
       {isGrantModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-4 sm:p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950 text-amber-600 flex items-center justify-center border border-amber-200 dark:border-amber-800">
@@ -1575,6 +1595,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   >
                     <option value="MAKER">MAKER</option>
                     <option value="CHECKER">CHECKER</option>
+                    <option value="AUDITOR">AUDITOR</option>
                     <option value="ADMIN">ADMIN</option>
                   </select>
                 </div>

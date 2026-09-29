@@ -395,40 +395,42 @@ export const Phase2SSOTView: React.FC<Phase2SSOTViewProps> = ({
             </h4>
 
             <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-2xs">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-semibold">
-                    <th className="py-2 px-3">GL Account Code</th>
-                    <th className="py-2 px-3">Account Description</th>
-                    <th className="py-2 px-3 text-right">GL Balance (ETB)</th>
-                    <th className="py-2 px-3 text-right">Regulatory Sum (ETB)</th>
-                    <th className="py-2 px-3 text-right">Variance</th>
-                    <th className="py-2 px-3 text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {reconciliation.map((r, i) => (
-                    <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                      <td className="py-2 px-3 font-mono font-bold text-ob-indigo-700 dark:text-ob-indigo-400">{r.glAccount}</td>
-                      <td className="py-2 px-3 font-medium text-slate-900 dark:text-slate-100">{r.glAccountName}</td>
-                      <td className="py-2 px-3 text-right font-mono font-semibold text-slate-800 dark:text-slate-200">
-                        {r.glBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono font-semibold text-slate-800 dark:text-slate-200">
-                        {r.reportAggregate.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                        {r.variance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="py-2 px-3 text-center">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                          {r.status}
-                        </span>
-                      </td>
+              <div className="overflow-x-auto min-w-full touch-scroll-x">
+                <table className="min-w-[650px] w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-semibold">
+                      <th className="py-2 px-3">GL Account Code</th>
+                      <th className="py-2 px-3">Account Description</th>
+                      <th className="py-2 px-3 text-right">GL Balance (ETB)</th>
+                      <th className="py-2 px-3 text-right">Regulatory Sum (ETB)</th>
+                      <th className="py-2 px-3 text-right">Variance</th>
+                      <th className="py-2 px-3 text-center">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {reconciliation.map((r, i) => (
+                      <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                        <td className="py-2 px-3 font-mono font-bold text-ob-indigo-700 dark:text-ob-indigo-400">{r.glAccount}</td>
+                        <td className="py-2 px-3 font-medium text-slate-900 dark:text-slate-100">{r.glAccountName}</td>
+                        <td className="py-2 px-3 text-right font-mono font-semibold text-slate-800 dark:text-slate-200">
+                          {r.glBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono font-semibold text-slate-800 dark:text-slate-200">
+                          {r.reportAggregate.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {r.variance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                            {r.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 

@@ -81,7 +81,7 @@ class AuditServiceClass {
     actorId?: string;
     actorName?: string;
     actorRole?: string;
-    action: 'BIOMETRIC_AUTH_SUCCESS' | 'BIOMETRIC_AUTH_FAILURE' | 'BIOMETRIC_AUTH_TIMEOUT' | 'BIOMETRIC_LOGIN' | 'BIOMETRIC_ENROLLED' | 'BIOMETRIC_REVOKED' | 'BIOMETRIC_PROBE';
+    action: 'BIOMETRIC_AUTH_SUCCESS' | 'BIOMETRIC_AUTH_FAILURE' | 'BIOMETRIC_AUTH_TIMEOUT' | 'BIOMETRIC_LOGIN' | 'BIOMETRIC_ENROLLED' | 'BIOMETRIC_PROBE';
     type?: 'FINGERPRINT' | 'FACE' | 'WEBAUTHN_PLATFORM';
     entityId?: string;
     details?: string;

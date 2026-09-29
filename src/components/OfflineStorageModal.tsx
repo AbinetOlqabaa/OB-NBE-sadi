@@ -121,7 +121,7 @@ export const OfflineStorageModal: React.FC<OfflineStorageModalProps> = ({ isOpen
       aria-modal="true"
       aria-labelledby="offline-modal-title"
     >
-      <div className="bg-white dark:bg-[#15182e] border border-slate-200 dark:border-slate-700/80 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-4xl max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-900/50">
           <div className="flex items-center gap-3">
@@ -134,7 +134,7 @@ export const OfflineStorageModal: React.FC<OfflineStorageModalProps> = ({ isOpen
                 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2"
               >
                 IndexedDB Storage & Remote Site Visit Center
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold">
+                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold">
                   NBE BSD/03/2020
                 </span>
               </h2>
@@ -366,7 +366,7 @@ export const OfflineStorageModal: React.FC<OfflineStorageModalProps> = ({ isOpen
                               {draft.reportKey}
                             </span>
                             <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase font-mono ${
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase font-mono ${
                                 isPending
                                   ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
                                   : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
@@ -443,7 +443,7 @@ export const OfflineStorageModal: React.FC<OfflineStorageModalProps> = ({ isOpen
                             </span>
                           </div>
                           <span
-                            className={`px-1.5 py-0.2 rounded-full text-[9px] font-bold uppercase font-mono ${
+                            className={`px-1.5 py-0.2 rounded-md text-[9px] font-bold uppercase font-mono ${
                               isPending
                                 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300'
                                 : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300'

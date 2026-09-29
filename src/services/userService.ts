@@ -12,7 +12,7 @@ import {
 import { departmentService } from './departmentService.ts';
 import { getAllReports } from '../data/report-registry.ts';
 
-export type UserRole = 'ADMIN' | 'MAKER' | 'CHECKER';
+export type UserRole = 'ADMIN' | 'MAKER' | 'CHECKER' | 'AUDITOR';
 export type UserStatus = 'ACTIVE' | 'PENDING_APPROVAL' | 'DISABLED';
 
 export interface BiometricCredential {
@@ -48,7 +48,202 @@ export interface UserAccount {
   approvedAt?: string;
   approvedBy?: string;
   lastLoginAt?: string;
+  auditorJustification?: string;
+  auditScope?: string;
 }
+
+/**
+ * Authoritative Development Seed Accounts per NBE BSD/03/2020 Segregation of Duties.
+ * NOTE: biometricCredentials are intentionally EMPTY so that genuine hardware/browser
+ * biometric enrollment can be performed and tested against them.
+ * Development Password for all accounts: "password"
+ */
+export const DEV_SEED_USERS: UserAccount[] = [
+  // 1. ADMIN - Compliance & Legal Governance
+  {
+    id: 'usr_admin_1',
+    name: 'Dawit Bekele',
+    email: 'admin@oromiabank.com',
+    password: 'password',
+    role: 'ADMIN',
+    status: 'ACTIVE',
+    institutionCode: '0000013',
+    department: 'Compliance & Legal Governance',
+    employeeId: 'OB-ADM-001',
+    phoneNumber: '+251 91 123 4567',
+    specialAccessGrants: [],
+    createdAt: '2026-01-10T08:00:00Z',
+    approvedAt: '2026-01-10T08:00:00Z',
+    approvedBy: 'National Bank of Ethiopia / OB Board',
+    biometricCredentials: [],
+  },
+  // 2. MAKER - Credit Operations & Portfolio Management
+  {
+    id: 'usr_maker_1',
+    name: 'Abebe Kebede',
+    email: 'abebe.kebede@oromiabank.com',
+    password: 'password',
+    role: 'MAKER',
+    status: 'ACTIVE',
+    institutionCode: '0000013',
+    department: 'Credit Operations & Portfolio Management',
+    employeeId: 'OB-MKR-104',
+    phoneNumber: '+251 91 234 5678',
+    specialAccessGrants: [],
+    createdAt: '2026-02-01T09:00:00Z',
+    approvedAt: '2026-02-02T10:00:00Z',
+    approvedBy: 'Dawit Bekele (ADMIN)',
+    biometricCredentials: [],
+  },
+  // 3. CHECKER - Credit Operations & Portfolio Management
+  {
+    id: 'usr_checker_1',
+    name: 'Chala Desta',
+    email: 'chala.desta@oromiabank.com',
+    password: 'password',
+    role: 'CHECKER',
+    status: 'ACTIVE',
+    institutionCode: '0000013',
+    department: 'Credit Operations & Portfolio Management',
+    employeeId: 'OB-CHK-055',
+    phoneNumber: '+251 91 456 7890',
+    specialAccessGrants: [],
+    createdAt: '2026-01-15T08:30:00Z',
+    approvedAt: '2026-01-16T09:15:00Z',
+    approvedBy: 'Dawit Bekele (ADMIN)',
+    biometricCredentials: [],
+  },
+  // 4. AUDITOR - Internal Audit & Regulatory Control
+  {
+    id: 'usr_auditor_1',
+    name: 'Worku Alemu',
+    email: 'auditor@oromiabank.com',
+    password: 'password',
+    role: 'AUDITOR',
+    status: 'ACTIVE',
+    institutionCode: '0000013',
+    department: 'Internal Audit & Regulatory Control',
+    employeeId: 'OB-AUD-009',
+    phoneNumber: '+251 91 999 1234',
+    specialAccessGrants: [],
+    createdAt: '2026-01-18T08:00:00Z',
+    approvedAt: '2026-01-18T08:30:00Z',
+    approvedBy: 'National Bank of Ethiopia Board',
+    biometricCredentials: [],
+  },
+  // 5. MAKER - Trade Services & International Banking
+  {
+    id: 'usr_maker_2',
+    name: 'Tigist Alemu',
+    email: 'tigist.alemu@oromiabank.com',
+    password: 'password',
+    role: 'MAKER',
+    status: 'ACTIVE',
+    institutionCode: '0000013',
+    department: 'Trade Services & International Banking',
+    employeeId: 'OB-MKR-219',
+    phoneNumber: '+251 91 345 6789',
+    specialAccessGrants: [
+      {
+        id: 'grant_demo_1',
+        reportKey: 'DigitalLendingDL001',
+        department: 'Digital Banking & Fintech Operations',
+        grantedBy: 'Dawit Bekele (ADMIN)',
+        grantedAt: '2026-03-01T10:00:00Z',
+        reason: 'Temporary delegation for Fintech & Digital Trade micro-lending returns (Approved by VP Operations).',
+      },
+    ],
+    createdAt: '2026-02-15T11:00:00Z',
+    approvedAt: '2026-02-16T14:30:00Z',
+    approvedBy: 'Dawit Bekele (ADMIN)',
+    biometricCredentials: [],
+  },
+  // 6. CHECKER - Trade Services & International Banking
+  {
+    id: 'usr_checker_2',
+    name: 'Meron Worku',
+    email: 'meron.worku@oromiabank.com',
+    password: 'password',
+    role: 'CHECKER',
+    status: 'ACTIVE',
+    institutionCode: '0000013',
+    department: 'Trade Services & International Banking',
+    employeeId: 'OB-CHK-112',
+    phoneNumber: '+251 91 789 0123',
+    specialAccessGrants: [],
+    createdAt: '2026-02-18T10:00:00Z',
+    approvedAt: '2026-02-19T11:00:00Z',
+    approvedBy: 'Dawit Bekele (ADMIN)',
+    biometricCredentials: [],
+  },
+  // 7. MAKER - Specialized Asset Recovery & Workout
+  {
+    id: 'usr_maker_3',
+    name: 'Bekele Desta',
+    email: 'bekele.desta@oromiabank.com',
+    password: 'password',
+    role: 'MAKER',
+    status: 'ACTIVE',
+    institutionCode: '0000013',
+    department: 'Specialized Asset Recovery & Workout',
+    employeeId: 'OB-MKR-305',
+    phoneNumber: '+251 91 890 1234',
+    specialAccessGrants: [],
+    createdAt: '2026-02-20T08:00:00Z',
+    approvedAt: '2026-02-21T09:00:00Z',
+    approvedBy: 'Dawit Bekele (ADMIN)',
+    biometricCredentials: [],
+  },
+  // 8. CHECKER - Specialized Asset Recovery & Workout
+  {
+    id: 'usr_checker_3',
+    name: 'Getachew Feyisa',
+    email: 'getachew.feyisa@oromiabank.com',
+    password: 'password',
+    role: 'CHECKER',
+    status: 'ACTIVE',
+    institutionCode: '0000013',
+    department: 'Specialized Asset Recovery & Workout',
+    employeeId: 'OB-CHK-144',
+    phoneNumber: '+251 91 901 2345',
+    specialAccessGrants: [],
+    createdAt: '2026-02-22T08:30:00Z',
+    approvedAt: '2026-02-23T09:15:00Z',
+    approvedBy: 'Dawit Bekele (ADMIN)',
+    biometricCredentials: [],
+  },
+  // 9. PENDING REGISTRATIONS
+  {
+    id: 'usr_pending_1',
+    name: 'Lemlem Tadesse',
+    email: 'lemlem.tadesse@oromiabank.com',
+    password: 'password',
+    role: 'MAKER',
+    status: 'PENDING_APPROVAL',
+    institutionCode: '0000013',
+    department: 'Digital Banking & Fintech Operations',
+    employeeId: 'OB-MKR-388',
+    phoneNumber: '+251 91 567 8901',
+    specialAccessGrants: [],
+    createdAt: '2026-09-24T14:20:00Z',
+    biometricCredentials: [],
+  },
+  {
+    id: 'usr_pending_2',
+    name: 'Fikadu Tolosa',
+    email: 'fikadu.tolosa@oromiabank.com',
+    password: 'password',
+    role: 'CHECKER',
+    status: 'PENDING_APPROVAL',
+    institutionCode: '0000013',
+    department: 'Credit Risk & Prudential Reporting',
+    employeeId: 'OB-CHK-092',
+    phoneNumber: '+251 91 678 9012',
+    specialAccessGrants: [],
+    createdAt: '2026-09-25T07:45:00Z',
+    biometricCredentials: [],
+  },
+];
 
 class UserServiceClass {
   private users: Map<string, UserAccount> = new Map();
@@ -59,205 +254,47 @@ class UserServiceClass {
   }
 
   private seedUsers(): void {
-    const initialUsers: UserAccount[] = [
-      {
-        id: 'usr_admin_1',
-        name: 'Dawit Bekele',
-        email: 'admin@oromiabank.com',
-        password: 'password',
-        role: 'ADMIN',
-        status: 'ACTIVE',
-        institutionCode: '0000013',
-        department: 'Compliance & Legal Governance',
-        employeeId: 'OB-ADM-001',
-        phoneNumber: '+251 91 123 4567',
-        specialAccessGrants: [],
-        createdAt: '2026-01-10T08:00:00Z',
-        approvedAt: '2026-01-10T08:00:00Z',
-        approvedBy: 'National Bank of Ethiopia / OB Board',
-        biometricCredentials: [
-          {
-            type: 'FINGERPRINT',
-            credentialId: 'cred_admin_fp_default',
-            enrolledAt: '2026-01-10T08:00:00Z',
-            deviceLabel: 'Oromia Bank Mobile Passkey',
-          },
-          {
-            type: 'FACE',
-            credentialId: 'cred_admin_face_default',
-            faceHash: 'face_hash_admin_default_sig',
-            enrolledAt: '2026-01-10T08:00:00Z',
-            deviceLabel: 'Oromia Bank Face ID Optical Sensor',
-          },
-        ],
-      },
-      // 1. Credit Operations & Portfolio Management (Maker & Checker from same department)
-      {
-        id: 'usr_maker_1',
-        name: 'Abebe Kebede',
-        email: 'abebe.kebede@oromiabank.com',
-        password: 'password',
-        role: 'MAKER',
-        status: 'ACTIVE',
-        institutionCode: '0000013',
-        department: 'Credit Operations & Portfolio Management',
-        employeeId: 'OB-MKR-104',
-        phoneNumber: '+251 91 234 5678',
-        specialAccessGrants: [],
-        createdAt: '2026-02-01T09:00:00Z',
-        approvedAt: '2026-02-02T10:00:00Z',
-        approvedBy: 'Dawit Bekele (ADMIN)',
-        biometricCredentials: [
-          {
-            type: 'FINGERPRINT',
-            credentialId: 'cred_maker1_fp_default',
-            enrolledAt: '2026-02-01T09:00:00Z',
-            deviceLabel: 'Oromia Bank Mobile Passkey',
-          },
-        ],
-      },
-      {
-        id: 'usr_checker_1',
-        name: 'Chala Desta',
-        email: 'chala.desta@oromiabank.com',
-        password: 'password',
-        role: 'CHECKER',
-        status: 'ACTIVE',
-        institutionCode: '0000013',
-        department: 'Credit Operations & Portfolio Management',
-        employeeId: 'OB-CHK-055',
-        phoneNumber: '+251 91 456 7890',
-        specialAccessGrants: [],
-        createdAt: '2026-01-15T08:30:00Z',
-        approvedAt: '2026-01-16T09:15:00Z',
-        approvedBy: 'Dawit Bekele (ADMIN)',
-        biometricCredentials: [
-          {
-            type: 'FINGERPRINT',
-            credentialId: 'cred_checker1_fp_default',
-            enrolledAt: '2026-01-15T08:30:00Z',
-            deviceLabel: 'Oromia Bank Mobile Passkey',
-          },
-          {
-            type: 'FACE',
-            credentialId: 'cred_checker1_face_default',
-            faceHash: 'face_hash_checker1_default_sig',
-            enrolledAt: '2026-01-15T08:30:00Z',
-            deviceLabel: 'Oromia Bank Face ID Optical Sensor',
-          },
-        ],
-      },
+    DEV_SEED_USERS.forEach((u) => {
+      this.users.set(u.id, {
+        ...u,
+        specialAccessGrants: [...u.specialAccessGrants],
+        biometricCredentials: [],
+      });
+    });
+  }
 
-      // 2. Trade Services & International Banking (Maker & Checker from same department)
-      {
-        id: 'usr_maker_2',
-        name: 'Tigist Alemu',
-        email: 'tigist.alemu@oromiabank.com',
-        password: 'password',
-        role: 'MAKER',
-        status: 'ACTIVE',
-        institutionCode: '0000013',
-        department: 'Trade Services & International Banking',
-        employeeId: 'OB-MKR-219',
-        phoneNumber: '+251 91 345 6789',
-        specialAccessGrants: [
-          // Demonstration of Admin-granted cross-department special access
-          {
-            id: 'grant_demo_1',
-            reportKey: 'DigitalLendingDL001',
-            department: 'Digital Banking & Fintech Operations',
-            grantedBy: 'Dawit Bekele (ADMIN)',
-            grantedAt: '2026-03-01T10:00:00Z',
-            reason: 'Temporary delegation for Fintech & Digital Trade micro-lending returns (Approved by VP Operations).',
-          },
-        ],
-        createdAt: '2026-02-15T11:00:00Z',
-        approvedAt: '2026-02-16T14:30:00Z',
-        approvedBy: 'Dawit Bekele (ADMIN)',
-      },
-      {
-        id: 'usr_checker_2',
-        name: 'Meron Worku',
-        email: 'meron.worku@oromiabank.com',
-        password: 'password',
-        role: 'CHECKER',
-        status: 'ACTIVE',
-        institutionCode: '0000013',
-        department: 'Trade Services & International Banking',
-        employeeId: 'OB-CHK-112',
-        phoneNumber: '+251 91 789 0123',
-        specialAccessGrants: [],
-        createdAt: '2026-02-18T10:00:00Z',
-        approvedAt: '2026-02-19T11:00:00Z',
-        approvedBy: 'Dawit Bekele (ADMIN)',
-      },
+  /**
+   * Resets all users to pristine development seed state with zero pre-seeded biometrics.
+   */
+  public resetDevelopmentSeedData(): { success: boolean; usersCount: number; message: string } {
+    this.users.clear();
+    this.seedUsers();
+    return {
+      success: true,
+      usersCount: this.users.size,
+      message: 'Development seed accounts re-initialized with zero pre-seeded biometrics.',
+    };
+  }
 
-      // 3. Specialized Asset Recovery & Workout (Maker & Checker from same department)
-      {
-        id: 'usr_maker_3',
-        name: 'Bekele Desta',
-        email: 'bekele.desta@oromiabank.com',
-        password: 'password',
-        role: 'MAKER',
-        status: 'ACTIVE',
-        institutionCode: '0000013',
-        department: 'Specialized Asset Recovery & Workout',
-        employeeId: 'OB-MKR-305',
-        phoneNumber: '+251 91 890 1234',
-        specialAccessGrants: [],
-        createdAt: '2026-02-20T08:00:00Z',
-        approvedAt: '2026-02-21T09:00:00Z',
-        approvedBy: 'Dawit Bekele (ADMIN)',
-      },
-      {
-        id: 'usr_checker_3',
-        name: 'Getachew Feyisa',
-        email: 'getachew.feyisa@oromiabank.com',
-        password: 'password',
-        role: 'CHECKER',
-        status: 'ACTIVE',
-        institutionCode: '0000013',
-        department: 'Specialized Asset Recovery & Workout',
-        employeeId: 'OB-CHK-144',
-        phoneNumber: '+251 91 901 2345',
-        specialAccessGrants: [],
-        createdAt: '2026-02-22T08:30:00Z',
-        approvedAt: '2026-02-23T09:15:00Z',
-        approvedBy: 'Dawit Bekele (ADMIN)',
-      },
-
-      // 4. Pending Approval Registrations
-      {
-        id: 'usr_pending_1',
-        name: 'Lemlem Tadesse',
-        email: 'lemlem.tadesse@oromiabank.com',
-        password: 'password',
-        role: 'MAKER',
-        status: 'PENDING_APPROVAL',
-        institutionCode: '0000013',
-        department: 'Digital Banking & Fintech Operations',
-        employeeId: 'OB-MKR-388',
-        phoneNumber: '+251 91 567 8901',
-        specialAccessGrants: [],
-        createdAt: '2026-09-24T14:20:00Z',
-      },
-      {
-        id: 'usr_pending_2',
-        name: 'Fikadu Tolosa',
-        email: 'fikadu.tolosa@oromiabank.com',
-        password: 'password',
-        role: 'CHECKER',
-        status: 'PENDING_APPROVAL',
-        institutionCode: '0000013',
-        department: 'Credit Risk & Prudential Reporting',
-        employeeId: 'OB-CHK-092',
-        phoneNumber: '+251 91 678 9012',
-        specialAccessGrants: [],
-        createdAt: '2026-09-25T07:45:00Z',
-      },
-    ];
-
-    initialUsers.forEach((u) => this.users.set(u.id, u));
+  /**
+   * Returns safe developer reference data for test accounts.
+   */
+  public getDevelopmentSeedSummary(): Array<{
+    email: string;
+    name: string;
+    role: UserRole;
+    department: string;
+    employeeId: string;
+    status: UserStatus;
+  }> {
+    return DEV_SEED_USERS.map(({ email, name, role, department, employeeId, status }) => ({
+      email,
+      name,
+      role,
+      department,
+      employeeId,
+      status,
+    }));
   }
 
   public getAll(): UserAccount[] {
@@ -289,13 +326,15 @@ class UserServiceClass {
     department: string;
     employeeId: string;
     phoneNumber?: string;
+    auditorJustification?: string;
+    auditScope?: string;
   }): { success: boolean; user?: UserAccount; message?: string } {
     if (!data.name || !data.email) {
       return { success: false, message: 'Full name and email address are required.' };
     }
 
-    if (!data.role || (data.role !== 'MAKER' && data.role !== 'CHECKER')) {
-      return { success: false, message: 'Registration role must be either MAKER or CHECKER.' };
+    if (!data.role || (data.role !== 'MAKER' && data.role !== 'CHECKER' && data.role !== 'AUDITOR')) {
+      return { success: false, message: 'Registration role must be MAKER, CHECKER, or AUDITOR.' };
     }
 
     if (!data.department) {
@@ -319,6 +358,8 @@ class UserServiceClass {
       department: data.department.trim(),
       employeeId: data.employeeId || `OB-${Math.floor(100 + Math.random() * 900)}`,
       phoneNumber: data.phoneNumber || '',
+      auditorJustification: data.auditorJustification,
+      auditScope: data.auditScope || (data.role === 'AUDITOR' ? 'ALL_DEPARTMENTS' : undefined),
       specialAccessGrants: [],
       createdAt: new Date().toISOString(),
     };
@@ -341,12 +382,20 @@ class UserServiceClass {
     message?: string;
     redirectTab?: string;
   } {
-    const user = this.getByEmail(email);
-    if (!user) {
-      return { success: false, message: 'Invalid credentials. User not found.' };
+    if (!email || !email.trim()) {
+      return { success: false, message: 'Corporate email address is required.' };
     }
 
-    if (password && user.password && user.password !== password) {
+    if (!password) {
+      return { success: false, message: 'Password is required to sign in.' };
+    }
+
+    const user = this.getByEmail(email);
+    if (!user) {
+      return { success: false, message: 'Invalid credentials. User account not found.' };
+    }
+
+    if (user.password !== password) {
       return { success: false, message: 'Invalid password. Please check your credentials.' };
     }
 
@@ -367,10 +416,11 @@ class UserServiceClass {
     // Update last login
     user.lastLoginAt = new Date().toISOString();
 
-    // Determine redirect tab
+    // Determine redirect tab based on authorized role
     let redirectTab = 'MAKER_WORKSPACE';
     if (user.role === 'ADMIN') redirectTab = 'ADMIN_DASHBOARD';
     else if (user.role === 'CHECKER') redirectTab = 'CHECKER_INBOX';
+    else if (user.role === 'AUDITOR') redirectTab = 'AUDITOR_DASHBOARD';
     else if (user.role === 'MAKER') redirectTab = 'MAKER_WORKSPACE';
 
     const { password: pw, ...safe } = user;
@@ -509,51 +559,14 @@ class UserServiceClass {
   }
 
   /**
-   * Resets / revokes enrolled biometric credentials for a user
-   */
-  public resetBiometrics(
-    email: string,
-    type?: 'FINGERPRINT' | 'FACE' | 'ALL'
-  ): { success: boolean; user?: UserAccount; message?: string } {
-    const user = this.getByEmail(email);
-    if (!user) {
-      return { success: false, message: 'User not found.' };
-    }
-
-    if (!user.biometricCredentials || user.biometricCredentials.length === 0) {
-      const { password: pw, ...safe } = user;
-      return {
-        success: true,
-        user: safe as UserAccount,
-        message: 'No biometric credentials registered for this account.',
-      };
-    }
-
-    if (!type || type === 'ALL') {
-      user.biometricCredentials = [];
-    } else {
-      user.biometricCredentials = user.biometricCredentials.filter((c) => c.type !== type);
-    }
-
-    const { password: pw, ...safe } = user;
-    return {
-      success: true,
-      user: safe as UserAccount,
-      message: `Biometric credentials (${type || 'ALL'}) successfully reset.`,
-    };
-  }
-
-  /**
    * Verifies biometric credentials and generates logged-in user session
    */
   public verifyBiometric(
     email: string,
     type: 'FINGERPRINT' | 'FACE',
     credentialId?: string,
-    faceHash?: string,
-    matchScore?: number,
-    requiredThreshold?: number
-  ): { success: boolean; user?: UserAccount; message?: string; redirectTab?: string; matchConfidence?: number } {
+    faceHash?: string
+  ): { success: boolean; user?: UserAccount; message?: string; redirectTab?: string } {
     const user = this.getByEmail(email);
     if (!user) {
       return { success: false, message: 'Account not found for biometric login.' };
@@ -594,15 +607,6 @@ class UserServiceClass {
       }
     }
 
-    // Verify sensitivity threshold if specified
-    if (matchScore !== undefined && requiredThreshold !== undefined && matchScore < requiredThreshold) {
-      return {
-        success: false,
-        message: `Biometric matching confidence (${matchScore}%) did not meet user-configured sensitivity threshold (${requiredThreshold}%).`,
-        matchConfidence: matchScore,
-      };
-    }
-
     // Verify faceHash consistency if both enrolled and challenge hashes are present
     if (type === 'FACE' && matched.faceHash && faceHash) {
       const isMismatchTest =
@@ -638,6 +642,8 @@ class UserServiceClass {
     let redirectTab = 'MAKER_WORKSPACE';
     if (user.role === 'ADMIN') redirectTab = 'ADMIN_DASHBOARD';
     else if (user.role === 'CHECKER') redirectTab = 'CHECKER_INBOX';
+    else if (user.role === 'AUDITOR') redirectTab = 'AUDITOR_DASHBOARD';
+    else if (user.role === 'MAKER') redirectTab = 'MAKER_WORKSPACE';
 
     const { password: pw, ...safe } = user;
     return {
@@ -680,6 +686,13 @@ class UserServiceClass {
 
     const { password, ...safe } = user;
     return { success: true, user: safe as UserAccount };
+  }
+
+  public authorizeUser(
+    userId: string,
+    adminName: string
+  ): { success: boolean; user?: UserAccount; message?: string } {
+    return this.updateUserStatus(userId, 'ACTIVE', adminName);
   }
 
   public updateUser(
@@ -821,7 +834,7 @@ class UserServiceClass {
    *     3. All reports in any external department(s) explicitly granted by Admin
    */
   public getAllowedReportKeysForUser(user: UserAccount | UserSession): string[] {
-    if (user.role === 'ADMIN') {
+    if (user.role === 'ADMIN' || user.role === 'AUDITOR') {
       return Array.from(new Set(getAllReports().map((r) => r.ReturnKey)));
     }
 
@@ -893,9 +906,15 @@ class UserServiceClass {
       reportKey: string;
     }
   ): { allowed: boolean; reason?: string } {
-    if (user.role === 'ADMIN') {
-      // Admin has oversight view but should not apply review changes directly
-      return { allowed: false, reason: 'Administrator has read-only compliance oversight. Review sign-off must be performed by an authorized Checker.' };
+    if (user.role === 'ADMIN' || user.role === 'AUDITOR') {
+      // Admin and Auditor have independent oversight view but cannot sign off reviews
+      return {
+        allowed: false,
+        reason:
+          user.role === 'ADMIN'
+            ? 'Administrator has read-only compliance oversight. Review sign-off must be performed by an authorized Checker.'
+            : 'Auditor has independent supervisory oversight. Review sign-off must be performed by an authorized Checker.',
+      };
     }
 
     if (user.role !== 'CHECKER') {

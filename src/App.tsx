@@ -21,6 +21,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { DepartmentReportManagement } from './components/DepartmentReportManagement';
 import { MakerWorkspace } from './components/MakerWorkspace';
 import { CheckerInbox } from './components/CheckerInbox';
+import { AuditorDashboard } from './components/AuditorDashboard';
 import { DynamicReportForm } from './components/DynamicReportForm';
 import { NbeSimulatorView } from './components/NbeSimulatorView';
 import { Phase2SSOTView } from './components/Phase2SSOTView';
@@ -77,6 +78,7 @@ export default function App() {
   const getInitialTabForRole = (role?: string): ViewTab => {
     if (role === 'ADMIN') return 'ADMIN_DASHBOARD';
     if (role === 'CHECKER') return 'CHECKER_INBOX';
+    if (role === 'AUDITOR') return 'AUDITOR_DASHBOARD';
     return 'MAKER_WORKSPACE';
   };
 
@@ -563,7 +565,7 @@ export default function App() {
     : null;
 
   return (
-    <div className="h-[100dvh] max-h-[100dvh] w-screen overflow-hidden flex flex-col font-sans bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased selection:bg-ob-indigo-600 selection:text-white transition-colors">
+    <div className="h-[100dvh] max-h-[100dvh] w-full max-w-full overflow-hidden flex flex-col font-sans bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased selection:bg-ob-indigo-600 selection:text-white transition-colors">
       {/* 1. Top Navigation Bar (Strictly Fixed Height h-14 / h-16) */}
       <Navbar
         currentUser={currentUser}
@@ -572,6 +574,7 @@ export default function App() {
         pendingCheckerCount={pendingCheckerCount}
         isSidebarCollapsed={isSidebarCollapsed}
         onToggleSidebar={toggleSidebar}
+        onOpenMobileDrawer={() => setIsMobileDrawerOpen(true)}
         onLogout={handleLogout}
         onNavigateToSimulator={() => {
           setActiveTab('NBE_SIMULATOR');
@@ -604,7 +607,7 @@ export default function App() {
         <main
           ref={mainViewportRef as any}
           {...swipeTouchHandlers}
-          className="flex-1 h-full min-h-0 overflow-y-auto overflow-x-hidden flex flex-col p-2.5 sm:p-4 touch-scroll-y relative"
+          className="flex-1 h-full min-h-0 overflow-y-auto overflow-x-hidden flex flex-col p-2.5 sm:p-4 pb-3 sm:pb-4 touch-scroll-y relative"
         >
           {/* Subtle Mobile Drag/Swipe Navigation Direction Indicator */}
           {isSwiping && Math.abs(swipeOffset) > 25 && (
@@ -683,6 +686,21 @@ export default function App() {
                 />
               )}
 
+              {activeTab === 'AUDITOR_DASHBOARD' && (
+                <AuditorDashboard
+                  currentUser={currentUser}
+                  onNavigateToReport={(reportKey) => {
+                    const t = getReportByKey(reportKey);
+                    if (t) {
+                      const sub = submissions.find((s) => s.reportKey === reportKey);
+                      if (sub) {
+                        setEditingSubmission(sub);
+                      }
+                    }
+                  }}
+                />
+              )}
+
               {activeTab === 'NBE_SIMULATOR' && <NbeSimulatorView />}
 
               {activeTab === 'PHASE2_SSOT' && (
@@ -701,6 +719,14 @@ export default function App() {
               {activeTab === 'DOCUMENTATION' && <DocumentationView templates={templates} />}
             </>
           )}
+
+          {/* Centralized Application Shell Workspace Footer */}
+          <footer className="mt-auto pt-6 pb-2 text-center text-[11px] text-slate-400 dark:text-slate-500 border-t border-slate-200/60 dark:border-slate-800/60 flex flex-col sm:flex-row items-center justify-between gap-1 shrink-0 transition-colors">
+            <div>© 2026 Oromia Bank S.C. All rights reserved.</div>
+            <div className="text-[10px] sm:text-[11px]">
+              National Bank of Ethiopia · BSD/03/2020 Supervisory Governance
+            </div>
+          </footer>
         </main>
       </div>
 
@@ -753,7 +779,7 @@ export default function App() {
           className="fixed bottom-5 right-4 sm:right-6 z-50 max-w-sm sm:max-w-md w-full animate-in fade-in slide-in-from-bottom-3 duration-300 pointer-events-auto"
         >
           {toastNotification.type === 'hardware' ? (
-            <div className="bg-[#121428]/95 dark:bg-[#0E1022]/98 backdrop-blur-md text-white rounded-2xl p-4 shadow-2xl border border-emerald-500/40 ring-1 ring-emerald-500/20 relative overflow-hidden transition-all">
+            <div className="bg-slate-900/95 dark:bg-slate-950/98 backdrop-blur-md text-white rounded-2xl p-4 shadow-2xl border border-emerald-500/40 ring-1 ring-emerald-500/20 relative overflow-hidden transition-all">
               {/* Subtle ambient decorative accents */}
               <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none -mr-10 -mt-10" />
               <div className="absolute bottom-0 left-0 w-24 h-24 bg-ob-indigo-500/10 rounded-full blur-xl pointer-events-none -ml-8 -mb-8" />
@@ -764,7 +790,7 @@ export default function App() {
                   {toastNotification.iconType === 'dual' ? (
                     <div className="relative flex items-center justify-center">
                       <Fingerprint className="w-5 h-5 text-emerald-400" />
-                      <span className="absolute -bottom-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-[#121428]" />
+                      <span className="absolute -bottom-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-slate-900" />
                     </div>
                   ) : toastNotification.iconType === 'camera' ? (
                     <Camera className="w-5 h-5 text-emerald-400" />
@@ -782,9 +808,9 @@ export default function App() {
                       {toastNotification.title || 'Device Hardware Verified'}
                     </span>
                     {toastNotification.badgeLabel && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        {toastNotification.badgeLabel}
+                        <span>{toastNotification.badgeLabel}</span>
                       </span>
                     )}
                   </div>
@@ -821,7 +847,7 @@ export default function App() {
             </div>
           ) : (
             /* Standard toast */
-            <div className="bg-[#121428] text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-2xl border border-ob-indigo-800/80 flex items-center gap-2 justify-between">
+            <div className="bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-2xl border border-ob-indigo-800/80 flex items-center gap-2 justify-between">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-ob-green-400 animate-pulse" />
                 <span>{toastNotification.message}</span>

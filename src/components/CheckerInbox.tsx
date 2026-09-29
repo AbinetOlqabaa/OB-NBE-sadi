@@ -426,7 +426,8 @@ export const CheckerInbox: React.FC<CheckerInboxProps> = ({
               </div>
 
               {/* Tablet / Desktop Table View */}
-              <table className="hidden sm:table w-full text-left border-collapse text-xs">
+              <div className="hidden sm:block overflow-x-auto min-w-full touch-scroll-x">
+                <table className="w-full min-w-[700px] text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-semibold sticky top-0 z-10">
                     <th className="py-2.5 px-3">Return Code</th>
@@ -503,7 +504,8 @@ export const CheckerInbox: React.FC<CheckerInboxProps> = ({
                   })}
                 </tbody>
               </table>
-            </>
+            </div>
+          </>
           )}
         </div>
 

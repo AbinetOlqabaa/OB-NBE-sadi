@@ -110,12 +110,12 @@ export class PdfGenerator {
     const pageHeight = doc.internal.pageSize.getHeight();
 
     // Brand Palette:
-    // Oromia Royal Indigo (#5962AB -> [89, 98, 171])
-    // Oromia Leaf Green (#94C83D -> [148, 200, 61])
+    // Oromia Primary Blue (#5962AB -> [89, 98, 171])
+    // Authoritative OB Green (#8CC51F -> [140, 197, 31])
     // Dark Charcoal Navy (#121428 -> [18, 20, 40])
     // Slate Border (#DCE1EB -> [220, 225, 235])
     const primaryIndigo: [number, number, number] = [89, 98, 171];
-    const brandGreen: [number, number, number] = [148, 200, 61];
+    const brandGreen: [number, number, number] = [140, 197, 31];
     const darkNavy: [number, number, number] = [18, 20, 40];
     const borderGray: [number, number, number] = [220, 225, 235];
     const cardBg: [number, number, number] = [248, 250, 253];

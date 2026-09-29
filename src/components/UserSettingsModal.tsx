@@ -24,11 +24,8 @@ import {
   Cpu,
   RefreshCw,
   Sparkles,
-  Trash2,
 } from 'lucide-react';
 import { UserSession } from '../types/regulatory.ts';
-import { userService } from '../services/userService.ts';
-import { recordBiometricAuditLog } from './AuditTrailView.tsx';
 import {
   authHistoryService,
   AuthHistoryEntry,
@@ -42,9 +39,6 @@ import {
   setBiometricLoginEnabled,
   getDeviceCapabilities,
   DeviceCapabilities,
-  getBiometricSensitivity,
-  setBiometricSensitivity,
-  getBiometricSensitivityProfile,
 } from '../utils/deviceCapabilities.ts';
 import { triggerHaptic, vibrate } from '../utils/haptics.ts';
 
@@ -72,36 +66,14 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
     isBiometricLoginEnabled(currentUser.email)
   );
   const [deviceCaps, setDeviceCaps] = useState<DeviceCapabilities | null>(null);
-  const [resetNotice, setResetNotice] = useState<string | null>(null);
-  const [isResettingBio, setIsResettingBio] = useState<boolean>(false);
-  const [sensitivity, setSensitivity] = useState<number>(() =>
-    getBiometricSensitivity(currentUser.email)
-  );
 
   useEffect(() => {
     if (isOpen) {
       setActiveTab(initialTab);
       setIsBioEnabled(isBiometricLoginEnabled(currentUser.email));
-      setSensitivity(getBiometricSensitivity(currentUser.email));
       getDeviceCapabilities(currentUser.email).then(setDeviceCaps);
     }
   }, [isOpen, initialTab, currentUser.email]);
-
-  const handleSensitivityChange = (newVal: number) => {
-    setSensitivity(newVal);
-    setBiometricSensitivity(newVal, currentUser.email);
-    vibrate(10);
-    triggerHaptic('selection');
-
-    authHistoryService.recordAttempt({
-      method: 'FINGERPRINT',
-      status: 'ENROLLED',
-      userEmail: currentUser.email,
-      userName: currentUser.name,
-      userRole: currentUser.role,
-      failureReason: `Biometric sensitivity threshold adjusted to ${newVal}% (${getBiometricSensitivityProfile(newVal).label})`,
-    });
-  };
 
   useEffect(() => {
     const unsub = authHistoryService.subscribe((allRecords) => {
@@ -155,55 +127,6 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
     triggerHaptic('success');
   };
 
-  const handleRevokeBiometrics = async () => {
-    setIsResettingBio(true);
-    vibrate(25);
-    try {
-      userService.resetBiometrics(currentUser.email, 'ALL');
-      await fetch('/api/auth/biometrics/reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: currentUser.email, type: 'ALL' }),
-      });
-      // Clear localStorage
-      try {
-        const stored = localStorage.getItem('ob_biometric_credentials');
-        if (stored) {
-          const list = JSON.parse(stored);
-          const remaining = list.filter((c: any) => c.email.toLowerCase() !== currentUser.email.toLowerCase());
-          localStorage.setItem('ob_biometric_credentials', JSON.stringify(remaining));
-        }
-      } catch {}
-
-      recordBiometricAuditLog({
-        actorId: currentUser.email,
-        actorName: currentUser.name,
-        actorRole: currentUser.role,
-        action: 'BIOMETRIC_REVOKED',
-        type: 'FINGERPRINT',
-        entityId: currentUser.email,
-        details: 'User revoked all registered biometric credentials in User Settings',
-      });
-
-      authHistoryService.recordAttempt({
-        method: 'FINGERPRINT',
-        status: 'FAILED',
-        userEmail: currentUser.email,
-        userName: currentUser.name,
-        userRole: currentUser.role,
-        failureReason: 'User revoked passkeys in User Settings',
-      });
-
-      triggerHaptic('success');
-      setResetNotice('All biometric passkeys successfully revoked from server & device.');
-    } catch (e) {
-      setResetNotice('Biometric passkeys revoked locally.');
-    } finally {
-      setIsResettingBio(false);
-      setTimeout(() => setResetNotice(null), 5000);
-    }
-  };
-
   // Filter records
   const filteredRecords = records.filter((r) => {
     if (methodFilter !== 'ALL' && r.method !== methodFilter) return false;
@@ -221,9 +144,9 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-2xl bg-white dark:bg-[#12152E] border border-slate-200 dark:border-[#262E5C] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-all">
+      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)] transition-all">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-100 dark:border-[#202752] flex items-center justify-between bg-slate-50/80 dark:bg-[#171B3B]/80">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-800/80">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-ob-indigo-500/15 text-ob-indigo-600 dark:text-ob-indigo-400 flex items-center justify-center border border-ob-indigo-500/30">
               <Sliders className="w-4 h-4" />
@@ -283,7 +206,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
           >
             <History className="w-3.5 h-3.5" />
             <span>Authentication History</span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-ob-indigo-100 dark:bg-ob-indigo-950/80 text-ob-indigo-700 dark:text-ob-indigo-300 font-mono font-bold">
+            <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-ob-indigo-100 dark:bg-ob-indigo-950/80 text-ob-indigo-700 dark:text-ob-indigo-300 font-mono font-bold">
               {records.length}
             </span>
           </button>
@@ -350,132 +273,6 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
                   <span className="font-mono text-[10px] text-slate-800 dark:text-slate-200 truncate max-w-[240px]">
                     {getHardwareDeviceId()}
                   </span>
-                </div>
-
-                <div className="pt-2 border-t border-slate-100 dark:border-[#222852] flex items-center justify-between">
-                  <span className="text-slate-500 dark:text-slate-400">Passkey Data:</span>
-                  <button
-                    type="button"
-                    onClick={handleRevokeBiometrics}
-                    disabled={isResettingBio}
-                    className="px-2.5 py-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-800/60 transition-colors flex items-center gap-1.5 cursor-pointer touch-press disabled:opacity-50"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    <span>{isResettingBio ? 'Revoking...' : 'Revoke & Reset Passkeys'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {resetNotice && (
-                <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200 text-xs flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <span>{resetNotice}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Biometric Sensitivity & Matching Threshold Slider Card */}
-            <div className="bg-slate-50 dark:bg-[#171B3B] border border-slate-200 dark:border-[#283163] rounded-2xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center border border-teal-500/30">
-                    <Sliders className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                        Biometric Sensitivity Threshold
-                      </h3>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getBiometricSensitivityProfile(sensitivity).badgeColor}`}>
-                        {sensitivity}% • {getBiometricSensitivityProfile(sensitivity).label}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Adjust matching threshold required for successful Face ID and Fingerprint authentication
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Slider Control */}
-              <div className="space-y-2 p-3 bg-white dark:bg-[#11132B] rounded-xl border border-slate-200 dark:border-[#222852]">
-                <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  <span className="flex items-center gap-1.5">
-                    <span>Matching Threshold:</span>
-                    <span className="text-sm font-mono font-bold text-ob-green-600 dark:text-ob-green-400">{sensitivity}%</span>
-                  </span>
-                  <span className="text-[10px] font-mono text-slate-400">
-                    Range: 60% – 99%
-                  </span>
-                </div>
-
-                <div className="relative py-1">
-                  <input
-                    type="range"
-                    min="60"
-                    max="99"
-                    step="1"
-                    value={sensitivity}
-                    onChange={(e) => handleSensitivityChange(parseInt(e.target.value, 10))}
-                    className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-ob-green-600 touch-press"
-                    aria-label="Biometric Sensitivity Slider"
-                  />
-                  <div className="flex justify-between text-[9px] text-slate-400 font-mono mt-1">
-                    <span>60% (Permissive)</span>
-                    <span className="text-emerald-500 font-bold">85% (NBE Standard)</span>
-                    <span>99% (Strict)</span>
-                  </div>
-                </div>
-
-                {/* Preset Quick Buttons */}
-                <div className="pt-2 border-t border-slate-100 dark:border-[#222852] flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Quick Presets:</span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => handleSensitivityChange(75)}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer touch-press ${
-                        sensitivity === 75
-                          ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40 ring-1 ring-amber-400/30'
-                          : 'bg-slate-50 dark:bg-[#181C3D] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-[#283163] hover:bg-slate-100 dark:hover:bg-[#20254D]'
-                      }`}
-                    >
-                      Flexible (75%)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSensitivityChange(85)}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer touch-press ${
-                        sensitivity === 85
-                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 ring-1 ring-emerald-400/30'
-                          : 'bg-slate-50 dark:bg-[#181C3D] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-[#283163] hover:bg-slate-100 dark:hover:bg-[#20254D]'
-                      }`}
-                    >
-                      Standard (85%)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSensitivityChange(95)}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer touch-press ${
-                        sensitivity === 95
-                          ? 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/40 ring-1 ring-rose-400/30'
-                          : 'bg-slate-50 dark:bg-[#181C3D] text-slate-600 dark:text-slate-400 border-slate-200 dark:border-[#283163] hover:bg-slate-100 dark:hover:bg-[#20254D]'
-                      }`}
-                    >
-                      Strict (95%)
-                    </button>
-                  </div>
-                </div>
-
-                {/* Profile Description */}
-                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#141738] text-[11px] text-slate-600 dark:text-slate-300 space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-200">
-                    <ShieldCheck className="w-3.5 h-3.5 text-ob-green-500" />
-                    <span>{getBiometricSensitivityProfile(sensitivity).directiveAlignment}</span>
-                  </div>
-                  <p className="leading-relaxed text-slate-500 dark:text-slate-400 text-[10px]">
-                    {getBiometricSensitivityProfile(sensitivity).description}
-                  </p>
                 </div>
               </div>
             </div>
@@ -706,7 +503,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
         )}
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-slate-100 dark:border-[#202752] bg-slate-50/50 dark:bg-[#131633] flex items-center justify-between text-xs">
+        <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center justify-between text-xs">
           <span className="text-slate-400 text-[11px]">
             Supervisory Governance Directive BSD/03/2020 Compliance
           </span>

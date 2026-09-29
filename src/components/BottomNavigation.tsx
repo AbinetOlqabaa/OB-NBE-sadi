@@ -13,6 +13,7 @@ import {
   Menu,
   History,
   HelpCircle,
+  ShieldAlert,
 } from 'lucide-react';
 import { UserSession } from '../types/regulatory.ts';
 import { ViewTab } from './Sidebar.tsx';
@@ -91,6 +92,33 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
             badge: null,
           },
         ];
+      case 'AUDITOR':
+        return [
+          {
+            id: 'AUDITOR_DASHBOARD' as ViewTab,
+            label: 'Auditor',
+            icon: ShieldAlert,
+            badge: null,
+          },
+          {
+            id: 'AUDIT_TRAIL' as ViewTab,
+            label: 'Audit',
+            icon: History,
+            badge: null,
+          },
+          {
+            id: 'PHASE2_SSOT' as ViewTab,
+            label: 'SSOT',
+            icon: Database,
+            badge: null,
+          },
+          {
+            id: 'DOCUMENTATION' as ViewTab,
+            label: 'Specs',
+            icon: HelpCircle,
+            badge: null,
+          },
+        ];
       case 'MAKER':
       default:
         return [
@@ -126,7 +154,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
 
   return (
     <nav
-      className="md:hidden shrink-0 bg-white/95 dark:bg-[#101226]/95 border-t border-slate-200 dark:border-[#22284D] backdrop-blur-lg px-2 pt-1 pb-safe shadow-lg z-30 transition-colors"
+      className="md:hidden shrink-0 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 backdrop-blur-lg px-2 pt-1 pb-safe shadow-lg z-30 transition-colors"
       aria-label="Mobile Bottom Navigation"
     >
       <div className="flex items-center justify-around max-w-md mx-auto h-14">
@@ -149,7 +177,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
               <div className="relative">
                 <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110' : ''}`} />
                 {item.badge !== null && item.badge > 0 && (
-                  <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-full bg-amber-500 text-white font-mono text-[9px] font-bold min-w-[15px] h-[15px] flex items-center justify-center border-2 border-white dark:border-[#101226] animate-pulse">
+                  <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-full bg-amber-500 text-white font-mono text-[9px] font-bold min-w-[15px] h-[15px] flex items-center justify-center border-2 border-white dark:border-slate-900 animate-pulse">
                     {item.badge}
                   </span>
                 )}

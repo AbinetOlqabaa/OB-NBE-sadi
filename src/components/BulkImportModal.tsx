@@ -192,7 +192,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
-      <div className="bg-white dark:bg-[#161933] rounded-2xl max-w-2xl w-full border border-slate-200 dark:border-[#262D55] shadow-2xl p-5 space-y-4 max-h-[92vh] overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4 max-h-[calc(100dvh-2rem)] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2.5">
@@ -223,7 +223,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
             <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Import Target
             </label>
-            <div className="flex rounded-xl bg-slate-100 dark:bg-[#101226] p-1 border border-slate-200 dark:border-[#262D55]">
+            <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700">
               <button
                 type="button"
                 onClick={() => {

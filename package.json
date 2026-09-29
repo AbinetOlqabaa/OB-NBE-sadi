@@ -12,7 +12,10 @@
     "preview": "vite preview --host 0.0.0.0 --port 5173",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx src/tests/run-all-tests.ts"
+    "test": "tsx src/tests/run-all-tests.ts",
+    "simulator": "python3 nbe_simulator_service/manage.py runserver 0.0.0.0:8001",
+    "test:simulator": "PYTHONPATH=nbe_simulator_service python3 nbe_simulator_service/manage.py test apps.simulator.tests",
+    "test:all": "npm test && npm run test:simulator"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

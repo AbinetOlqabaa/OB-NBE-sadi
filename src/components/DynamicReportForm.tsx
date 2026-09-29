@@ -506,14 +506,14 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
         {validation && (
           <div className="flex items-center gap-2 text-[11px]">
             {validation.isValid ? (
-              <span className="text-emerald-700 dark:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full">
-                <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-                All Validations Passed (100%)
+              <span className="text-emerald-700 dark:text-emerald-300 font-bold flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/80 px-2 py-0.5 rounded-md">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>All Validations Passed (100%)</span>
               </span>
             ) : (
-              <span className="text-rose-700 dark:text-rose-300 font-bold flex items-center gap-1 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 px-2 py-0.5 rounded-full">
-                <AlertCircle className="w-3 h-3 text-rose-600 dark:text-rose-400" />
-                {validation.errorsCount} Error(s) detected
+              <span className="text-rose-700 dark:text-rose-300 font-bold flex items-center gap-1.5 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800/80 px-2 py-0.5 rounded-md">
+                <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                <span>{validation.errorsCount} Error(s) detected</span>
               </span>
             )}
           </div>
@@ -719,7 +719,7 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
 
       {/* 5.5 Mobile Sticky Thumb-Zone Action Bar (< 640px) */}
       {!isEffectiveReadOnly && (
-        <div className="sm:hidden shrink-0 bg-white/95 dark:bg-[#121428]/95 border-t border-slate-200 dark:border-[#22284D] backdrop-blur-md px-3 py-2 flex items-center justify-between gap-2 shadow-lg z-20 pb-safe">
+        <div className="sm:hidden shrink-0 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 backdrop-blur-md px-3 py-2 flex items-center justify-between gap-2 shadow-lg z-20 pb-safe">
           <button
             type="button"
             onClick={handleManualSave}

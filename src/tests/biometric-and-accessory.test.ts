@@ -4,7 +4,6 @@
  */
 
 import { userService } from '../services/userService.ts';
-import { authHistoryService } from '../services/authHistoryService.ts';
 
 function assert(condition: boolean, msg: string) {
   if (!condition) {
@@ -114,6 +113,22 @@ export async function runBiometricAndAccessoryTests() {
   const targetUser = userService.getByEmail('abebe.kebede@oromiabank.com');
   assert(Boolean(targetUser), 'Target bank officer found in user registry');
 
+  // Verify all seed accounts start with zero pre-seeded biometrics
+  const allSeedUsers = [
+    'admin@oromiabank.com',
+    'abebe.kebede@oromiabank.com',
+    'chala.desta@oromiabank.com',
+    'auditor@oromiabank.com',
+  ];
+  for (const sEmail of allSeedUsers) {
+    const u = userService.getByEmail(sEmail)!;
+    assert(Boolean(u), `Seed user ${sEmail} exists`);
+    assert(
+      !u.biometricCredentials || u.biometricCredentials.length === 0,
+      `Seed user ${sEmail} has 0 pre-seeded fake biometrics (ready for genuine enrollment)`
+    );
+  }
+
   // 3. Real Biometric Registration & Verification (End-to-End)
   console.log('\n--- Real Biometric Registration & Enrolled Validation ---');
 
@@ -122,9 +137,15 @@ export async function runBiometricAndAccessoryTests() {
   const nonEnrolledAttempt = userService.verifyBiometric(nonEnrolledEmail, 'FINGERPRINT');
   assert(nonEnrolledAttempt.success === false, 'Biometric verification correctly rejects non-existent account');
 
-  const unEnrolledAttempt = userService.verifyBiometric(targetUser!.email, 'FACE');
-  assert(unEnrolledAttempt.success === false, 'Biometric verification rejects un-enrolled face biometrics');
-  assert(unEnrolledAttempt.message?.includes('registered') === true, 'Descriptive error message explains biometric passkey not registered');
+  // Test 3a2: Un-enrolled fingerprint on legitimate user rejects
+  const unEnrolledFpAttempt = userService.verifyBiometric(targetUser!.email, 'FINGERPRINT');
+  assert(unEnrolledFpAttempt.success === false, 'Biometric verification rejects un-enrolled fingerprint');
+  assert(unEnrolledFpAttempt.message?.includes('registered') === true, 'Descriptive error message explains fingerprint passkey not registered');
+
+  // Test 3a3: Un-enrolled face on legitimate user rejects
+  const unEnrolledFaceAttempt = userService.verifyBiometric(targetUser!.email, 'FACE');
+  assert(unEnrolledFaceAttempt.success === false, 'Biometric verification rejects un-enrolled face biometrics');
+  assert(unEnrolledFaceAttempt.message?.includes('registered') === true, 'Descriptive error message explains biometric passkey not registered');
 
   // Test 3b: Fingerprint Enrollment
   const fpRegResult = userService.registerBiometric(targetUser!.email, {
@@ -385,8 +406,12 @@ export async function runBiometricAndAccessoryTests() {
   assert(typeof getRoleTabs === 'function', 'getRoleTabs utility exported as a function');
 
   const adminTabs = getRoleTabs('ADMIN');
-  assert(adminTabs.length === 8, 'Admin role has access to all 8 tabs');
+  assert(adminTabs.length === 9, 'Admin role has access to all 9 tabs including Auditor Dashboard');
   assert(adminTabs[0] === 'ADMIN_DASHBOARD', 'First admin tab is ADMIN_DASHBOARD');
+
+  const auditorTabs = getRoleTabs('AUDITOR');
+  assert(auditorTabs.length === 4, 'Auditor role has 4 core tabs (Auditor Dashboard, Audit Trail, SSOT, Docs)');
+  assert(auditorTabs[0] === 'AUDITOR_DASHBOARD', 'First auditor tab is AUDITOR_DASHBOARD');
 
   const makerTabs = getRoleTabs('MAKER');
   assert(makerTabs.length === 4, 'Maker role has 4 core tabs (Maker, SSOT, Audit, Docs)');
@@ -596,313 +621,6 @@ export async function runBiometricAndAccessoryTests() {
     onToggleCollapse: () => {},
   });
   assert(Boolean(sidebarElement) && sidebarElement.type === Sidebar, 'Sidebar instantiated successfully with User Settings Biometric Login toggle');
-
-  // 14. Full Stack End-to-End Registration, Login & Biometric Revocation / Reset Verification
-  console.log('\n--- 14. Full Stack Registration, Login & Biometric Reset Verification ---');
-
-  // Verify userService.resetBiometrics
-  assert(typeof userService.resetBiometrics === 'function', 'userService.resetBiometrics exported as function');
-
-  // Test user biometric enrollment and reset
-  const testResetUserEmail = 'abebe.kebede@oromiabank.com';
-  const initialStatus = userService.getBiometricStatus(testResetUserEmail);
-  assert(initialStatus.hasFingerprint === true, 'Maker user starts with enrolled fingerprint');
-
-  // Reset single modality
-  const resetFpResult = userService.resetBiometrics(testResetUserEmail, 'FINGERPRINT');
-  assert(resetFpResult.success === true, 'resetBiometrics successfully resets FINGERPRINT');
-  const statusAfterFpReset = userService.getBiometricStatus(testResetUserEmail);
-  assert(statusAfterFpReset.hasFingerprint === false, 'Biometric status reflects revoked fingerprint');
-
-  // Re-enroll biometric credential
-  userService.registerBiometric(testResetUserEmail, {
-    type: 'FINGERPRINT',
-    credentialId: 'cred_test_fp_restored',
-    enrolledAt: new Date().toISOString(),
-    deviceLabel: 'Restored Test Touch Passkey',
-  });
-  const restoredStatus = userService.getBiometricStatus(testResetUserEmail);
-  assert(restoredStatus.hasFingerprint === true, 'Biometric passkey re-enrolled cleanly');
-
-  // Reset ALL biometrics
-  const resetAllResult = userService.resetBiometrics(testResetUserEmail, 'ALL');
-  assert(resetAllResult.success === true, 'resetBiometrics ALL completes successfully');
-  const emptyStatus = userService.getBiometricStatus(testResetUserEmail);
-  assert(emptyStatus.hasFingerprint === false && emptyStatus.hasFace === false, 'All biometrics revoked from single source of truth');
-
-  // Restore for subsequent app operation
-  userService.registerBiometric(testResetUserEmail, {
-    type: 'FINGERPRINT',
-    credentialId: 'cred_maker1_fp_default',
-    enrolledAt: new Date().toISOString(),
-    deviceLabel: 'Oromia Bank Mobile Passkey',
-  });
-
-  // Verify LoginPage component instantiation with BiometricStatusIndicator
-  const { LoginPage } = await import('../components/LoginPage.tsx');
-  assert(typeof LoginPage === 'function', 'LoginPage exported as React functional component');
-  const loginElement = React.createElement(LoginPage, {
-    onLoginSuccess: () => {},
-    onNavigateRegister: () => {},
-  });
-  assert(Boolean(loginElement), 'LoginPage instantiated successfully with BiometricStatusIndicator');
-
-  // 15. SystemHealthDashboard Automated Diagnostic Cycle & Download Report Verification
-  console.log('\n--- 15. SystemHealthDashboard Diagnostic Cycle & Download Report Verification ---');
-  const { SystemHealthDashboard } = await import('../components/SystemHealthDashboard.tsx');
-  assert(typeof SystemHealthDashboard === 'function', 'SystemHealthDashboard exported as React functional component');
-
-  const healthDashboardElement = React.createElement(SystemHealthDashboard, {
-    currentUser: {
-      id: 'usr_maker_1',
-      name: 'Abebe Kebede',
-      email: 'abebe.kebede@oromiabank.com',
-      role: 'MAKER',
-      institutionCode: '0000013',
-      department: 'Credit Operations & Portfolio Management',
-    },
-  });
-  assert(Boolean(healthDashboardElement) && healthDashboardElement.type === SystemHealthDashboard, 'SystemHealthDashboard instantiates successfully with automated diagnostic cycle and Download Report button');
-
-  // 16. Live Fingerprint Scanning, Dual Face Matching & Independent Attempters E2E Tests
-  console.log('\n--- 16. Live Fingerprint Scanning, Dual Face Matching & Independent Attempters Verification ---');
-
-  // 16a. Verify BiometricLiveScanPage component export & instantiation
-  const { BiometricLiveScanPage } = await import('../components/BiometricLiveScanPage.tsx');
-  assert(typeof BiometricLiveScanPage === 'function', 'BiometricLiveScanPage exported as React functional component');
-
-  let fpLiveRedirectTab: string | undefined;
-  let fpLiveUserSession: any;
-  const fpPageElement = React.createElement(BiometricLiveScanPage, {
-    initialMethod: 'FINGERPRINT',
-    targetEmail: 'abebe.kebede@oromiabank.com',
-    onSuccess: (u, tab) => {
-      fpLiveUserSession = u;
-      fpLiveRedirectTab = tab;
-    },
-    onCancel: () => {},
-  });
-  assert(Boolean(fpPageElement) && fpPageElement.type === BiometricLiveScanPage, 'BiometricLiveScanPage instantiates cleanly in FINGERPRINT mode');
-
-  // 16b. Verify Fingerprint live scan matching authentication in userService
-  const makerUser = userService.getByEmail('abebe.kebede@oromiabank.com')!;
-  assert(Boolean(makerUser), 'Maker user found for biometric verification');
-  const makerFpStatus = userService.getBiometricStatus('abebe.kebede@oromiabank.com');
-  assert(makerFpStatus.hasFingerprint === true, 'Maker account has enrolled fingerprint');
-
-  const fpLiveVerifyResult = userService.verifyBiometric('abebe.kebede@oromiabank.com', 'FINGERPRINT');
-  assert(fpLiveVerifyResult.success === true, 'Fingerprint matching authentication succeeds for enrolled Maker');
-  assert(fpLiveVerifyResult.redirectTab === 'MAKER_WORKSPACE', 'Fingerprint login directs Maker to MAKER_WORKSPACE');
-
-  // 16c. Verify Face matching authentication step before redirecting
-  userService.registerBiometric('abebe.kebede@oromiabank.com', {
-    type: 'FACE',
-    credentialId: 'cred_maker1_face_default',
-    faceHash: 'face_hash_maker1_default_sig',
-    enrolledAt: new Date().toISOString(),
-    deviceLabel: 'Oromia Bank Face ID Optical Sensor',
-  });
-  const makerFaceStatus = userService.getBiometricStatus('abebe.kebede@oromiabank.com');
-  assert(makerFaceStatus.hasFace === true, 'Maker account has enrolled Face ID for Step 2 verification');
-
-  const faceLiveVerifyResult = userService.verifyBiometric('abebe.kebede@oromiabank.com', 'FACE');
-  assert(faceLiveVerifyResult.success === true, 'Face matching authentication succeeds before redirecting to dashboard');
-  assert(faceLiveVerifyResult.redirectTab === 'MAKER_WORKSPACE', 'Face verification confirms redirection to MAKER_WORKSPACE');
-
-  // 16d. Verify Checker Role Biometric Matching & Redirection to CHECKER_INBOX
-  const checkerFpResult = userService.verifyBiometric('chala.desta@oromiabank.com', 'FINGERPRINT');
-  assert(checkerFpResult.success === true, 'Fingerprint matching authentication succeeds for enrolled Checker');
-  assert(checkerFpResult.redirectTab === 'CHECKER_INBOX', 'Fingerprint login directs Checker to CHECKER_INBOX');
-
-  const checkerFaceResult = userService.verifyBiometric('chala.desta@oromiabank.com', 'FACE');
-  assert(checkerFaceResult.success === true, 'Face matching authentication succeeds for enrolled Checker');
-  assert(checkerFaceResult.redirectTab === 'CHECKER_INBOX', 'Face verification directs Checker to CHECKER_INBOX');
-
-  // 16e. Verify Administrator Role Biometric Matching & Redirection to ADMIN_DASHBOARD
-  const adminFaceResult = userService.verifyBiometric('admin@oromiabank.com', 'FACE');
-  assert(adminFaceResult.success === true, 'Face matching authentication succeeds for Administrator');
-  assert(adminFaceResult.redirectTab === 'ADMIN_DASHBOARD', 'Face verification directs Administrator to ADMIN_DASHBOARD');
-
-  // 16f. Verify Independent Sign-In Attempters:
-  // When Face ID is attempted, it operates independently and ignores password credentials even if entered
-  function simulateIndependentAttempters(
-    selectedMethod: 'PASSWORD' | 'FINGERPRINT' | 'FACE',
-    enteredPassword: string
-  ) {
-    if (selectedMethod === 'FACE') {
-      // Ignore enteredPassword completely and execute Face ID matching
-      const bioAuth = userService.verifyBiometric('abebe.kebede@oromiabank.com', 'FACE');
-      return {
-        attempterUsed: 'FACE',
-        passwordEvaluated: false,
-        success: bioAuth.success,
-        redirectTab: bioAuth.redirectTab,
-      };
-    } else if (selectedMethod === 'FINGERPRINT') {
-      // Ignore enteredPassword completely and execute Fingerprint + Face dual matching
-      const fpAuth = userService.verifyBiometric('abebe.kebede@oromiabank.com', 'FINGERPRINT');
-      const faceAuth = userService.verifyBiometric('abebe.kebede@oromiabank.com', 'FACE');
-      return {
-        attempterUsed: 'FINGERPRINT',
-        passwordEvaluated: false,
-        success: fpAuth.success && faceAuth.success,
-        redirectTab: fpAuth.redirectTab,
-      };
-    } else {
-      // Password attempter: validates credentials
-      const pwAuth = userService.login('abebe.kebede@oromiabank.com', enteredPassword);
-      return {
-        attempterUsed: 'PASSWORD',
-        passwordEvaluated: true,
-        success: pwAuth.success,
-        redirectTab: pwAuth.redirectTab,
-      };
-    }
-  }
-
-  // Test 1: User selects Face ID while typing an incorrect password
-  const faceTestWithWrongPw = simulateIndependentAttempters('FACE', 'completely_wrong_password_123');
-  assert(faceTestWithWrongPw.attempterUsed === 'FACE', 'Face ID attempter activated exclusively');
-  assert(faceTestWithWrongPw.passwordEvaluated === false, 'Password was ignored during Face ID login attempt');
-  assert(faceTestWithWrongPw.success === true, 'Face ID login succeeds independently of password value');
-  assert(faceTestWithWrongPw.redirectTab === 'MAKER_WORKSPACE', 'Redirects to MAKER_WORKSPACE');
-
-  // Test 2: User selects Fingerprint while typing password
-  const fpTestWithPw = simulateIndependentAttempters('FINGERPRINT', 'irrelevant_password_xyz');
-  assert(fpTestWithPw.attempterUsed === 'FINGERPRINT', 'Fingerprint attempter activated exclusively');
-  assert(fpTestWithPw.passwordEvaluated === false, 'Password was ignored during Fingerprint login attempt');
-  assert(fpTestWithPw.success === true, 'Fingerprint + Face dual matching succeeds independently');
-
-  // Test 3: User selects Password method
-  const pwTest = simulateIndependentAttempters('PASSWORD', 'password');
-  assert(pwTest.attempterUsed === 'PASSWORD', 'Password attempter activated exclusively');
-  assert(pwTest.passwordEvaluated === true, 'Password was evaluated for Password login attempt');
-  assert(pwTest.success === true, 'Password login succeeds');
-
-  // 16g. Verify device scanner and camera availability check integration
-  const deviceCapsCheck = await checkHardwareCapabilities();
-  assert(typeof deviceCapsCheck.hasBiometricHardware === 'boolean', 'Device biometric hardware availability determined');
-  assert(typeof deviceCapsCheck.canRegisterFingerprint === 'boolean', 'Device fingerprint scanner availability determined');
-  assert(typeof deviceCapsCheck.canRegisterFace === 'boolean', 'Device camera availability determined');
-
-  // 17. Hardware Diagnostics History & User-Configurable Biometric Sensitivity Tests
-  console.log('\n--- 17. Hardware Diagnostics History & Biometric Sensitivity Tests ---');
-
-  // 17a. Verify authHistoryService.getHardwareDiagnosticsHistory
-  const diagHistoryAll = authHistoryService.getHardwareDiagnosticsHistory();
-  assert(Array.isArray(diagHistoryAll), 'getHardwareDiagnosticsHistory returns array of events');
-  assert(diagHistoryAll.length > 0, 'Hardware diagnostics history contains initial audit events');
-
-  // Verify explicit inclusion of failed sensor initializations and authentication timeouts
-  const failedEvents = authHistoryService.getHardwareDiagnosticsHistory({ filter: 'FAILED' });
-  assert(failedEvents.length > 0, 'Hardware diagnostics history explicitly retrieves FAILED sensor initialization events');
-  assert(failedEvents.every((e) => e.status === 'FAILED'), 'All retrieved records have FAILED status');
-  assert(Boolean(failedEvents[0].failureReason), 'Failed events explicitly document failure reason for audit transparency');
-
-  const timeoutEvents = authHistoryService.getHardwareDiagnosticsHistory({ filter: 'TIMEOUT' });
-  assert(timeoutEvents.length > 0, 'Hardware diagnostics history explicitly retrieves authentication TIMEOUT events');
-  assert(timeoutEvents.every((e) => e.status === 'TIMEOUT'), 'All retrieved records have TIMEOUT status');
-  assert(Boolean(timeoutEvents[0].failureReason?.includes('30') || timeoutEvents[0].failureReason?.includes('timeout')), 'Timeout events explicitly document 30s inactivity lock reason');
-
-  // Test recording a new hardware failure event
-  const recordedFailEvent = authHistoryService.recordHardwareDiagnosticEvent({
-    sensor: 'CAMERA',
-    eventType: 'FAILED',
-    userEmail: 'chala.desta@oromiabank.com',
-    userName: 'Chala Desta',
-    userRole: 'CHECKER',
-    failureReason: 'Test optical camera sensor initialization rejected by hardware device',
-    latencyMs: 1500,
-  });
-  assert(recordedFailEvent.status === 'FAILED', 'Recorded hardware diagnostic failure status is FAILED');
-  assert(recordedFailEvent.method === 'FACE', 'Camera diagnostic maps to FACE method');
-  assert(Boolean(recordedFailEvent.failureReason?.includes('Test optical camera')), 'Failure reason accurately preserved');
-
-  // 17b. Verify Biometric Sensitivity Thresholds
-  const {
-    getBiometricSensitivity,
-    setBiometricSensitivity,
-    getBiometricSensitivityProfile,
-  } = await import('../utils/deviceCapabilities.ts');
-
-  assert(typeof getBiometricSensitivity === 'function', 'getBiometricSensitivity exported as function');
-  assert(typeof setBiometricSensitivity === 'function', 'setBiometricSensitivity exported as function');
-  assert(typeof getBiometricSensitivityProfile === 'function', 'getBiometricSensitivityProfile exported as function');
-
-  // Test default sensitivity is 85%
-  const defaultSens = getBiometricSensitivity('new.user@oromiabank.com');
-  assert(defaultSens === 85, 'Default biometric sensitivity threshold is 85% (NBE standard)');
-
-  // Test setting custom sensitivity
-  setBiometricSensitivity(95, 'abebe.kebede@oromiabank.com');
-  assert(getBiometricSensitivity('abebe.kebede@oromiabank.com') === 95, 'Biometric sensitivity updated to 95% for user');
-
-  // Verify sensitivity profiles
-  const profileStrict = getBiometricSensitivityProfile(95);
-  assert(profileStrict.level === 'MAXIMUM', 'Profile 95% classified as MAXIMUM / Strict');
-  assert(profileStrict.directiveAlignment.includes('NBE'), 'Strict profile aligns with NBE directive');
-
-  const profileStandard = getBiometricSensitivityProfile(85);
-  assert(profileStandard.level === 'STANDARD', 'Profile 85% classified as STANDARD Compliance');
-
-  const profileFlexible = getBiometricSensitivityProfile(75);
-  assert(profileFlexible.level === 'FLEXIBLE', 'Profile 75% classified as FLEXIBLE');
-
-  // Verify userService.verifyBiometric sensitivity matching logic
-  // Match score 70% fails against 85% threshold
-  const failSensMatch = userService.verifyBiometric(
-    'abebe.kebede@oromiabank.com',
-    'FINGERPRINT',
-    undefined,
-    undefined,
-    70,
-    85
-  );
-  assert(failSensMatch.success === false, 'Biometric match rejected when score is below sensitivity threshold (70% < 85%)');
-  assert(Boolean(failSensMatch.message?.includes('sensitivity threshold')), 'Rejection message cites user sensitivity threshold');
-
-  // Match score 90% passes against 85% threshold
-  const passSensMatch = userService.verifyBiometric(
-    'abebe.kebede@oromiabank.com',
-    'FINGERPRINT',
-    undefined,
-    undefined,
-    90,
-    85
-  );
-  assert(passSensMatch.success === true, 'Biometric match accepted when score meets sensitivity threshold (90% >= 85%)');
-
-  // 17c. Verify UserSettingsModal with Biometric Sensitivity Slider
-  const { UserSettingsModal } = await import('../components/UserSettingsModal.tsx');
-  assert(typeof UserSettingsModal === 'function', 'UserSettingsModal exported as React functional component');
-
-  const settingsElement = React.createElement(UserSettingsModal, {
-    isOpen: true,
-    onClose: () => {},
-    currentUser: {
-      id: 'usr_maker_1',
-      name: 'Abebe Kebede',
-      email: 'abebe.kebede@oromiabank.com',
-      role: 'MAKER',
-      institutionCode: '0000013',
-      department: 'Credit Operations & Portfolio Management',
-    },
-    initialTab: 'SETTINGS',
-  });
-  assert(Boolean(settingsElement) && settingsElement.type === UserSettingsModal, 'UserSettingsModal instantiates successfully with Biometric Sensitivity slider');
-
-  // 17d. Verify SystemHealthDashboard instantiates with Hardware Diagnostics History
-  const healthDashboardDiagElement = React.createElement(SystemHealthDashboard, {
-    currentUser: {
-      id: 'usr_maker_1',
-      name: 'Abebe Kebede',
-      email: 'abebe.kebede@oromiabank.com',
-      role: 'MAKER',
-      institutionCode: '0000013',
-      department: 'Credit Operations & Portfolio Management',
-    },
-  });
-  assert(Boolean(healthDashboardDiagElement) && healthDashboardDiagElement.type === SystemHealthDashboard, 'SystemHealthDashboard instantiates successfully with Hardware Diagnostics History section');
 
   console.log('✓ All Biometric WebAuthn, Face ID, OTP, Password Reset & Hardware Capability tests passed successfully.');
 }

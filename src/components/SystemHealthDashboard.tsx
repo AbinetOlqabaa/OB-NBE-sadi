@@ -28,10 +28,6 @@ import {
   Info,
   Layers,
   FileCheck,
-  History,
-  Clock,
-  Filter,
-  Search,
 } from 'lucide-react';
 import { UserSession } from '../types/regulatory.ts';
 import {
@@ -48,12 +44,7 @@ import {
 } from '../utils/deviceCapabilities.ts';
 import { useBiometricAuth } from '../hooks/useBiometricAuth.ts';
 import { triggerHaptic, vibrate } from '../utils/haptics.ts';
-import {
-  authHistoryService,
-  AuthHistoryEntry,
-  getHardwareDeviceId,
-  getHardwareDeviceLabel,
-} from '../services/authHistoryService.ts';
+import { getHardwareDeviceId, getHardwareDeviceLabel } from '../services/authHistoryService.ts';
 
 interface SystemHealthDashboardProps {
   currentUser: UserSession;
@@ -68,22 +59,6 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
   const [hwCheck, setHwCheck] = useState<HardwareCapabilitiesResult | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [lastCheckTime, setLastCheckTime] = useState<string>(new Date().toLocaleTimeString());
-
-  // Automated Hardware Diagnostic Cycle State
-  const [isDiagnosticRunning, setIsDiagnosticRunning] = useState<boolean>(true);
-  const [diagnosticProgress, setDiagnosticProgress] = useState<number>(0);
-  const [diagnosticCurrentMessage, setDiagnosticCurrentMessage] = useState<string>('Initializing hardware diagnostic cycle...');
-  const [diagnosticCompleted, setDiagnosticCompleted] = useState<boolean>(false);
-  const [diagnosticSteps, setDiagnosticSteps] = useState<{
-    camera: { status: 'PENDING' | 'CHECKING' | 'READY' | 'RESTRICTED'; message: string; latencyMs?: number };
-    fingerprint: { status: 'PENDING' | 'CHECKING' | 'READY' | 'STANDBY'; message: string; latencyMs?: number };
-    enclave: { status: 'PENDING' | 'CHECKING' | 'READY' | 'RESTRICTED'; message: string; latencyMs?: number };
-  }>({
-    camera: { status: 'CHECKING', message: 'Verifying optical sensor & camera permission...' },
-    fingerprint: { status: 'PENDING', message: 'Awaiting touch sensor probe...' },
-    enclave: { status: 'PENDING', message: 'Awaiting cryptographic keystore attestation...' },
-  });
-  const [downloadNotice, setDownloadNotice] = useState<string | null>(null);
 
   // Camera Live Test State
   const [isCameraTesting, setIsCameraTesting] = useState<boolean>(false);
@@ -107,62 +82,6 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
 
   // Expanded troubleshooting bottleneck item
   const [expandedBottleneck, setExpandedBottleneck] = useState<string | null>(null);
-
-  // Hardware Diagnostics History State
-  const [diagRecords, setDiagRecords] = useState<AuthHistoryEntry[]>(() =>
-    authHistoryService.getHardwareDiagnosticsHistory({ userEmail: currentUser.role === 'ADMIN' ? undefined : currentUser.email })
-  );
-  const [diagFilter, setDiagFilter] = useState<'ALL' | 'FAILED' | 'TIMEOUT'>('ALL');
-  const [diagSearch, setDiagSearch] = useState<string>('');
-
-  useEffect(() => {
-    const unsub = authHistoryService.subscribe(() => {
-      setDiagRecords(
-        authHistoryService.getHardwareDiagnosticsHistory({
-          userEmail: currentUser.role === 'ADMIN' ? undefined : currentUser.email,
-        })
-      );
-    });
-    return unsub;
-  }, [currentUser.email, currentUser.role]);
-
-  const handleSimulateFailedSensorInit = () => {
-    vibrate(20);
-    authHistoryService.recordHardwareDiagnosticEvent({
-      sensor: 'CAMERA',
-      eventType: 'FAILED',
-      userEmail: currentUser.email,
-      userName: currentUser.name,
-      userRole: currentUser.role,
-      failureReason: 'Optical camera sensor initialization failed: Permission denied by browser sandbox policy',
-    });
-    triggerHaptic('selection');
-  };
-
-  const handleSimulateAuthTimeout = () => {
-    vibrate(20);
-    authHistoryService.recordHardwareDiagnosticEvent({
-      sensor: 'FINGERPRINT',
-      eventType: 'TIMEOUT',
-      userEmail: currentUser.email,
-      userName: currentUser.name,
-      userRole: currentUser.role,
-      failureReason: 'Inactivity timer expired (30 seconds auto-cancellation to prevent hardware lock)',
-    });
-    triggerHaptic('selection');
-  };
-
-  const handleExportDiagHistory = () => {
-    const dataStr = JSON.stringify(diagRecords, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `OB_Hardware_Diagnostics_History_${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    triggerHaptic('success');
-  };
 
   const {
     startCameraStream,
@@ -189,138 +108,9 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
     }
   }, [currentUser.email]);
 
-  /**
-   * Automated Hardware Diagnostic Cycle
-   * Automatically executes on tab open to verify camera and biometric sensor readiness.
-   */
-  const runAutomatedDiagnosticCycle = useCallback(async () => {
-    setIsDiagnosticRunning(true);
-    setDiagnosticCompleted(false);
-    setDiagnosticProgress(10);
-    setDiagnosticCurrentMessage('Initializing automated hardware sensor diagnostic cycle...');
-    vibrate(15);
-
-    // Step 1: Camera readiness check
-    setDiagnosticSteps(prev => ({
-      ...prev,
-      camera: { status: 'CHECKING', message: 'Checking optical sensor stream & media permissions...' },
-      fingerprint: { status: 'PENDING', message: 'Queued for touch sensor probe...' },
-      enclave: { status: 'PENDING', message: 'Queued for keystore attestation...' },
-    }));
-    setDiagnosticProgress(25);
-    setDiagnosticCurrentMessage('Phase 1/3: Checking camera optical readiness & permissions...');
-
-    const camStartTime = performance.now();
-    let camStatusResult: 'READY' | 'RESTRICTED' = 'READY';
-    let camMessageResult = 'Webcam optical stream ready (WebRTC capture verified).';
-
-    try {
-      const caps = await getDeviceCapabilities(currentUser.email);
-      const camLatency = Math.round(performance.now() - camStartTime);
-      if (caps.isCameraSupported) {
-        camStatusResult = 'READY';
-        camMessageResult = `Optical camera verified (${caps.cameraCount || 1} sensor(s), ${camLatency}ms response).`;
-      } else {
-        camStatusResult = 'RESTRICTED';
-        camMessageResult = caps.cameraStatus.reason || 'Camera optical stream restricted or permission required.';
-      }
-      setDiagnosticSteps(prev => ({
-        ...prev,
-        camera: { status: camStatusResult, message: camMessageResult, latencyMs: camLatency },
-      }));
-    } catch {
-      camStatusResult = 'RESTRICTED';
-      camMessageResult = 'Camera check completed with native selfie fallback.';
-      setDiagnosticSteps(prev => ({
-        ...prev,
-        camera: { status: 'RESTRICTED', message: camMessageResult, latencyMs: 35 },
-      }));
-    }
-
-    setDiagnosticProgress(55);
-    vibrate(20);
-
-    // Step 2: Biometric Fingerprint Sensor Probe
-    setDiagnosticCurrentMessage('Phase 2/3: Probing biometric touch sensor & platform passkeys...');
-    setDiagnosticSteps(prev => ({
-      ...prev,
-      fingerprint: { status: 'CHECKING', message: 'Probing biometric fingerprint touch sensor...' },
-    }));
-
-    const fpStartTime = performance.now();
-    let fpStatusResult: 'READY' | 'STANDBY' = 'READY';
-    let fpMessageResult = 'Fingerprint sensor operational with platform passkey.';
-
-    try {
-      const probeRes = await probeFingerprintSensor();
-      const fpLatency = Math.round(performance.now() - fpStartTime);
-      if (probeRes.success) {
-        fpStatusResult = 'READY';
-        fpMessageResult = `Biometric sensor verified (${fpLatency}ms latency, passkey active).`;
-      } else {
-        fpStatusResult = 'STANDBY';
-        fpMessageResult = probeRes.message || 'Touch passkey ready in platform keystore.';
-      }
-      setDiagnosticSteps(prev => ({
-        ...prev,
-        fingerprint: { status: fpStatusResult, message: fpMessageResult, latencyMs: fpLatency },
-      }));
-    } catch {
-      setDiagnosticSteps(prev => ({
-        ...prev,
-        fingerprint: { status: 'READY', message: 'Touch passkey fallback active.', latencyMs: 25 },
-      }));
-    }
-
-    setDiagnosticProgress(85);
-    vibrate(20);
-
-    // Step 3: Secure Enclave & Keystore Attestation
-    setDiagnosticCurrentMessage('Phase 3/3: Verifying Secure Enclave attestation & cryptographic keystore...');
-    setDiagnosticSteps(prev => ({
-      ...prev,
-      enclave: { status: 'CHECKING', message: 'Testing cryptographic keystore signature isolation...' },
-    }));
-
-    const encStartTime = performance.now();
-    await new Promise(r => setTimeout(r, 200));
-    const isSecCtx = typeof window !== 'undefined' && Boolean(window.isSecureContext);
-    const isWebAuthn = typeof window !== 'undefined' && Boolean(window.PublicKeyCredential);
-    const encLatency = Math.round(performance.now() - encStartTime);
-
-    setDiagnosticSteps(prev => ({
-      ...prev,
-      enclave: {
-        status: isSecCtx && isWebAuthn ? 'READY' : 'READY',
-        message: isSecCtx && isWebAuthn
-          ? `Hardware-isolated enclave attestation confirmed (P-256 Curve, ${encLatency}ms).`
-          : `Keystore verified in secure origin (${encLatency}ms).`,
-        latencyMs: encLatency,
-      },
-    }));
-
-    setDiagnosticProgress(100);
-    setDiagnosticCurrentMessage('Automated hardware diagnostic cycle complete: Camera & biometric sensors ready.');
-
-    // Finalize state
-    const [caps, hw] = await Promise.all([
-      getDeviceCapabilities(currentUser.email),
-      checkHardwareCapabilities(currentUser.email),
-    ]);
-    setDeviceCaps(caps);
-    setHwCheck(hw);
-    setLastCheckTime(new Date().toLocaleTimeString());
-
-    setIsDiagnosticRunning(false);
-    setDiagnosticCompleted(true);
-    vibrate([20, 30, 20]);
-    triggerHaptic('success');
-  }, [currentUser.email, probeFingerprintSensor]);
-
-  // Run automated diagnostic cycle whenever the tab is opened
   useEffect(() => {
-    runAutomatedDiagnosticCycle();
-  }, [runAutomatedDiagnosticCycle]);
+    loadCapabilities();
+  }, [loadCapabilities]);
 
   // Clean up camera stream on unmount
   useEffect(() => {
@@ -435,15 +225,6 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
       deviceId: getHardwareDeviceId(),
       deviceLabel: getHardwareDeviceLabel(),
       formFactor: detectDeviceFormFactor(),
-      healthScore: healthScore,
-      healthStatus: healthScore >= 90 ? 'Optimal' : healthScore >= 60 ? 'Operational' : 'Check Needed',
-      diagnosticCycle: {
-        completed: diagnosticCompleted,
-        isRunning: isDiagnosticRunning,
-        progressPercent: diagnosticProgress,
-        lastRunAt: lastCheckTime,
-        steps: diagnosticSteps,
-      },
       capabilities: deviceCaps,
       cameraStatus: deviceCaps?.cameraStatus,
       fingerprintStatus: deviceCaps?.fingerprintStatus,
@@ -456,12 +237,10 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `OB_Hardware_Telemetry_Report_${Date.now()}.json`;
+    a.download = `OB_System_Health_${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
     triggerHaptic('success');
-    setDownloadNotice('Hardware telemetry report downloaded successfully as JSON.');
-    setTimeout(() => setDownloadNotice(null), 4000);
   };
 
   // Determine overall health score (0 - 100%)
@@ -536,22 +315,21 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
             <div className="flex flex-col gap-1.5">
               <button
                 type="button"
-                onClick={runAutomatedDiagnosticCycle}
-                disabled={isDiagnosticRunning}
-                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all border border-white/15 flex items-center gap-1.5 cursor-pointer touch-press disabled:opacity-50"
+                onClick={loadCapabilities}
+                disabled={isLoading}
+                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all border border-white/15 flex items-center gap-1.5 cursor-pointer touch-press"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isDiagnosticRunning ? 'animate-spin' : ''}`} />
-                <span>Rerun Diagnostics</span>
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                <span>Refresh Sensors</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleExportReport}
                 className="px-3 py-1.5 rounded-xl bg-ob-green-600 hover:bg-ob-green-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer touch-press shadow"
-                title="Download hardware telemetry report as JSON"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Download Report</span>
+                <span>Export Audit (JSON)</span>
               </button>
             </div>
           </div>
@@ -576,230 +354,6 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
             <span className="font-bold text-ob-indigo-300 uppercase px-2 py-0.5 rounded bg-white/5 border border-white/10">
               {detectDeviceFormFactor()}
             </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Download Report Toast Notice */}
-      {downloadNotice && (
-        <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200 text-xs flex items-center justify-between gap-2 shadow-sm animate-in fade-in zoom-in-95">
-          <div className="flex items-center gap-2.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-            <span className="font-semibold">{downloadNotice}</span>
-          </div>
-          <span className="text-[10px] font-mono opacity-75">NBE BSD/03/2020 Art. 6.4</span>
-        </div>
-      )}
-
-      {/* Automated Hardware Diagnostic Cycle Progress Card */}
-      <div className="bg-white dark:bg-[#161A36] border border-slate-200 dark:border-[#272F5E] rounded-3xl p-5 shadow-md space-y-4 transition-all">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border transition-all ${
-                isDiagnosticRunning
-                  ? 'bg-ob-indigo-500/20 text-ob-indigo-600 dark:text-ob-indigo-400 border-ob-indigo-500/40 animate-pulse'
-                  : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/40'
-              }`}
-            >
-              {isDiagnosticRunning ? (
-                <RefreshCw className="w-5 h-5 animate-spin" />
-              ) : (
-                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-              )}
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-                  Automated Hardware Diagnostic Cycle
-                </h2>
-                {isDiagnosticRunning ? (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-ob-indigo-500/15 text-ob-indigo-700 dark:text-ob-indigo-300 border border-ob-indigo-500/30 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-ob-indigo-500 animate-ping" />
-                    Checking Sensors ({diagnosticProgress}%)
-                  </span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                    Sensors Ready (100%)
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {diagnosticCurrentMessage}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
-            <button
-              type="button"
-              onClick={runAutomatedDiagnosticCycle}
-              disabled={isDiagnosticRunning}
-              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#1E234A] dark:hover:bg-[#282F63] text-slate-700 dark:text-slate-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer touch-press disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isDiagnosticRunning ? 'animate-spin' : ''}`} />
-              <span>Rerun Diagnostics</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleExportReport}
-              className="px-3 py-1.5 rounded-xl bg-ob-green-600 hover:bg-ob-green-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer touch-press shadow"
-              title="Download hardware telemetry report as JSON"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Download Report</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Progress Bar with Shimmer Animation */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-ob-green-500" />
-              <span>Hardware Sensor Readiness Check</span>
-            </span>
-            <span className="font-mono font-bold text-ob-indigo-600 dark:text-ob-indigo-400">
-              {diagnosticProgress}%
-            </span>
-          </div>
-
-          <div className="w-full h-3 bg-slate-100 dark:bg-[#101228] rounded-full overflow-hidden border border-slate-200 dark:border-[#272F5E] p-0.5 relative">
-            <div
-              className={`h-full rounded-full transition-all duration-500 relative overflow-hidden ${
-                diagnosticProgress === 100
-                  ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-ob-green-500'
-                  : 'bg-gradient-to-r from-ob-indigo-600 via-teal-500 to-emerald-500'
-              }`}
-              style={{ width: `${diagnosticProgress}%` }}
-            >
-              {isDiagnosticRunning && (
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-bio-shimmer" />
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* 3 Sensor Subsystem Readiness Step Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-          {/* Step 1: Camera */}
-          <div
-            className={`p-3 rounded-2xl border transition-all ${
-              diagnosticSteps.camera.status === 'READY'
-                ? 'bg-teal-500/10 border-teal-500/30'
-                : diagnosticSteps.camera.status === 'CHECKING'
-                ? 'bg-teal-500/15 border-teal-500/50 ring-1 ring-teal-500/40'
-                : 'bg-slate-50 dark:bg-[#12152E] border-slate-200 dark:border-[#252B57]'
-            }`}
-          >
-            <div className="flex items-center justify-between gap-1 mb-1.5">
-              <div className="flex items-center gap-1.5">
-                <Camera className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
-                <span className="text-xs font-bold text-slate-900 dark:text-white">1. Optical Camera</span>
-              </div>
-              {diagnosticSteps.camera.status === 'CHECKING' ? (
-                <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400 flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3 animate-spin" />
-                  Testing...
-                </span>
-              ) : diagnosticSteps.camera.status === 'READY' ? (
-                <span className="text-[10px] font-bold text-teal-700 dark:text-teal-300 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3 text-teal-500" />
-                  Ready
-                </span>
-              ) : (
-                <span className="text-[10px] font-bold text-slate-400">Standby</span>
-              )}
-            </div>
-            <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
-              {diagnosticSteps.camera.message}
-            </p>
-            {diagnosticSteps.camera.latencyMs !== undefined && (
-              <span className="inline-block mt-1 text-[9px] font-mono text-teal-600 dark:text-teal-400">
-                Response: {diagnosticSteps.camera.latencyMs}ms
-              </span>
-            )}
-          </div>
-
-          {/* Step 2: Fingerprint */}
-          <div
-            className={`p-3 rounded-2xl border transition-all ${
-              diagnosticSteps.fingerprint.status === 'READY'
-                ? 'bg-emerald-500/10 border-emerald-500/30'
-                : diagnosticSteps.fingerprint.status === 'CHECKING'
-                ? 'bg-emerald-500/15 border-emerald-500/50 ring-1 ring-emerald-500/40'
-                : 'bg-slate-50 dark:bg-[#12152E] border-slate-200 dark:border-[#252B57]'
-            }`}
-          >
-            <div className="flex items-center justify-between gap-1 mb-1.5">
-              <div className="flex items-center gap-1.5">
-                <Fingerprint className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span className="text-xs font-bold text-slate-900 dark:text-white">2. Touch Passkey</span>
-              </div>
-              {diagnosticSteps.fingerprint.status === 'CHECKING' ? (
-                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3 animate-spin" />
-                  Probing...
-                </span>
-              ) : diagnosticSteps.fingerprint.status === 'READY' ? (
-                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                  Ready
-                </span>
-              ) : (
-                <span className="text-[10px] font-bold text-slate-400">Standby</span>
-              )}
-            </div>
-            <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
-              {diagnosticSteps.fingerprint.message}
-            </p>
-            {diagnosticSteps.fingerprint.latencyMs !== undefined && (
-              <span className="inline-block mt-1 text-[9px] font-mono text-emerald-600 dark:text-emerald-400">
-                Response: {diagnosticSteps.fingerprint.latencyMs}ms
-              </span>
-            )}
-          </div>
-
-          {/* Step 3: Secure Enclave */}
-          <div
-            className={`p-3 rounded-2xl border transition-all ${
-              diagnosticSteps.enclave.status === 'READY'
-                ? 'bg-ob-indigo-500/10 border-ob-indigo-500/30'
-                : diagnosticSteps.enclave.status === 'CHECKING'
-                ? 'bg-ob-indigo-500/15 border-ob-indigo-500/50 ring-1 ring-ob-indigo-500/40'
-                : 'bg-slate-50 dark:bg-[#12152E] border-slate-200 dark:border-[#252B57]'
-            }`}
-          >
-            <div className="flex items-center justify-between gap-1 mb-1.5">
-              <div className="flex items-center gap-1.5">
-                <Cpu className="w-3.5 h-3.5 text-ob-indigo-600 dark:text-ob-indigo-400" />
-                <span className="text-xs font-bold text-slate-900 dark:text-white">3. Secure Enclave</span>
-              </div>
-              {diagnosticSteps.enclave.status === 'CHECKING' ? (
-                <span className="text-[10px] font-bold text-ob-indigo-600 dark:text-ob-indigo-400 flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3 animate-spin" />
-                  Testing...
-                </span>
-              ) : diagnosticSteps.enclave.status === 'READY' ? (
-                <span className="text-[10px] font-bold text-ob-indigo-700 dark:text-ob-indigo-300 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3 text-ob-indigo-500" />
-                  Isolated
-                </span>
-              ) : (
-                <span className="text-[10px] font-bold text-slate-400">Standby</span>
-              )}
-            </div>
-            <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
-              {diagnosticSteps.enclave.message}
-            </p>
-            {diagnosticSteps.enclave.latencyMs !== undefined && (
-              <span className="inline-block mt-1 text-[9px] font-mono text-ob-indigo-600 dark:text-ob-indigo-400">
-                Response: {diagnosticSteps.enclave.latencyMs}ms
-              </span>
-            )}
           </div>
         </div>
       </div>
@@ -1219,257 +773,6 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
               </div>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Hardware Diagnostics History Section */}
-      <div className="bg-white dark:bg-[#161A36] border border-slate-200 dark:border-[#272F5E] rounded-3xl p-5 sm:p-6 shadow-md space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center">
-                <History className="w-4 h-4" />
-              </div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Hardware Diagnostics History
-              </h3>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30">
-                Audit Transparency
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Audit log of failed hardware sensor initialization events and 30-second authentication time-outs under NBE Directive BSD/03/2020 Art. 6.4
-            </p>
-          </div>
-
-          {/* Counts & Action Buttons */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              type="button"
-              onClick={handleSimulateFailedSensorInit}
-              className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800/60 transition-colors flex items-center gap-1 cursor-pointer touch-press"
-              title="Record a simulated sensor initialization failure event for audit verification"
-            >
-              <AlertCircle className="w-3.5 h-3.5" />
-              <span>Simulate Failure</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleSimulateAuthTimeout}
-              className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800/60 transition-colors flex items-center gap-1 cursor-pointer touch-press"
-              title="Record a simulated 30s timeout event for audit verification"
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>Simulate Timeout</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleExportDiagHistory}
-              className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-[#1C224B] dark:hover:bg-[#252C63] text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-[#2F3775] transition-colors flex items-center gap-1 cursor-pointer touch-press"
-              title="Export diagnostics records as JSON"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export JSON</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Filter Controls & Search */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-[#242B59]">
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-[#11132B] rounded-xl border border-slate-200 dark:border-[#222852]">
-            <button
-              type="button"
-              onClick={() => setDiagFilter('ALL')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer touch-press ${
-                diagFilter === 'ALL'
-                  ? 'bg-white dark:bg-[#1E244F] text-slate-900 dark:text-white shadow-xs'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              All Events ({diagRecords.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setDiagFilter('FAILED')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer touch-press ${
-                diagFilter === 'FAILED'
-                  ? 'bg-rose-600 text-white shadow-xs'
-                  : 'text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300'
-              }`}
-            >
-              <AlertCircle className="w-3 h-3" />
-              <span>Failed Initializations ({diagRecords.filter((r) => r.status === 'FAILED').length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setDiagFilter('TIMEOUT')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer touch-press ${
-                diagFilter === 'TIMEOUT'
-                  ? 'bg-amber-600 text-white shadow-xs'
-                  : 'text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300'
-              }`}
-            >
-              <Clock className="w-3 h-3" />
-              <span>Time-Outs ({diagRecords.filter((r) => r.status === 'TIMEOUT').length})</span>
-            </button>
-          </div>
-
-          <div className="relative min-w-[220px]">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Filter by reason, device, officer..."
-              value={diagSearch}
-              onChange={(e) => setDiagSearch(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-[#11132B] border border-slate-200 dark:border-[#222852] rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-rose-500"
-            />
-          </div>
-        </div>
-
-        {/* Diagnostics Events List */}
-        <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
-          {diagRecords
-            .filter((rec) => {
-              if (diagFilter === 'FAILED' && rec.status !== 'FAILED') return false;
-              if (diagFilter === 'TIMEOUT' && rec.status !== 'TIMEOUT') return false;
-              if (diagSearch.trim()) {
-                const q = diagSearch.toLowerCase();
-                const text = `${rec.userEmail} ${rec.userName} ${rec.method} ${rec.failureReason || ''} ${rec.deviceId} ${rec.deviceLabel}`.toLowerCase();
-                if (!text.includes(q)) return false;
-              }
-              return true;
-            })
-            .map((entry) => {
-              const isFailed = entry.status === 'FAILED';
-              const isTimeout = entry.status === 'TIMEOUT';
-
-              return (
-                <div
-                  key={entry.id}
-                  className={`p-3.5 rounded-2xl border transition-all text-xs space-y-2 ${
-                    isFailed
-                      ? 'bg-rose-500/5 dark:bg-rose-950/20 border-rose-300/80 dark:border-rose-900/50'
-                      : isTimeout
-                      ? 'bg-amber-500/5 dark:bg-amber-950/20 border-amber-300/80 dark:border-amber-900/50'
-                      : 'bg-slate-50 dark:bg-[#12152E] border-slate-200 dark:border-[#222852]'
-                  }`}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                    <div className="flex items-center gap-2">
-                      {isFailed ? (
-                        <span className="p-1 rounded-lg bg-rose-500/20 text-rose-600 dark:text-rose-400">
-                          <AlertCircle className="w-4 h-4" />
-                        </span>
-                      ) : (
-                        <span className="p-1 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400">
-                          <Clock className="w-4 h-4" />
-                        </span>
-                      )}
-
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                          isFailed
-                            ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
-                            : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
-                        }`}
-                      >
-                        {isFailed ? 'Hardware Sensor Initialization Failed' : 'Authentication Inactivity Time-Out'}
-                      </span>
-
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                        {entry.method === 'FACE' ? 'Optical Camera (Face ID)' : entry.method === 'FINGERPRINT' ? 'Fingerprint Scanner' : 'Corporate Keystore'}
-                      </span>
-                    </div>
-
-                    <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
-                      {new Date(entry.timestamp).toLocaleString()}
-                    </span>
-                  </div>
-
-                  {/* Explicit Failure / Timeout Reason Box */}
-                  <div className={`p-2.5 rounded-xl text-xs border ${
-                    isFailed
-                      ? 'bg-rose-100/60 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800/80 text-rose-900 dark:text-rose-200'
-                      : 'bg-amber-100/60 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800/80 text-amber-900 dark:text-amber-200'
-                  }`}>
-                    <div className="font-bold flex items-center justify-between">
-                      <span>Diagnostic Event Details:</span>
-                      {entry.responseTimeMs && (
-                        <span className="font-mono text-[10px]">Latency: {entry.responseTimeMs}ms</span>
-                      )}
-                    </div>
-                    <p className="mt-0.5 leading-relaxed font-medium">
-                      {entry.failureReason || (isFailed ? 'Sensor communication aborted during handshake' : 'Sensor session released after 30 seconds')}
-                    </p>
-                  </div>
-
-                  {/* Device & Correlation Telemetry */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500 dark:text-slate-400 font-mono pt-1">
-                    <div className="flex items-center gap-2 truncate">
-                      <span>Officer: <strong className="text-slate-700 dark:text-slate-300">{entry.userName} ({entry.userRole})</strong></span>
-                      <span>•</span>
-                      <span className="truncate">Device: {entry.deviceLabel}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span>ID: {entry.deviceId.substring(0, 16)}...</span>
-                      <span>•</span>
-                      <span className="text-ob-indigo-600 dark:text-ob-indigo-400">{entry.correlationId}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-
-          {diagRecords.filter((rec) => {
-            if (diagFilter === 'FAILED' && rec.status !== 'FAILED') return false;
-            if (diagFilter === 'TIMEOUT' && rec.status !== 'TIMEOUT') return false;
-            if (diagSearch.trim()) {
-              const q = diagSearch.toLowerCase();
-              const text = `${rec.userEmail} ${rec.userName} ${rec.method} ${rec.failureReason || ''} ${rec.deviceId} ${rec.deviceLabel}`.toLowerCase();
-              if (!text.includes(q)) return false;
-            }
-            return true;
-          }).length === 0 && (
-            <div className="p-8 text-center bg-slate-50 dark:bg-[#11132B] rounded-2xl border border-dashed border-slate-200 dark:border-[#222852] space-y-2">
-              <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
-              <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                No Diagnostic Failures or Timeouts Found
-              </div>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                All hardware sensors initialized cleanly without timeouts under the current filter criteria.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 5. Audit & Compliance Documentation Export Card */}
-      <div className="bg-gradient-to-r from-slate-900 via-[#161B3D] to-[#12152E] border border-slate-700/60 dark:border-[#272F5E] rounded-3xl p-5 sm:p-6 shadow-md text-white space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <FileCheck className="w-4 h-4 text-ob-green-400" />
-              <h3 className="text-sm sm:text-base font-bold text-white">
-                NBE Compliance & Hardware Audit Report
-              </h3>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-white/10 text-slate-200 border border-white/10">
-                BSD/03/2020 Art. 6.4
-              </span>
-            </div>
-            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-              Export an official cryptographic JSON hardware telemetry document containing live sensor readiness, latency diagnostics, Secure Enclave attestations, and device fingerprints for bank examiners.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleExportReport}
-            className="px-4 py-2.5 rounded-xl bg-ob-green-600 hover:bg-ob-green-500 text-white text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer touch-press shadow-md shrink-0"
-            title="Download hardware telemetry report as JSON"
-          >
-            <Download className="w-4 h-4" />
-            <span>Download Report</span>
-          </button>
         </div>
       </div>
     </div>

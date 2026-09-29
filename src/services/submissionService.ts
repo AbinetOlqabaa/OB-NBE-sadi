@@ -523,6 +523,10 @@ class SubmissionServiceClass {
     );
   }
 
+  public getAllSubmissions(): ReportSubmission[] {
+    return this.getAll();
+  }
+
   public getById(id: string): ReportSubmission | undefined {
     return this.submissions.get(id);
   }

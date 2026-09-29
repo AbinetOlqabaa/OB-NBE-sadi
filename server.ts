@@ -6,11 +6,13 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { spawn } from 'child_process';
 import dotenv from 'dotenv';
 import { getAllReports, getReportByKey } from './src/data/report-registry.ts';
 import { submissionService, DEMO_USERS } from './src/services/submissionService.ts';
 import { nbeSimulator } from './src/services/nbeSimulator.ts';
 import { auditService } from './src/services/auditService.ts';
+import { auditorService } from './src/services/auditorService.ts';
 import { ExcelService } from './src/utils/excelService.ts';
 import { Phase2Pipeline } from './src/services/phase2Pipeline.ts';
 import { userService } from './src/services/userService.ts';
@@ -238,13 +240,13 @@ app.get('/api/regulatory/submissions/:id/export/xlsx', (req, res) => {
 });
 
 // -------------------------------------------------------------
-// USER AUTHENTICATION & ACCESS CONTROL (ADMIN, MAKER, CHECKER)
+// USER AUTHENTICATION & ACCESS CONTROL (ADMIN, MAKER, CHECKER, AUDITOR)
 // -------------------------------------------------------------
 
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
-  if (!email) {
-    res.status(400).json({ success: false, message: 'Email is required' });
+  if (!email || !password) {
+    res.status(400).json({ success: false, message: 'Corporate email and password are required to sign in.' });
     return;
   }
   const result = userService.login(email, password);
@@ -263,6 +265,30 @@ app.post('/api/auth/login', (req, res) => {
   } else {
     res.status(401).json(result);
   }
+});
+
+// Development Seed Data Reset Endpoint
+app.post('/api/auth/seed-data/reset', (req, res) => {
+  const result = userService.resetDevelopmentSeedData();
+  auditService.log({
+    actorId: 'system_dev',
+    actorName: 'Development Seeder',
+    actorRole: 'ADMIN',
+    action: 'SEED_DATA_RESET',
+    entityType: 'SYSTEM',
+    entityId: 'seed_users',
+    correlationId: `corr_seed_${Date.now()}`,
+    details: 'Development seed accounts re-initialized with zero pre-seeded biometrics',
+  });
+  res.json(result);
+});
+
+// Development Seed Data Reference Endpoint
+app.get('/api/auth/seed-data', (req, res) => {
+  res.json({
+    success: true,
+    users: userService.getDevelopmentSeedSummary(),
+  });
 });
 
 app.post('/api/auth/register', (req, res) => {
@@ -385,31 +411,6 @@ app.post('/api/auth/biometrics/verify', (req, res) => {
   }
 });
 
-// Reset / revoke biometric credentials on server
-app.post('/api/auth/biometrics/reset', (req, res) => {
-  const { email, type } = req.body;
-  if (!email) {
-    res.status(400).json({ success: false, message: 'Email is required to reset biometric credentials.' });
-    return;
-  }
-  const result = userService.resetBiometrics(email, type);
-  if (result.success && result.user) {
-    auditService.log({
-      actorId: result.user.id,
-      actorName: result.user.name,
-      actorRole: result.user.role,
-      action: 'BIOMETRIC_REVOKED',
-      entityType: 'USER',
-      entityId: result.user.id,
-      correlationId: `corr_bio_reset_${Date.now()}`,
-      details: `Revoked biometric credentials (${type || 'ALL'}) for ${result.user.email}`,
-    });
-    res.json(result);
-  } else {
-    res.status(400).json(result);
-  }
-});
-
 // Get enrolled biometrics status for email
 app.get('/api/auth/biometrics/status/:email', (req, res) => {
   const status = userService.getBiometricStatus(req.params.email);
@@ -519,23 +520,174 @@ app.delete('/api/users/:id/special-access/:grantId', (req, res) => {
 });
 
 // -------------------------------------------------------------
-// NBE SIMULATOR ROUTES
+// FIRST-CLASS AUDITOR & COMPLIANCE WORKFLOW ENDPOINTS
 // -------------------------------------------------------------
 
-app.get('/api/nbe-simulator/submissions', (req, res) => {
+// Auditor Work Queue
+app.get(['/api/audit/work-queue', '/api/v1/audit/work-queue'], (req, res) => {
+  const queue = auditorService.getWorkQueue({
+    department: (req.query.department as string) || undefined,
+    submissionStatus: (req.query.status as string) || undefined,
+    search: (req.query.search as string) || undefined,
+  });
+  res.json({
+    summary: auditorService.getKpiSummary(),
+    queue,
+  });
+});
+
+// Audit Findings
+app.get(['/api/audit/findings', '/api/v1/audit/findings'], (req, res) => {
+  const findings = auditorService.getFindings({
+    severity: req.query.severity as any,
+    status: req.query.status as any,
+    department: req.query.department as any,
+  });
+  res.json(findings);
+});
+
+app.post(['/api/audit/findings', '/api/v1/audit/findings'], (req, res) => {
+  const { user, ...findingData } = req.body;
+  if (user && user.role !== 'AUDITOR' && user.role !== 'ADMIN') {
+    res.status(403).json({ error: "Only AUDITOR or ADMIN roles can create audit findings." });
+    return;
+  }
+  const finding = auditorService.createFinding({
+    ...findingData,
+    auditorId: user?.id || 'usr_auditor_1',
+    auditorName: user?.name || 'Compliance Auditor',
+  });
+  res.status(201).json(finding);
+});
+
+app.patch(['/api/audit/findings/:id', '/api/v1/audit/findings/:id'], (req, res) => {
+  const updated = auditorService.updateFinding(req.params.id, req.body);
+  if (updated) {
+    res.json(updated);
+  } else {
+    res.status(404).json({ error: 'Finding not found' });
+  }
+});
+
+// Evidence Management
+app.get(['/api/audit/evidence', '/api/v1/audit/evidence'], (req, res) => {
+  const evidences = auditorService.getEvidence(req.query.reportKey as string, req.query.submissionId as string);
+  res.json(evidences);
+});
+
+app.post(['/api/audit/evidence', '/api/v1/audit/evidence'], async (req, res) => {
+  const evidence = await auditorService.attachEvidence(req.body);
+  res.status(201).json(evidence);
+});
+
+// Audit Working Papers / Notes
+app.get(['/api/audit/notes', '/api/v1/audit/notes'], (req, res) => {
+  const notes = auditorService.getWorkingNotes(req.query.reportKey as string, req.query.submissionId as string);
+  res.json(notes);
+});
+
+app.post(['/api/audit/notes', '/api/v1/audit/notes'], (req, res) => {
+  const note = auditorService.addWorkingNote(req.body);
+  res.status(201).json(note);
+});
+
+// Remediation Action Tracking
+app.get(['/api/audit/remediations', '/api/v1/audit/remediations'], (req, res) => {
+  const rems = auditorService.getRemediations(req.query.findingId as string);
+  res.json(rems);
+});
+
+app.post(['/api/audit/remediations', '/api/v1/audit/remediations'], (req, res) => {
+  const rem = auditorService.createRemediation(req.body);
+  res.status(201).json(rem);
+});
+
+app.patch(['/api/audit/remediations/:id', '/api/v1/audit/remediations/:id'], (req, res) => {
+  const { verifiedBy, status: remStatus, remediationProof, ...rest } = req.body;
+  let updated;
+  if (remStatus === 'VERIFIED_BY_AUDITOR') {
+    updated = auditorService.verifyRemediationByAuditor(req.params.id, verifiedBy || 'Compliance Auditor', remediationProof);
+  } else {
+    updated = auditorService.updateRemediation(req.params.id, { status: remStatus, remediationProof, ...rest });
+  }
+  if (updated) res.json(updated);
+  else res.status(404).json({ error: 'Remediation not found' });
+});
+
+// Formal Audit Report Export
+app.post(['/api/audit/reports/export', '/api/v1/audit/reports/export'], (req, res) => {
+  const pkg = auditorService.generateAuditReport({
+    period: req.body.period || 'Q1 2026',
+    scopeDepartments: req.body.scopeDepartments || [],
+    executiveSummary: req.body.executiveSummary,
+    generatedBy: req.body.generatedBy || 'Compliance Internal Audit Directorate',
+  });
+  res.status(201).json(pkg);
+});
+
+// -------------------------------------------------------------
+// NBE GATEWAY / SIMULATOR ADAPTER ROUTES
+// Proxies OB frontend requests to the independent Django NBE Simulator microservice (port 8001)
+// -------------------------------------------------------------
+
+const DJANGO_SIMULATOR_URL = process.env.NBE_SIMULATOR_URL || 'http://127.0.0.1:8001/api/v1/nbe-simulator';
+
+app.get('/api/nbe-simulator/submissions', async (req, res) => {
+  try {
+    const limit = req.query.limit || '100';
+    const response = await fetch(`${DJANGO_SIMULATOR_URL}/submissions?limit=${limit}`);
+    if (response.ok) {
+      const data = await response.json();
+      res.json(data);
+      return;
+    }
+  } catch (err) {
+    // Graceful fallback to local buffer if Django simulator is offline
+  }
   res.json(nbeSimulator.getSubmissions());
 });
 
-app.get('/api/nbe-simulator/logs', (req, res) => {
+app.get('/api/nbe-simulator/logs', async (req, res) => {
+  try {
+    const limit = req.query.limit || '100';
+    const response = await fetch(`${DJANGO_SIMULATOR_URL}/logs?limit=${limit}`);
+    if (response.ok) {
+      const data = await response.json();
+      res.json(data);
+      return;
+    }
+  } catch (err) {
+    // Graceful fallback
+  }
   res.json(nbeSimulator.getLogs());
 });
 
-app.delete('/api/nbe-simulator/logs', (req, res) => {
+app.delete('/api/nbe-simulator/logs', async (req, res) => {
   nbeSimulator.clearLogs();
+  try {
+    const response = await fetch(`${DJANGO_SIMULATOR_URL}/logs`, { method: 'DELETE' });
+    if (response.ok) {
+      const data = await response.json();
+      res.json(data);
+      return;
+    }
+  } catch (err) {
+    // Fallback
+  }
   res.json({ message: 'Logs cleared' });
 });
 
-app.get('/api/nbe-simulator/gateway-health', (req, res) => {
+app.get('/api/nbe-simulator/gateway-health', async (req, res) => {
+  try {
+    const response = await fetch(`${DJANGO_SIMULATOR_URL}/gateway-health`);
+    if (response.ok) {
+      const data = await response.json();
+      res.json(data);
+      return;
+    }
+  } catch (err) {
+    // Fallback
+  }
   const scenario = nbeSimulator.getScenario();
   const isHealthy = scenario.mode !== 'SERVER_ERROR' && scenario.mode !== 'TIMEOUT';
   const status = (scenario.mode === 'SERVER_ERROR' || scenario.mode === 'TIMEOUT')
@@ -559,20 +711,62 @@ app.get('/api/nbe-simulator/gateway-health', (req, res) => {
   });
 });
 
-app.get('/api/nbe-simulator/scenario', (req, res) => {
+app.get('/api/nbe-simulator/scenario', async (req, res) => {
+  try {
+    const response = await fetch(`${DJANGO_SIMULATOR_URL}/scenario`);
+    if (response.ok) {
+      const data = await response.json();
+      res.json(data);
+      return;
+    }
+  } catch (err) {
+    // Fallback
+  }
   res.json(nbeSimulator.getScenario());
 });
 
-app.post('/api/nbe-simulator/scenario', (req, res) => {
-  const updated = nbeSimulator.setScenario(req.body);
-  res.json(updated);
+app.post('/api/nbe-simulator/scenario', async (req, res) => {
+  const updatedLocal = nbeSimulator.setScenario(req.body);
+  try {
+    const response = await fetch(`${DJANGO_SIMULATOR_URL}/scenario`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      res.json(data);
+      return;
+    }
+  } catch (err) {
+    // Fallback
+  }
+  res.json(updatedLocal);
 });
 
 // Simulator HTTP Intake Endpoint
 app.post('/api/nbe-simulator/submit', async (req, res) => {
   const headers = req.headers as Record<string, string>;
-  const result = await nbeSimulator.processSubmission(req.body, headers);
-  res.status(result.statusCode).json(result.body);
+  try {
+    const forwardHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    for (const h of ['idempotency-key', 'x-correlation-id', 'x-institution-code', 'authorization', 'x-simulator-force-scenario']) {
+      if (headers[h]) forwardHeaders[h] = headers[h];
+    }
+    const response = await fetch(`${DJANGO_SIMULATOR_URL}/submit`, {
+      method: 'POST',
+      headers: forwardHeaders,
+      body: JSON.stringify(req.body),
+    });
+    const data = await response.json();
+    res.status(response.status).json(data);
+    return;
+  } catch (err) {
+    // Fallback to local in-memory simulation
+    const result = await nbeSimulator.processSubmission(req.body, headers);
+    res.status(result.statusCode).json(result.body);
+  }
 });
 
 // -------------------------------------------------------------
@@ -690,7 +884,32 @@ app.get('/api/health', (req, res) => {
 // DEV / PROD SERVER BOOTSTRAP
 // -------------------------------------------------------------
 
+function ensureDjangoSimulatorRunning() {
+  const checkUrl = 'http://127.0.0.1:8001/api/v1/nbe-simulator/gateway-health';
+  fetch(checkUrl, { signal: AbortSignal.timeout(1500) })
+    .then((r) => {
+      if (r.ok) {
+        console.log('[NBE Simulator Service] Microservice active on port 8001.');
+      }
+    })
+    .catch(() => {
+      console.log('[NBE Simulator Service] Launching independent Django service on port 8001...');
+      try {
+        const proc = spawn('python3', ['nbe_simulator_service/manage.py', 'runserver', '127.0.0.1:8001', '--noreload'], {
+          detached: true,
+          stdio: 'ignore',
+          cwd: __dirname,
+        });
+        proc.unref();
+      } catch (e: any) {
+        console.warn('[NBE Simulator Service] Auto-spawn notice:', e.message);
+      }
+    });
+}
+
 async function startServer() {
+  ensureDjangoSimulatorRunning();
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({

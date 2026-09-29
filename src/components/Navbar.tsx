@@ -27,6 +27,7 @@ interface NavbarProps {
   pendingCheckerCount: number;
   isSidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
+  onOpenMobileDrawer?: () => void;
   onLogout?: () => void;
   onNavigateToSimulator?: () => void;
 }
@@ -37,17 +38,26 @@ export const Navbar: React.FC<NavbarProps> = ({
   pendingCheckerCount,
   isSidebarCollapsed = false,
   onToggleSidebar,
+  onOpenMobileDrawer,
   onLogout,
   onNavigateToSimulator,
 }) => {
+  const handleNavToggle = () => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768 && onOpenMobileDrawer) {
+      onOpenMobileDrawer();
+    } else if (onToggleSidebar) {
+      onToggleSidebar();
+    }
+  };
+
   return (
-    <header className="h-14 sm:h-16 bg-white dark:bg-[#121428] border-b border-slate-200 dark:border-[#22284D] px-2.5 sm:px-5 flex items-center justify-between sticky top-0 z-30 shadow-2xs shrink-0 select-none transition-colors">
+    <header className="h-14 sm:h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-2.5 sm:px-5 flex items-center justify-between sticky top-0 z-30 shadow-2xs shrink-0 select-none transition-colors">
       {/* Zone 1: Sidebar / Drawer Toggle + Official Oromia Bank Brand */}
       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-        {onToggleSidebar && (
+        {(onToggleSidebar || onOpenMobileDrawer) && (
           <button
             type="button"
-            onClick={onToggleSidebar}
+            onClick={handleNavToggle}
             className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-slate-600 dark:text-slate-300 hover:text-ob-indigo-700 dark:hover:text-ob-indigo-300 hover:bg-ob-indigo-50 dark:hover:bg-ob-indigo-950/50 transition-colors focus:outline-none focus:ring-2 focus:ring-ob-indigo-400 touch-manipulation touch-press cursor-pointer"
             title={isSidebarCollapsed ? 'Expand navigation (Ctrl+B)' : 'Collapse navigation (Ctrl+B)'}
             aria-label="Toggle navigation drawer"
@@ -72,10 +82,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             <img
               src="/brand/oromia-logo-full.png"
               alt="Oromia Bank"
-              className="h-6 sm:h-8 w-auto object-contain"
+              className="h-6 sm:h-8 w-auto object-contain hidden sm:block"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = '/brand/oromia-logo-mark-transparent.png';
               }}
+            />
+            <img
+              src="/brand/oromia-logo-mark-transparent.png"
+              alt="Oromia Bank"
+              className="h-6 w-6 object-contain sm:hidden"
             />
           </div>
 

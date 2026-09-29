@@ -614,7 +614,8 @@ export const NbeSimulatorView: React.FC = () => {
                 )}
               </div>
             ) : (
-              <table className="w-full text-left border-collapse text-xs">
+              <div className="overflow-x-auto min-w-full touch-scroll-x">
+                <table className="min-w-[750px] w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-semibold sticky top-0 z-10">
                     <th className="py-2 px-3">Timestamp (UTC/Local)</th>
@@ -702,7 +703,8 @@ export const NbeSimulatorView: React.FC = () => {
                   ))}
                 </tbody>
               </table>
-            )}
+            </div>
+          )}
           </div>
 
           {/* Pagination Footer */}
@@ -733,7 +735,8 @@ export const NbeSimulatorView: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <table className="w-full text-left border-collapse text-xs">
+              <div className="overflow-x-auto min-w-full touch-scroll-x">
+                <table className="min-w-[650px] w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-semibold sticky top-0 z-10">
                     <th className="py-2 px-3">Receipt Time</th>
@@ -791,7 +794,8 @@ export const NbeSimulatorView: React.FC = () => {
                   ))}
                 </tbody>
               </table>
-            )}
+            </div>
+          )}
           </div>
 
           {/* Pagination Footer */}

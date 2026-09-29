@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { DepartmentDefinition, OROMIA_BANK_DEPARTMENTS } from '../data/organizationHierarchy.ts';
+import { type DepartmentDefinition, OROMIA_BANK_DEPARTMENTS } from '../data/organizationHierarchy.ts';
 import { auditService } from './auditService.ts';
 import type { ReportMetadata } from '../types/regulatory.ts';
 

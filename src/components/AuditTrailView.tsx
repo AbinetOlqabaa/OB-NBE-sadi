@@ -39,7 +39,6 @@ export interface BiometricLogPayload {
     | 'BIOMETRIC_AUTH_TIMEOUT'
     | 'BIOMETRIC_LOGIN'
     | 'BIOMETRIC_ENROLLED'
-    | 'BIOMETRIC_REVOKED'
     | 'BIOMETRIC_PROBE'
     | 'BIOMETRIC_PREFERENCE_ENABLED'
     | 'BIOMETRIC_PREFERENCE_DISABLED';
@@ -347,9 +346,6 @@ export const AuditTrailView: React.FC = () => {
     if (action === 'BIOMETRIC_PROBE') {
       return 'bg-cyan-50 text-cyan-800 border-cyan-300 dark:bg-cyan-950/60 dark:text-cyan-300 dark:border-cyan-800';
     }
-    if (action === 'BIOMETRIC_REVOKED') {
-      return 'bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800';
-    }
     if (action.includes('APPROVE')) return 'bg-emerald-50 text-emerald-800 border-emerald-300';
     if (action.includes('REJECT')) return 'bg-rose-50 text-rose-800 border-rose-300';
     if (action.includes('SUBMIT')) return 'bg-amber-50 text-amber-800 border-amber-300';
@@ -570,7 +566,8 @@ export const AuditTrailView: React.FC = () => {
               )}
             </div>
           ) : (
-            <table className="w-full text-left border-collapse text-xs">
+            <div className="overflow-x-auto min-w-full touch-scroll-x">
+              <table className="min-w-[700px] w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-semibold sticky top-0 z-10">
                   <th className="py-2 px-3">Timestamp</th>
@@ -624,7 +621,8 @@ export const AuditTrailView: React.FC = () => {
                 ))}
               </tbody>
             </table>
-          )}
+          </div>
+        )}
         </div>
 
         {/* Pagination Footer */}

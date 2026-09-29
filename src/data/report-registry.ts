@@ -1367,6 +1367,8 @@ export function getReportByKey(key: string): ReportMetadata | undefined {
   return dynamicReportsList.find((r) => r.ReturnKey.toUpperCase() === norm || r.Code.toUpperCase() === norm);
 }
 
+export const getReportDefinition = getReportByKey;
+
 export function getReportsByCategory(category: string): ReportMetadata[] {
   return getAllReports().filter((r) => r.Category === category);
 }

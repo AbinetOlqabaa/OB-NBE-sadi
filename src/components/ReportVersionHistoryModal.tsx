@@ -99,7 +99,7 @@ export const ReportVersionHistoryModal: React.FC<ReportVersionHistoryModalProps>
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
-      <div className="bg-white dark:bg-[#161933] rounded-2xl max-w-3xl w-full border border-slate-200 dark:border-[#262D55] shadow-2xl p-5 space-y-4 max-h-[92vh] overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-3xl w-full border border-slate-200 dark:border-slate-800 shadow-2xl p-5 space-y-4 max-h-[calc(100dvh-2rem)] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2.5">
@@ -111,7 +111,7 @@ export const ReportVersionHistoryModal: React.FC<ReportVersionHistoryModalProps>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                   Report Version History & Structure Audit
                 </h3>
-                <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-[#1E234B] text-ob-indigo-600 dark:text-ob-indigo-400 font-bold border border-slate-200 dark:border-[#2B3369]">
+                <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-ob-indigo-600 dark:text-ob-indigo-400 font-bold border border-slate-200 dark:border-slate-700">
                   {reportKey}
                 </span>
               </div>
@@ -157,7 +157,7 @@ export const ReportVersionHistoryModal: React.FC<ReportVersionHistoryModalProps>
                     className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-ob-indigo-50/80 dark:bg-ob-indigo-950/60 border-ob-indigo-400 dark:border-ob-indigo-600 shadow-xs'
-                        : 'bg-slate-50 dark:bg-[#121428] border-slate-200 dark:border-[#22284D] hover:border-slate-300'
+                        : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
@@ -193,10 +193,10 @@ export const ReportVersionHistoryModal: React.FC<ReportVersionHistoryModalProps>
             </div>
 
             {/* Version Snapshot Detail */}
-            <div className="md:col-span-7 bg-slate-50 dark:bg-[#101226] border border-slate-200 dark:border-[#22284D] rounded-xl p-3.5 space-y-3 max-h-96 overflow-y-auto">
+            <div className="md:col-span-7 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 space-y-3 max-h-96 overflow-y-auto">
               {selectedVersion ? (
                 <>
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-[#22284D]">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
                     <div>
                       <span className="text-xs font-bold text-slate-900 dark:text-white">
                         Version {selectedVersion.versionNumber} Snapshot
@@ -249,7 +249,7 @@ export const ReportVersionHistoryModal: React.FC<ReportVersionHistoryModalProps>
                         {selectedVersion.snapshot.departments.map((d) => (
                           <span
                             key={d}
-                            className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white dark:bg-[#161933] border border-slate-200 dark:border-[#2B3369] text-slate-800 dark:text-slate-200"
+                            className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
                           >
                             {d}
                           </span>
@@ -259,7 +259,7 @@ export const ReportVersionHistoryModal: React.FC<ReportVersionHistoryModalProps>
 
                     {/* Diff breakdown if available */}
                     {selectedVersion.diff && selectedVersion.diff.length > 0 && (
-                      <div className="pt-2 border-t border-slate-200 dark:border-[#22284D] space-y-1">
+                      <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1">
                         <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase">
                           Detected Changes in this Version:
                         </span>
@@ -290,7 +290,7 @@ export const ReportVersionHistoryModal: React.FC<ReportVersionHistoryModalProps>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-[#1E234B] hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+            className="px-4 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
           >
             Close
           </button>

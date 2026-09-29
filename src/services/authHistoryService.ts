@@ -143,54 +143,9 @@ class AuthHistoryServiceClass {
         userRole: 'MAKER',
         deviceId: devId,
         deviceLabel: devLabel,
-        failureReason: 'Inactivity timer expired (30 seconds auto-cancellation to prevent hardware lock)',
+        failureReason: 'Inactivity timer expired (30 seconds auto-cancellation)',
         complianceDirective: 'NBE Directive BSD/03/2020 Art. 6.4',
         correlationId: `corr_seed_to_${now - 90000}`,
-        responseTimeMs: 30000,
-      },
-      {
-        id: 'auth_rec_hw_fail_01',
-        timestamp: new Date(now - 1000 * 60 * 110).toISOString(),
-        method: 'FACE',
-        status: 'FAILED',
-        userEmail: 'chala.desta@oromiabank.com',
-        userName: 'Chala Desta',
-        userRole: 'CHECKER',
-        deviceId: devId,
-        deviceLabel: 'Oromia Bank Optical Front Camera (Face ID)',
-        failureReason: 'Optical camera sensor initialization failed: Permission denied by browser sandbox policy',
-        complianceDirective: 'NBE Directive BSD/03/2020 Art. 6.4',
-        correlationId: `corr_hw_fail_cam_${now - 110000}`,
-        responseTimeMs: 1420,
-      },
-      {
-        id: 'auth_rec_hw_fail_02',
-        timestamp: new Date(now - 1000 * 60 * 135).toISOString(),
-        method: 'FINGERPRINT',
-        status: 'FAILED',
-        userEmail: 'abebe.kebede@oromiabank.com',
-        userName: 'Abebe Kebede',
-        userRole: 'MAKER',
-        deviceId: devId,
-        deviceLabel: devLabel,
-        failureReason: 'Touch sensor initialization error: Dermal ridge mismatch below user sensitivity threshold (72% < 85%)',
-        complianceDirective: 'NBE Directive BSD/03/2020 Art. 6.4',
-        correlationId: `corr_hw_fail_fp_${now - 135000}`,
-        responseTimeMs: 2150,
-      },
-      {
-        id: 'auth_rec_hw_to_02',
-        timestamp: new Date(now - 1000 * 60 * 140).toISOString(),
-        method: 'FACE',
-        status: 'TIMEOUT',
-        userEmail: 'admin@oromiabank.com',
-        userName: 'Dawit Bekele',
-        userRole: 'ADMIN',
-        deviceId: devId,
-        deviceLabel: 'Oromia Bank Optical Front Camera (Face ID)',
-        failureReason: 'Face ID alignment verification timed out (30 seconds inactivity limit reached)',
-        complianceDirective: 'NBE Directive BSD/03/2020 Art. 6.4',
-        correlationId: `corr_hw_to_face_${now - 140000}`,
         responseTimeMs: 30000,
       },
       {
@@ -319,61 +274,6 @@ class AuthHistoryServiceClass {
     });
 
     return newRecord;
-  }
-
-  /**
-   * Retrieves hardware diagnostics history explicitly highlighting failed sensor initialization events and timeouts
-   */
-  public getHardwareDiagnosticsHistory(params?: {
-    filter?: 'ALL' | 'FAILED' | 'TIMEOUT';
-    userEmail?: string;
-  }): AuthHistoryEntry[] {
-    let list = [...this.history];
-    if (params?.userEmail) {
-      const norm = params.userEmail.toLowerCase().trim();
-      list = list.filter((h) => h.userEmail.toLowerCase() === norm);
-    }
-
-    if (params?.filter === 'FAILED') {
-      return list.filter((h) => h.status === 'FAILED');
-    } else if (params?.filter === 'TIMEOUT') {
-      return list.filter((h) => h.status === 'TIMEOUT');
-    }
-
-    // Default: return all records, prioritizing FAILED and TIMEOUT events at top for audit visibility
-    return list.filter((h) => h.status === 'FAILED' || h.status === 'TIMEOUT');
-  }
-
-  /**
-   * Records a hardware sensor failure or initialization issue
-   */
-  public recordHardwareDiagnosticEvent(params: {
-    sensor: 'CAMERA' | 'FINGERPRINT' | 'ENCLAVE';
-    eventType: 'FAILED' | 'TIMEOUT';
-    userEmail: string;
-    userName?: string;
-    userRole?: string;
-    failureReason: string;
-    latencyMs?: number;
-  }): AuthHistoryEntry {
-    const method: AuthMethod = params.sensor === 'CAMERA' ? 'FACE' : 'FINGERPRINT';
-    const devLabel =
-      params.sensor === 'CAMERA'
-        ? 'Oromia Bank Optical Front Camera (Face ID)'
-        : params.sensor === 'FINGERPRINT'
-        ? 'Platform Fingerprint Authenticator'
-        : 'Hardware Keystore / Secure Enclave';
-
-    return this.recordAttempt({
-      method,
-      status: params.eventType,
-      userEmail: params.userEmail,
-      userName: params.userName,
-      userRole: params.userRole,
-      deviceLabel: devLabel,
-      failureReason: params.failureReason,
-      responseTimeMs: params.latencyMs || (params.eventType === 'TIMEOUT' ? 30000 : 1200),
-    });
   }
 
   /**

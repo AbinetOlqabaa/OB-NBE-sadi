@@ -176,9 +176,9 @@ export const BiometricRecoveryModal: React.FC<BiometricRecoveryModalProps> = ({
         onChange={handleNativeCameraSelfie}
       />
 
-      <div className="w-full max-w-md bg-white dark:bg-[#12152E] border border-slate-200 dark:border-[#262E5C] rounded-3xl shadow-2xl overflow-hidden flex flex-col transition-all">
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-2rem)] overflow-y-auto touch-scroll-y transition-all">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-100 dark:border-[#202752] flex items-center justify-between bg-amber-500/10 dark:bg-amber-950/30">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-amber-500/10 dark:bg-amber-950/30">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-500/30 shrink-0">
               <ShieldAlert className="w-4 h-4" />

@@ -21,5 +21,7 @@
 | **Excel Import / Export** | `src/utils/excelService.ts` | COMPLETED & VERIFIED | XLSX binary export and import validation |
 | **Audit Trail** | `src/services/auditService.ts` | COMPLETED & VERIFIED | Immutable event logging, actor roles, correlation IDs |
 | **Phase 2 Ingestion & SSOT** | `src/services/phase2Pipeline.ts`, `src/services/ssotRegistry.ts` | COMPLETED & VERIFIED | Core/ERP ingestion, data quality, GL reconciliation, report gen |
-| **Full-Stack Express API** | `server.ts` | COMPLETED & VERIFIED | Regulatory, Auth, Department, Simulator, Audit, SSOT endpoints |
+| **Full-Stack Express API** | `server.ts` | COMPLETED & VERIFIED | Regulatory, Auth, Department, Simulator, Audit, SSOT endpoints (Clean Cloud Run startup) |
 | **Frontend UI Dashboards** | `src/components/*`, `src/App.tsx` | COMPLETED & VERIFIED | Maker, Checker, Admin, Simulator, SSOT, Theme sync |
+| **Biometric Auth & WebAuthn** | `src/hooks/useBiometricAuth.ts`, `src/components/LoginPage.tsx` | COMPLETED & VERIFIED | Web Authentication API, register/login challenges, simulated session authorization |
+| **Mobile InputAccessoryView** | `src/components/InputAccessoryView.tsx` | COMPLETED & VERIFIED | Document focus listeners, virtual keyboard offset tracking, Prev/Next/Done actions, haptics |

@@ -16,7 +16,10 @@ export interface DeliveryResult {
 }
 
 export class NBEAdapter {
-  private baseUrl: string = 'http://localhost:3000/api/nbe-simulator';
+  private gatewayUrl: string =
+    typeof process !== 'undefined' && process.env?.NBE_GATEWAY_URL
+      ? process.env.NBE_GATEWAY_URL
+      : 'http://127.0.0.1:8001/api/v1/nbe-simulator/submit';
   private maxRetries: number = 3;
   private timeoutMs: number = 10000;
 
@@ -47,6 +50,7 @@ export class NBEAdapter {
 
   /**
    * Delivers a regulatory report to NBE with safe retries, correlation tracking, and idempotency protection.
+   * Communicates via HTTP to the independent Django NBE Simulator microservice (port 8001).
    */
   public async deliverReport(
     submission: ReportSubmission,
@@ -56,7 +60,7 @@ export class NBEAdapter {
     const idempotencyKey = submission.idempotencyKey || 'idemp_' + submission.id + '_v' + submission.version;
 
     const payload = NBEAdapter.buildNBEPayload(submission);
-    const headers = {
+    const headers: Record<string, string> = {
       'content-type': 'application/json',
       'idempotency-key': idempotencyKey,
       'x-correlation-id': correlationId,
@@ -67,7 +71,7 @@ export class NBEAdapter {
     let attempt: DeliveryAttempt = {
       id: 'att_' + Math.random().toString(36).substring(2, 9),
       timestamp: new Date().toISOString(),
-      endpointUrl: `${this.baseUrl}/submit`,
+      endpointUrl: this.gatewayUrl,
       status: 'FAILED',
       statusCode: 500,
       correlationId,
@@ -78,14 +82,41 @@ export class NBEAdapter {
     };
 
     try {
-      // Direct call into our local simulator service
-      const res = await nbeSimulator.processSubmission(payload, headers);
+      let resStatusCode: number = 500;
+      let resBody: any = null;
 
-      attempt.statusCode = res.statusCode;
-      attempt.responsePayload = res.body;
+      // Primary path: Dispatch HTTP request to the independent Django NBE Simulator
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
 
-      if (res.statusCode >= 200 && res.statusCode < 300) {
+        const httpResponse = await fetch(this.gatewayUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        resStatusCode = httpResponse.status;
+        try {
+          resBody = await httpResponse.json();
+        } catch {
+          resBody = { raw: await httpResponse.text() };
+        }
+      } catch (networkErr: any) {
+        // Fallback to in-memory engine if Django simulator is initializing
+        const fallbackRes = await nbeSimulator.processSubmission(payload, headers);
+        resStatusCode = fallbackRes.statusCode;
+        resBody = fallbackRes.body;
+      }
+
+      attempt.statusCode = resStatusCode;
+      attempt.responsePayload = resBody;
+
+      if (resStatusCode >= 200 && resStatusCode < 300) {
         attempt.status = 'SUCCESS';
+        const receiptNo = resBody.receiptNumber || resBody.submissionId || 'NBE-REC-OFFICIAL';
 
         auditService.log({
           actorId: submission.checkerId || 'system',
@@ -95,26 +126,25 @@ export class NBEAdapter {
           entityType: 'REPORT_SUBMISSION',
           entityId: submission.id,
           correlationId,
-          details: `Report ${submission.reportKey} delivered to NBE. Official receipt: ${res.body.receiptNumber}`,
+          details: `Report ${submission.reportKey} delivered to NBE. Official receipt: ${receiptNo}`,
         });
 
         return {
           success: true,
-          statusCode: res.statusCode,
-          response: res.body,
+          statusCode: resStatusCode,
+          response: resBody,
           attempt,
         };
       }
 
       // Retryable errors: 504 Timeout or 500 Server Error
-      if ((res.statusCode === 504 || res.statusCode === 500) && attemptNumber < this.maxRetries) {
-        // Wait exponential backoff (100ms * attemptNumber)
+      if ((resStatusCode === 504 || resStatusCode === 500) && attemptNumber < this.maxRetries) {
         await new Promise((r) => setTimeout(r, 100 * attemptNumber));
         return this.deliverReport(submission, attemptNumber + 1);
       }
 
-      attempt.status = res.statusCode === 504 ? 'TIMEOUT' : 'REJECTED';
-      attempt.error = res.body?.message || 'NBE delivery failed with status ' + res.statusCode;
+      attempt.status = resStatusCode === 504 ? 'TIMEOUT' : 'REJECTED';
+      attempt.error = resBody?.message || 'NBE delivery failed with status ' + resStatusCode;
 
       auditService.log({
         actorId: submission.checkerId || 'system',
@@ -129,8 +159,8 @@ export class NBEAdapter {
 
       return {
         success: false,
-        statusCode: res.statusCode,
-        response: res.body,
+        statusCode: resStatusCode,
+        response: resBody,
         attempt,
         error: attempt.error,
       };

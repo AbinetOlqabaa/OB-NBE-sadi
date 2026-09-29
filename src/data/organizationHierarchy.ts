@@ -210,3 +210,6 @@ export function getReportsForDepartment(departmentName: string): string[] {
 export function getAllDepartmentNames(): string[] {
   return OROMIA_BANK_DEPARTMENTS.map((d) => d.name);
 }
+
+// Export DEPARTMENTS alias for backward and cross-component compatibility
+export const DEPARTMENTS = OROMIA_BANK_DEPARTMENTS;

@@ -194,7 +194,7 @@ export const NbeHealthIndicator: React.FC<NbeHealthIndicatorProps> = ({
 
         {/* Text Details with Status Light Label */}
         <div className="flex items-center gap-1.5 leading-none">
-          <span className="font-bold text-slate-800 dark:text-slate-200 hidden sm:inline">NBE Gateway:</span>
+          <span className="font-bold text-slate-800 dark:text-slate-200 hidden lg:inline">NBE Gateway:</span>
           <span className={`font-mono text-[11px] font-bold ${visuals.textColor}`}>
             {healthData.status === 'ONLINE'
               ? `${healthData.latencyMs}ms`
@@ -211,7 +211,7 @@ export const NbeHealthIndicator: React.FC<NbeHealthIndicatorProps> = ({
 
       {/* Interactive Telemetry Popover Card */}
       {showPopover && (
-        <div className="absolute top-full right-0 mt-2 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl p-4 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-3.5 text-xs">
+        <div className="fixed inset-x-3 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full mt-2 sm:w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl p-4 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-3.5 text-xs max-w-[calc(100vw-24px)] mx-auto sm:mx-0">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
             <div className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
@@ -227,7 +227,7 @@ export const NbeHealthIndicator: React.FC<NbeHealthIndicatorProps> = ({
             </div>
 
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider border ${visuals.badgeBg}`}
+              className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase tracking-wider border ${visuals.badgeBg}`}
             >
               {healthData.status}
             </span>

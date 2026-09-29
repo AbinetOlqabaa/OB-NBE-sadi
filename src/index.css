@@ -3,37 +3,85 @@
 @custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
 @variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
 
+:root {
+  /* Authoritative Oromia Bank Brand Identity Colors */
+  --ob-primary-green: #8CC51F;
+  --ob-primary-blue: #5962AB;
+  --ob-primary-blue-requested: #5863AC;
+
+  /* Authoritative OB Blue Dashboard Sidebar Variables */
+  --ob-sidebar-bg: #5962AB;
+  --ob-sidebar-border: #47509A;
+  --ob-sidebar-text: #FFFFFF;
+  --ob-sidebar-text-muted: rgba(255, 255, 255, 0.75);
+  --ob-sidebar-hover: rgba(255, 255, 255, 0.12);
+  --ob-sidebar-active-bg: #2C3161;
+  --ob-sidebar-active-ring: rgba(255, 255, 255, 0.25);
+  --ob-sidebar-badge-bg: #8CC51F;
+  --ob-sidebar-badge-text: #0B0F19;
+
+  /* Standard Application Surface & Border Tokens */
+  --ob-surface-card: #FFFFFF;
+  --ob-surface-card-border: #E2E8F0;
+  --ob-surface-header: #FFFFFF;
+  --ob-surface-header-border: #E2E8F0;
+}
+
+.dark, [data-theme="dark"] {
+  /* Sidebar preserves authoritative OB blue in dark mode with refined border contrast */
+  --ob-sidebar-bg: #5962AB;
+  --ob-sidebar-border: #47509A;
+  --ob-surface-card: #121428;
+  --ob-surface-card-border: #22284D;
+  --ob-surface-header: #121428;
+  --ob-surface-header-border: #22284D;
+}
+
 @theme {
   --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Oromia Bank Signature Indigo/Blue Palette (from official logo #5962AB) */
-  --color-ob-indigo: #5962AB;
-  --color-ob-indigo-50: #F3F4FB;
-  --color-ob-indigo-100: #E6E8F6;
-  --color-ob-indigo-200: #D0D4EE;
-  --color-ob-indigo-300: #B2B8E3;
-  --color-ob-indigo-400: #8892D3;
-  --color-ob-indigo-500: #5962AB;
-  --color-ob-indigo-600: #464E94;
-  --color-ob-indigo-700: #373D76;
-  --color-ob-indigo-800: #292E59;
-  --color-ob-indigo-900: #1D203F;
-  --color-ob-indigo-950: #121428;
-
-  /* Oromia Bank Signature Spring/Lime Green Palette (from official logo #94C83D) */
-  --color-ob-green: #94C83D;
+  /* Authoritative Oromia Bank Signature Green Palette (#8CC51F per Abinet Alemu directive) */
+  --color-ob-green: #8CC51F;
   --color-ob-green-50: #F6FAF0;
-  --color-ob-green-100: #ECF5E1;
-  --color-ob-green-200: #DBECC3;
-  --color-ob-green-300: #C2DF9B;
-  --color-ob-green-400: #A8D169;
-  --color-ob-green-500: #94C83D;
-  --color-ob-green-600: #78A52D;
-  --color-ob-green-700: #5D8121;
-  --color-ob-green-800: #445E16;
-  --color-ob-green-900: #2C3E0D;
-  --color-ob-green-950: #162005;
+  --color-ob-green-100: #EDF7D9;
+  --color-ob-green-200: #DDF0B8;
+  --color-ob-green-300: #C6E68E;
+  --color-ob-green-400: #AADB56;
+  --color-ob-green-500: #8CC51F;
+  --color-ob-green-600: #74A617;
+  --color-ob-green-700: #5A8212;
+  --color-ob-green-800: #415E0D;
+  --color-ob-green-900: #2B3E09;
+  --color-ob-green-950: #172304;
+
+  /* Authoritative Oromia Bank Primary Blue Palette (#5962AB / #5863AC) */
+  --color-ob-blue: #5962AB;
+  --color-ob-blue-50: #F4F5FB;
+  --color-ob-blue-100: #E7E9F7;
+  --color-ob-blue-200: #D2D6EF;
+  --color-ob-blue-300: #B4BCE4;
+  --color-ob-blue-400: #8B96D5;
+  --color-ob-blue-500: #5962AB;
+  --color-ob-blue-600: #47509A;
+  --color-ob-blue-700: #383F7D;
+  --color-ob-blue-800: #2C3161;
+  --color-ob-blue-900: #22264C;
+  --color-ob-blue-950: #161933;
+
+  /* Backward Compatibility Alias: ob-indigo matching authoritative OB Blue */
+  --color-ob-indigo: #5962AB;
+  --color-ob-indigo-50: #F4F5FB;
+  --color-ob-indigo-100: #E7E9F7;
+  --color-ob-indigo-200: #D2D6EF;
+  --color-ob-indigo-300: #B4BCE4;
+  --color-ob-indigo-400: #8B96D5;
+  --color-ob-indigo-500: #5962AB;
+  --color-ob-indigo-600: #47509A;
+  --color-ob-indigo-700: #383F7D;
+  --color-ob-indigo-800: #2C3161;
+  --color-ob-indigo-900: #22264C;
+  --color-ob-indigo-950: #161933;
 }
 
 html.dark {

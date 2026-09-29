@@ -21,19 +21,38 @@ export async function runSecurityRbacWorkflowTests() {
   console.log('--- 2. SECURITY, AUTHENTICATION & RBAC TESTS ---');
   console.log('======================================================');
 
-  // Test 1: Successful login with valid credentials
+  // Test 1: Successful login with valid credentials for all 4 primary roles
   const loginAdmin = userService.login('admin@oromiabank.com', 'password');
   assert(loginAdmin.success && loginAdmin.user?.role === 'ADMIN', 'Admin login succeeds with correct credentials');
+  assert(loginAdmin.redirectTab === 'ADMIN_DASHBOARD', 'Admin redirects to ADMIN_DASHBOARD');
 
   const loginMaker = userService.login('abebe.kebede@oromiabank.com', 'password');
   assert(loginMaker.success && loginMaker.user?.role === 'MAKER', 'Maker login succeeds');
+  assert(loginMaker.redirectTab === 'MAKER_WORKSPACE', 'Maker redirects to MAKER_WORKSPACE');
 
   const loginChecker = userService.login('chala.desta@oromiabank.com', 'password');
   assert(loginChecker.success && loginChecker.user?.role === 'CHECKER', 'Checker login succeeds');
+  assert(loginChecker.redirectTab === 'CHECKER_INBOX', 'Checker redirects to CHECKER_INBOX');
 
-  // Test 2: Invalid password fails
+  const loginAuditor = userService.login('auditor@oromiabank.com', 'password');
+  assert(loginAuditor.success && loginAuditor.user?.role === 'AUDITOR', 'Auditor login succeeds');
+  assert(loginAuditor.redirectTab === 'AUDITOR_DASHBOARD', 'Auditor redirects to dedicated AUDITOR_DASHBOARD');
+
+  // Test 2: Invalid or missing password fails (no bypass)
   const loginBadPw = userService.login('admin@oromiabank.com', 'wrongpassword');
   assert(!loginBadPw.success, 'Login fails with incorrect password');
+
+  const loginNoPw = userService.login('admin@oromiabank.com', '');
+  assert(!loginNoPw.success, 'Login fails when password is missing (no bypass)');
+
+  const loginUndefinedPw = userService.login('admin@oromiabank.com', undefined);
+  assert(!loginUndefinedPw.success, 'Login fails when password is undefined');
+
+  // Test 2b: Development seed data reset verification
+  const seedReset = userService.resetDevelopmentSeedData();
+  assert(seedReset.success && seedReset.usersCount >= 4, 'resetDevelopmentSeedData re-initializes seed accounts');
+  const summary = userService.getDevelopmentSeedSummary();
+  assert(summary.some((u) => u.role === 'ADMIN') && summary.some((u) => u.role === 'AUDITOR'), 'Development seed summary includes ADMIN, MAKER, CHECKER, and AUDITOR');
 
   // Test 3: Registration enforces PENDING_APPROVAL and forbids arbitrary ADMIN role
   const regAdminAttempt = userService.register({

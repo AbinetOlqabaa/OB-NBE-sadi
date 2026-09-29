@@ -453,7 +453,7 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
         onChange={handleNativeCameraFile}
       />
 
-      <div className="w-full max-w-sm bg-white dark:bg-[#121428] border border-slate-200 dark:border-[#262D55] rounded-3xl p-5 sm:p-6 shadow-2xl space-y-3.5 text-center transition-all animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-2 duration-250">
+      <div className="w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-3.5 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto touch-scroll-y transition-all animate-in slide-in-from-bottom-6 sm:slide-in-from-bottom-2 duration-250">
         {/* Top Header */}
         <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800/80">
           <div className="flex items-center gap-2">

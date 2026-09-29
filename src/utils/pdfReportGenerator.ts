@@ -25,10 +25,10 @@ export class PdfReportGenerator {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
 
-    // Palette: Oromia Royal Indigo (#5962AB -> [89, 98, 171]) and Leaf Green (#94C83D -> [148, 200, 61])
+    // Palette: Oromia Primary Blue (#5962AB -> [89, 98, 171]) and Authoritative Brand Green (#8CC51F -> [140, 197, 31])
     const primaryIndigo: [number, number, number] = [89, 98, 171];
     const darkNavy: [number, number, number] = [18, 20, 40];
-    const brandGreen: [number, number, number] = [148, 200, 61];
+    const brandGreen: [number, number, number] = [140, 197, 31];
     const borderGray: [number, number, number] = [220, 225, 235];
 
     // 1. Top Brand Banner Bar

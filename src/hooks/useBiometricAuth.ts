@@ -759,7 +759,7 @@ export function useBiometricAuth() {
         });
       }
 
-      // If no enrolled credential exists, enforce that user must enroll first
+      // If no enrolled credential exists, require registration (no fake auto-provisioning bypass)
       if (!targetCred) {
         setIsAuthenticating(false);
         const errorMsg = `No ${type === 'FINGERPRINT' ? 'fingerprint passkey' : 'face recognition profile'} registered for ${normEmail || 'this account'}. Please register your biometric passkey first.`;
@@ -854,42 +854,42 @@ export function useBiometricAuth() {
         }
       } catch {}
 
-      // Fallback local session resolution
-      const existingUser = userService.getByEmail(targetCred.email);
-      let userSession: UserSession;
-
-      if (existingUser) {
-        userSession = {
-          id: existingUser.id,
-          name: existingUser.name,
-          email: existingUser.email,
-          role: existingUser.role,
-          institutionCode: existingUser.institutionCode,
-          department: existingUser.department,
-          employeeId: existingUser.employeeId,
-          specialAccessGrants: existingUser.specialAccessGrants || [],
-        };
-      } else {
-        userSession = {
-          id: targetCred.userId,
-          name: targetCred.name,
-          email: targetCred.email,
-          role: (targetCred.role as any) || 'MAKER',
-          institutionCode: '0000013',
-          department: targetCred.department,
-          employeeId: targetCred.employeeId || 'OB-BIO-001',
-          specialAccessGrants: [],
-        };
+      // Fallback local session resolution with authoritative verification
+      const verifyLocal = userService.verifyBiometric(
+        targetCred.email,
+        type,
+        targetCred.credentialId,
+        faceData?.faceHash || targetCred.faceHash
+      );
+      if (!verifyLocal.success || !verifyLocal.user) {
+        setIsAuthenticating(false);
+        const errorMsg = verifyLocal.message || 'Biometric authentication verification failed.';
+        setError(errorMsg);
+        return { success: false, error: errorMsg };
       }
+
+      const existingUser = verifyLocal.user;
+      const userSession: UserSession = {
+        id: existingUser.id,
+        name: existingUser.name,
+        email: existingUser.email,
+        role: existingUser.role,
+        institutionCode: existingUser.institutionCode,
+        department: existingUser.department,
+        employeeId: existingUser.employeeId,
+        specialAccessGrants: existingUser.specialAccessGrants || [],
+      };
 
       localStorage.setItem(LAST_USER_KEY, targetCred.email);
       try {
         localStorage.setItem('ob_logged_in_user', JSON.stringify(userSession));
       } catch {}
 
-      let redirectTab = 'MAKER_WORKSPACE';
+      let redirectTab = verifyLocal.redirectTab || 'MAKER_WORKSPACE';
       if (userSession.role === 'ADMIN') redirectTab = 'ADMIN_DASHBOARD';
       else if (userSession.role === 'CHECKER') redirectTab = 'CHECKER_INBOX';
+      else if (userSession.role === 'AUDITOR') redirectTab = 'AUDITOR_DASHBOARD';
+      else if (userSession.role === 'MAKER') redirectTab = 'MAKER_WORKSPACE';
 
       vibrate([30, 45, 35]);
       haptics.success();
@@ -925,56 +925,23 @@ export function useBiometricAuth() {
   }, []);
 
   /**
-   * Remove / revoke biometric credentials both locally and on backend server
+   * Remove biometric credentials
    */
   const removeBiometric = useCallback(
-    async (email?: string, type?: 'FINGERPRINT' | 'FACE' | 'ALL') => {
-      const targetEmail = (email || registeredEmail || '').trim().toLowerCase();
-
-      // 1. Clean localStorage
-      if (targetEmail) {
-        const remaining = getStoredCredentials().filter((c) => {
-          const matchesEmail = c.email.toLowerCase() === targetEmail;
-          if (!matchesEmail) return true;
-          if (!type || type === 'ALL') return false;
-          return c.type !== type;
-        });
+    (email?: string) => {
+      if (email) {
+        const remaining = getStoredCredentials().filter(
+          (c) => c.email.toLowerCase() !== email.toLowerCase()
+        );
         localStorage.setItem(STORAGE_KEY, JSON.stringify(remaining));
       } else {
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem(LAST_USER_KEY);
       }
-
-      // 2. Synchronize with backend server & in-memory userService
-      if (targetEmail) {
-        userService.resetBiometrics(targetEmail, type);
-        try {
-          await fetch('/api/auth/biometrics/reset', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: targetEmail, type: type || 'ALL' }),
-          });
-        } catch (e) {
-          console.warn('Backend biometric reset sync offline fallback:', e);
-        }
-
-        // 3. Record audit trail
-        recordBiometricAuditLog({
-          actorId: targetEmail,
-          actorName: 'Bank Officer',
-          action: 'BIOMETRIC_REVOKED',
-          type: type === 'FACE' ? 'FACE' : 'FINGERPRINT',
-          entityId: targetEmail,
-          details: `User revoked ${type || 'all'} biometric passkey credentials`,
-        });
-      }
-
       refreshEnrolledStatus();
       vibrate(20);
-      haptics.medium();
-      return { success: true, message: 'Biometric passkey credentials revoked.' };
     },
-    [getStoredCredentials, refreshEnrolledStatus, registeredEmail]
+    [getStoredCredentials, refreshEnrolledStatus]
   );
 
   const resetError = () => setError(null);
