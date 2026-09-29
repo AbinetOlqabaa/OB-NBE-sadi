@@ -22,6 +22,7 @@ import {
   getReportsForDepartment,
   getDepartmentForReport,
 } from './src/data/organizationHierarchy.ts';
+import { paginateList, PaginatedResult } from './src/utils/paginationUtils.ts';
 
 dotenv.config();
 
@@ -45,6 +46,12 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// -------------------------------------------------------------
+// STANDARD SERVER-SIDE PAGINATION CONTRACT (PART 7)
+// -------------------------------------------------------------
+export { paginateList };
+export type { PaginatedResult };
 
 // -------------------------------------------------------------
 // REGULATORY API ROUTES
@@ -82,10 +89,14 @@ app.get('/api/regulatory/templates/:key', (req, res) => {
   res.json(template);
 });
 
-// Submissions list with filtering
+// Submissions list with filtering and server-side pagination
 app.get('/api/regulatory/submissions', (req, res) => {
-  const { status, reportKey, makerId } = req.query as any;
+  const { status, reportKey, makerId, page, page_size, limit } = req.query as any;
   const submissions = submissionService.getByFilter({ status, reportKey, makerId });
+  if (page !== undefined || page_size !== undefined) {
+    res.json(paginateList(submissions, page, page_size || limit));
+    return;
+  }
   res.json(submissions);
 });
 
@@ -418,7 +429,13 @@ app.get('/api/auth/biometrics/status/:email', (req, res) => {
 });
 
 app.get('/api/users', (req, res) => {
-  res.json(userService.getAll());
+  const users = userService.getAll();
+  const { page, page_size, limit } = req.query as any;
+  if (page !== undefined || page_size !== undefined) {
+    res.json(paginateList(users, page, page_size || limit));
+    return;
+  }
+  res.json(users);
 });
 
 app.post('/api/users/:id/status', (req, res) => {
@@ -465,7 +482,13 @@ app.delete('/api/users/:id', (req, res) => {
 
 // Get official Oromia Bank departments & report classifications
 app.get('/api/departments', (req, res) => {
-  res.json(departmentService.getAll());
+  const depts = departmentService.getAll();
+  const { page, page_size, limit } = req.query as any;
+  if (page !== undefined || page_size !== undefined) {
+    res.json(paginateList(depts, page, page_size || limit));
+    return;
+  }
+  res.json(depts);
 });
 
 // Grant special cross-department access to a Maker or Checker
@@ -530,9 +553,29 @@ app.get(['/api/audit/work-queue', '/api/v1/audit/work-queue'], (req, res) => {
     submissionStatus: (req.query.status as string) || undefined,
     search: (req.query.search as string) || undefined,
   });
+  const summary = auditorService.getKpiSummary();
+  const { page, page_size, limit } = req.query as any;
+
+  if (page !== undefined || page_size !== undefined) {
+    const paginated = paginateList(queue, page, page_size || limit);
+    res.json({
+      summary,
+      ...paginated,
+      queue: paginated.items,
+    });
+    return;
+  }
+
   res.json({
-    summary: auditorService.getKpiSummary(),
+    summary,
     queue,
+    items: queue,
+    total: queue.length,
+    page: 1,
+    page_size: queue.length,
+    total_pages: 1,
+    has_next: false,
+    has_previous: false,
   });
 });
 
@@ -543,6 +586,11 @@ app.get(['/api/audit/findings', '/api/v1/audit/findings'], (req, res) => {
     status: req.query.status as any,
     department: req.query.department as any,
   });
+  const { page, page_size, limit } = req.query as any;
+  if (page !== undefined || page_size !== undefined) {
+    res.json(paginateList(findings, page, page_size || limit));
+    return;
+  }
   res.json(findings);
 });
 
@@ -572,6 +620,11 @@ app.patch(['/api/audit/findings/:id', '/api/v1/audit/findings/:id'], (req, res) 
 // Evidence Management
 app.get(['/api/audit/evidence', '/api/v1/audit/evidence'], (req, res) => {
   const evidences = auditorService.getEvidence(req.query.reportKey as string, req.query.submissionId as string);
+  const { page, page_size, limit } = req.query as any;
+  if (page !== undefined || page_size !== undefined) {
+    res.json(paginateList(evidences, page, page_size || limit));
+    return;
+  }
   res.json(evidences);
 });
 
@@ -583,6 +636,11 @@ app.post(['/api/audit/evidence', '/api/v1/audit/evidence'], async (req, res) => 
 // Audit Working Papers / Notes
 app.get(['/api/audit/notes', '/api/v1/audit/notes'], (req, res) => {
   const notes = auditorService.getWorkingNotes(req.query.reportKey as string, req.query.submissionId as string);
+  const { page, page_size, limit } = req.query as any;
+  if (page !== undefined || page_size !== undefined) {
+    res.json(paginateList(notes, page, page_size || limit));
+    return;
+  }
   res.json(notes);
 });
 
@@ -594,6 +652,11 @@ app.post(['/api/audit/notes', '/api/v1/audit/notes'], (req, res) => {
 // Remediation Action Tracking
 app.get(['/api/audit/remediations', '/api/v1/audit/remediations'], (req, res) => {
   const rems = auditorService.getRemediations(req.query.findingId as string);
+  const { page, page_size, limit } = req.query as any;
+  if (page !== undefined || page_size !== undefined) {
+    res.json(paginateList(rems, page, page_size || limit));
+    return;
+  }
   res.json(rems);
 });
 
@@ -612,6 +675,17 @@ app.patch(['/api/audit/remediations/:id', '/api/v1/audit/remediations/:id'], (re
   }
   if (updated) res.json(updated);
   else res.status(404).json({ error: 'Remediation not found' });
+});
+
+// Audit Reports Packages
+app.get(['/api/audit/reports', '/api/v1/audit/reports'], (req, res) => {
+  const pkgs = auditorService.getReportPackages();
+  const { page, page_size, limit } = req.query as any;
+  if (page !== undefined || page_size !== undefined) {
+    res.json(paginateList(pkgs, page, page_size || limit));
+    return;
+  }
+  res.json(pkgs);
 });
 
 // Formal Audit Report Export
@@ -633,33 +707,47 @@ app.post(['/api/audit/reports/export', '/api/v1/audit/reports/export'], (req, re
 const DJANGO_SIMULATOR_URL = process.env.NBE_SIMULATOR_URL || 'http://127.0.0.1:8001/api/v1/nbe-simulator';
 
 app.get('/api/nbe-simulator/submissions', async (req, res) => {
+  const { page, page_size, limit } = req.query as any;
+  let submissions: any[] = [];
   try {
-    const limit = req.query.limit || '100';
-    const response = await fetch(`${DJANGO_SIMULATOR_URL}/submissions?limit=${limit}`);
+    const lim = limit || '100';
+    const response = await fetch(`${DJANGO_SIMULATOR_URL}/submissions?limit=${lim}`);
     if (response.ok) {
-      const data = await response.json();
-      res.json(data);
-      return;
+      submissions = await response.json();
+    } else {
+      submissions = nbeSimulator.getSubmissions();
     }
   } catch (err) {
-    // Graceful fallback to local buffer if Django simulator is offline
+    submissions = nbeSimulator.getSubmissions();
   }
-  res.json(nbeSimulator.getSubmissions());
+
+  if (page !== undefined || page_size !== undefined) {
+    res.json(paginateList(submissions, page, page_size || limit));
+    return;
+  }
+  res.json(submissions);
 });
 
 app.get('/api/nbe-simulator/logs', async (req, res) => {
+  const { page, page_size, limit } = req.query as any;
+  let logs: any[] = [];
   try {
-    const limit = req.query.limit || '100';
-    const response = await fetch(`${DJANGO_SIMULATOR_URL}/logs?limit=${limit}`);
+    const lim = limit || '100';
+    const response = await fetch(`${DJANGO_SIMULATOR_URL}/logs?limit=${lim}`);
     if (response.ok) {
-      const data = await response.json();
-      res.json(data);
-      return;
+      logs = await response.json();
+    } else {
+      logs = nbeSimulator.getLogs();
     }
   } catch (err) {
-    // Graceful fallback
+    logs = nbeSimulator.getLogs();
   }
-  res.json(nbeSimulator.getLogs());
+
+  if (page !== undefined || page_size !== undefined) {
+    res.json(paginateList(logs, page, page_size || limit));
+    return;
+  }
+  res.json(logs);
 });
 
 app.delete('/api/nbe-simulator/logs', async (req, res) => {
@@ -774,8 +862,17 @@ app.post('/api/nbe-simulator/submit', async (req, res) => {
 // -------------------------------------------------------------
 
 app.get('/api/audit-logs', (req, res) => {
-  const limit = parseInt(req.query.limit as string || '100', 10);
-  res.json(auditService.getLogs(limit));
+  const { page, page_size, limit, entityId, actorId } = req.query as any;
+  let logs = auditService.getAllLogs();
+  if (entityId) logs = logs.filter((l: any) => l.entityId === entityId);
+  if (actorId) logs = logs.filter((l: any) => l.actorId === actorId);
+
+  if (page !== undefined || page_size !== undefined) {
+    res.json(paginateList(logs, page, page_size || limit));
+    return;
+  }
+  const lim = parseInt((limit as string) || '100', 10);
+  res.json(logs.slice(0, lim));
 });
 
 app.post('/api/audit-logs', (req, res) => {

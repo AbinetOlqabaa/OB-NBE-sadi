@@ -26,8 +26,29 @@ from apps.workflows.views import resolve_user_from_request
 
 class AuditLogListView(APIView):
     def get(self, request):
+        page = request.query_params.get('page')
+        page_size = int(request.query_params.get('page_size', request.query_params.get('limit', 10)))
+        qs = AuditLog.objects.all()
+        if page:
+            page_num = max(1, int(page))
+            total = qs.count()
+            total_pages = max(1, (total + page_size - 1) // page_size)
+            safe_page = min(page_num, total_pages)
+            start = (safe_page - 1) * page_size
+            items = qs[start:start + page_size]
+            serializer = AuditLogSerializer(items, many=True)
+            return Response({
+                'items': serializer.data,
+                'total': total,
+                'page': safe_page,
+                'page_size': page_size,
+                'total_pages': total_pages,
+                'has_next': safe_page < total_pages,
+                'has_previous': safe_page > 1,
+            })
+
         limit = int(request.query_params.get('limit', 100))
-        logs = AuditLog.objects.all()[:limit]
+        logs = qs[:limit]
         serializer = AuditLogSerializer(logs, many=True)
         return Response(serializer.data)
 
@@ -178,6 +199,27 @@ class AuditorWorkQueueView(APIView):
             'completedAudits': len([q for q in queue_items if q['auditStatus'] in ['NBE_DELIVERED_PENDING_AUDIT', 'CHECKER_APPROVED'] and q['openFindings'] == 0]),
         }
 
+        page = request.query_params.get('page')
+        page_size = int(request.query_params.get('page_size', request.query_params.get('limit', 10)))
+        if page:
+            page_num = max(1, int(page))
+            total = len(queue_items)
+            total_pages = max(1, (total + page_size - 1) // page_size)
+            safe_page = min(page_num, total_pages)
+            start = (safe_page - 1) * page_size
+            items = queue_items[start:start + page_size]
+            return Response({
+                'summary': summary,
+                'items': items,
+                'queue': items,
+                'total': total,
+                'page': safe_page,
+                'page_size': page_size,
+                'total_pages': total_pages,
+                'has_next': safe_page < total_pages,
+                'has_previous': safe_page > 1,
+            })
+
         return Response({
             'summary': summary,
             'queue': queue_items,
@@ -207,6 +249,26 @@ class AuditFindingsView(APIView):
             qs = qs.filter(status=status_param)
         if department:
             qs = qs.filter(department=department)
+
+        page = request.query_params.get('page')
+        page_size = int(request.query_params.get('page_size', request.query_params.get('limit', 10)))
+        if page:
+            page_num = max(1, int(page))
+            total = qs.count()
+            total_pages = max(1, (total + page_size - 1) // page_size)
+            safe_page = min(page_num, total_pages)
+            start = (safe_page - 1) * page_size
+            items = qs[start:start + page_size]
+            serializer = AuditFindingSerializer(items, many=True)
+            return Response({
+                'items': serializer.data,
+                'total': total,
+                'page': safe_page,
+                'page_size': page_size,
+                'total_pages': total_pages,
+                'has_next': safe_page < total_pages,
+                'has_previous': safe_page > 1,
+            })
 
         serializer = AuditFindingSerializer(qs, many=True)
         return Response(serializer.data)
@@ -293,9 +355,30 @@ class AuditEvidenceView(APIView):
     """
     def get(self, request):
         sub_id = request.query_params.get('submissionId')
-        qs = AuditEvidence.objects.all()
+        qs = AuditEvidence.objects.all().order_by('-uploaded_at')
         if sub_id:
             qs = qs.filter(submission_id=sub_id)
+
+        page = request.query_params.get('page')
+        page_size = int(request.query_params.get('page_size', request.query_params.get('limit', 10)))
+        if page:
+            page_num = max(1, int(page))
+            total = qs.count()
+            total_pages = max(1, (total + page_size - 1) // page_size)
+            safe_page = min(page_num, total_pages)
+            start = (safe_page - 1) * page_size
+            items = qs[start:start + page_size]
+            serializer = AuditEvidenceSerializer(items, many=True)
+            return Response({
+                'items': serializer.data,
+                'total': total,
+                'page': safe_page,
+                'page_size': page_size,
+                'total_pages': total_pages,
+                'has_next': safe_page < total_pages,
+                'has_previous': safe_page > 1,
+            })
+
         serializer = AuditEvidenceSerializer(qs, many=True)
         return Response(serializer.data)
 
@@ -333,9 +416,30 @@ class AuditNotesView(APIView):
     """
     def get(self, request):
         sub_id = request.query_params.get('submissionId')
-        qs = AuditWorkingNote.objects.all()
+        qs = AuditWorkingNote.objects.all().order_by('-created_at')
         if sub_id:
             qs = qs.filter(submission_id=sub_id)
+
+        page = request.query_params.get('page')
+        page_size = int(request.query_params.get('page_size', request.query_params.get('limit', 10)))
+        if page:
+            page_num = max(1, int(page))
+            total = qs.count()
+            total_pages = max(1, (total + page_size - 1) // page_size)
+            safe_page = min(page_num, total_pages)
+            start = (safe_page - 1) * page_size
+            items = qs[start:start + page_size]
+            serializer = AuditWorkingNoteSerializer(items, many=True)
+            return Response({
+                'items': serializer.data,
+                'total': total,
+                'page': safe_page,
+                'page_size': page_size,
+                'total_pages': total_pages,
+                'has_next': safe_page < total_pages,
+                'has_previous': safe_page > 1,
+            })
+
         serializer = AuditWorkingNoteSerializer(qs, many=True)
         return Response(serializer.data)
 
@@ -363,9 +467,30 @@ class RemediationTrackingView(APIView):
     """
     def get(self, request):
         finding_id = request.query_params.get('findingId')
-        qs = RemediationAction.objects.all()
+        qs = RemediationAction.objects.all().order_by('-created_at')
         if finding_id:
             qs = qs.filter(finding_id=finding_id)
+
+        page = request.query_params.get('page')
+        page_size = int(request.query_params.get('page_size', request.query_params.get('limit', 10)))
+        if page:
+            page_num = max(1, int(page))
+            total = qs.count()
+            total_pages = max(1, (total + page_size - 1) // page_size)
+            safe_page = min(page_num, total_pages)
+            start = (safe_page - 1) * page_size
+            items = qs[start:start + page_size]
+            serializer = RemediationActionSerializer(items, many=True)
+            return Response({
+                'items': serializer.data,
+                'total': total,
+                'page': safe_page,
+                'page_size': page_size,
+                'total_pages': total_pages,
+                'has_next': safe_page < total_pages,
+                'has_previous': safe_page > 1,
+            })
+
         serializer = RemediationActionSerializer(qs, many=True)
         return Response(serializer.data)
 

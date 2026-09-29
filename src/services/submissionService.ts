@@ -86,6 +86,16 @@ export const DEMO_USERS: UserSession[] = [
     department: 'Compliance & Legal Governance',
     employeeId: 'OB-ADM-001',
   },
+  {
+    id: 'usr_auditor_1',
+    name: 'Girma Wolde',
+    email: 'auditor@oromiabank.com',
+    role: 'AUDITOR',
+    institutionCode: '0000013',
+    department: 'Internal Audit & Regulatory Examination',
+    employeeId: 'OB-AUD-007',
+    specialAccessGrants: [],
+  },
 ];
 
 class SubmissionServiceClass {

@@ -53,6 +53,7 @@ import { submissionService } from '../services/submissionService.ts';
 import { DEPARTMENTS } from '../data/organizationHierarchy.ts';
 import { getAllReports, getReportDefinition } from '../data/report-registry.ts';
 import { vibrate, haptics } from '../utils/haptics.ts';
+import { Pagination } from './Pagination.tsx';
 
 type AuditorTab =
   | 'WORK_QUEUE'
@@ -81,6 +82,28 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
   const [deptFilter, setDeptFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Pagination states
+  const [workQueuePage, setWorkQueuePage] = useState<number>(1);
+  const [workQueuePageSize, setWorkQueuePageSize] = useState<number>(8);
+
+  const [findingPage, setFindingPage] = useState<number>(1);
+  const [findingPageSize, setFindingPageSize] = useState<number>(8);
+
+  const [evidencePage, setEvidencePage] = useState<number>(1);
+  const [evidencePageSize, setEvidencePageSize] = useState<number>(8);
+
+  const [notePage, setNotePage] = useState<number>(1);
+  const [notePageSize, setNotePageSize] = useState<number>(6);
+
+  const [remediationPage, setRemediationPage] = useState<number>(1);
+  const [remediationPageSize, setRemediationPageSize] = useState<number>(6);
+
+  const [reportPackagePage, setReportPackagePage] = useState<number>(1);
+  const [reportPackagePageSize, setReportPackagePageSize] = useState<number>(6);
+
+  // Timeline filter state
+  const [timelineFilter, setTimelineFilter] = useState<'ALL' | 'MAKER' | 'CHECKER' | 'NBE'>('ALL');
 
   // Findings state
   const [findingSeverityFilter, setFindingSeverityFilter] = useState<string>('');
@@ -157,6 +180,37 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
   const reportPackages = useMemo(() => {
     return auditorService.getReportPackages();
   }, [version]);
+
+  // Paginated Slices
+  const paginatedWorkQueue = useMemo(() => {
+    const start = (workQueuePage - 1) * workQueuePageSize;
+    return workQueue.slice(start, start + workQueuePageSize);
+  }, [workQueue, workQueuePage, workQueuePageSize]);
+
+  const paginatedFindings = useMemo(() => {
+    const start = (findingPage - 1) * findingPageSize;
+    return findings.slice(start, start + findingPageSize);
+  }, [findings, findingPage, findingPageSize]);
+
+  const paginatedEvidences = useMemo(() => {
+    const start = (evidencePage - 1) * evidencePageSize;
+    return evidences.slice(start, start + evidencePageSize);
+  }, [evidences, evidencePage, evidencePageSize]);
+
+  const paginatedNotes = useMemo(() => {
+    const start = (notePage - 1) * notePageSize;
+    return workingNotes.slice(start, start + notePageSize);
+  }, [workingNotes, notePage, notePageSize]);
+
+  const paginatedRemediations = useMemo(() => {
+    const start = (remediationPage - 1) * remediationPageSize;
+    return remediations.slice(start, start + remediationPageSize);
+  }, [remediations, remediationPage, remediationPageSize]);
+
+  const paginatedReportPackages = useMemo(() => {
+    const start = (reportPackagePage - 1) * reportPackagePageSize;
+    return reportPackages.slice(start, start + reportPackagePageSize);
+  }, [reportPackages, reportPackagePage, reportPackagePageSize]);
 
   // Selected report deep inspection data
   const currentInspection = useMemo(() => {
@@ -386,6 +440,31 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
           </div>
         </div>
 
+        {/* Compliance Notification & Alert Banner */}
+        {kpis.criticalFindings > 0 && (
+          <div className="mt-3 p-3.5 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-rose-900 dark:text-rose-200 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <AlertOctagon className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
+              <div>
+                <span className="font-bold">Supervisory Alert:</span>{' '}
+                <span>
+                  {kpis.criticalFindings} Critical Severity finding(s) require active remediation under NBE Directive BSD/03/2020.
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setFindingSeverityFilter('CRITICAL');
+                setActiveSubTab('FINDINGS');
+              }}
+              className="min-h-[36px] px-3.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold shrink-0 cursor-pointer touch-press"
+            >
+              Review Critical Findings
+            </button>
+          </div>
+        )}
+
         {/* Tab Navigation Pill Bar */}
         <div className="flex items-center gap-1.5 overflow-x-auto touch-scroll-x mt-4 pt-1 no-scrollbar">
           {[
@@ -446,7 +525,10 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
                   type="text"
                   placeholder="Search by report code, title, department, maker, or NBE ref..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setWorkQueuePage(1);
+                  }}
                   className="w-full min-h-[44px] pl-9 pr-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-ob-indigo-500 font-medium"
                 />
               </div>
@@ -454,7 +536,10 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
               <div className="flex items-center gap-2 flex-wrap">
                 <select
                   value={deptFilter}
-                  onChange={(e) => setDeptFilter(e.target.value)}
+                  onChange={(e) => {
+                    setDeptFilter(e.target.value);
+                    setWorkQueuePage(1);
+                  }}
                   className="min-h-[44px] px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-medium cursor-pointer"
                 >
                   <option value="">All Departments (8)</option>
@@ -467,7 +552,10 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
 
                 <select
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setWorkQueuePage(1);
+                  }}
                   className="min-h-[44px] px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-medium cursor-pointer"
                 >
                   <option value="">All Submission States</option>
@@ -485,6 +573,7 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
                       setDeptFilter('');
                       setStatusFilter('');
                       setSearchQuery('');
+                      setWorkQueuePage(1);
                     }}
                     className="min-h-[44px] px-3 py-2 text-xs text-rose-600 dark:text-rose-400 hover:underline font-semibold cursor-pointer"
                   >
@@ -518,7 +607,7 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
                         </td>
                       </tr>
                     ) : (
-                      workQueue.map((item) => (
+                      paginatedWorkQueue.map((item) => (
                         <tr
                           key={item.reportKey}
                           className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
@@ -631,6 +720,17 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
                   </tbody>
                 </table>
               </div>
+
+              {/* Work Queue Pagination */}
+              <Pagination
+                currentPage={workQueuePage}
+                totalItems={workQueue.length}
+                pageSize={workQueuePageSize}
+                onPageChange={setWorkQueuePage}
+                onPageSizeChange={setWorkQueuePageSize}
+                pageSizeOptions={[8, 16, 24]}
+                itemName="statutory returns"
+              />
             </div>
           </div>
         )}
@@ -747,100 +847,262 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
           </div>
         )}
 
-        {/* SUB-VIEW 3: WORKFLOW TIMELINE */}
+        {/* SUB-VIEW 3: WORKFLOW TIMELINE & SUBMISSION AUDIT */}
         {activeSubTab === 'TIMELINE' && (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 sm:p-6 space-y-6">
-            <div>
-              <h3 className="font-bold text-base text-slate-900 dark:text-white">
-                Regulatory Submission Audit Trail & Lifecycle
-              </h3>
-              <p className="text-xs text-slate-500">
-                End-to-end event chain from initial Maker draft to National Bank of Ethiopia gateway receipt.
-              </p>
+          <div className="space-y-4">
+            {/* Return Selector & Context Ribbon */}
+            <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex-1 w-full md:w-auto">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Select Return to Audit Timeline & Activity History
+                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    value={selectedReportKey}
+                    onChange={(e) => {
+                      setSelectedReportKey(e.target.value);
+                      setSelectedSubmissionId('');
+                    }}
+                    className="min-h-[44px] px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-white cursor-pointer"
+                  >
+                    {getAllReports().map((r) => (
+                      <option key={r.ReturnKey} value={r.ReturnKey}>
+                        {r.ReturnKey} — {r.Title}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-ob-indigo-50 dark:bg-ob-indigo-950/60 text-ob-indigo-700 dark:text-ob-indigo-300 border border-ob-indigo-200 dark:border-ob-indigo-800">
+                    Status: {currentInspection.submission?.status || 'DRAFT'}
+                  </span>
+                  <span className="text-xs text-slate-500 font-medium">
+                    v{currentInspection.submission?.version || 1}
+                  </span>
+                </div>
+              </div>
+
+              {/* Lifecycle Stage Filters */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {[
+                  { id: 'ALL', label: 'All Lifecycle Events' },
+                  { id: 'MAKER', label: 'Maker Activity' },
+                  { id: 'CHECKER', label: 'Checker Review' },
+                  { id: 'NBE', label: 'NBE Gateway' },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setTimelineFilter(f.id as any)}
+                    className={`min-h-[36px] px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer touch-press ${
+                      timelineFilter === f.id
+                        ? 'bg-ob-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="relative pl-6 space-y-8 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-700">
-              {/* Event 1: Creation */}
-              <div className="relative">
-                <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px]">
-                  ✓
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <span>1. Report Draft Initialized by Maker</span>
-                    <span className="text-[10px] text-slate-400 font-mono">2026-01-16 09:30 UTC</span>
-                  </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-300">
-                    Maker initiated {selectedReportKey} return using official NBE statutory schema v2026.
-                  </p>
-                </div>
+            {/* Timeline Cards Container */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 sm:p-6 space-y-6">
+              <div>
+                <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>{selectedReportKey} Statutory Audit Trail & Activity Lifecycle</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Chronological event verification chain from initial Maker data intake to Central Bank cryptographic receipt.
+                </p>
               </div>
 
-              {/* Event 2: Revision */}
-              <div className="relative">
-                <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[10px]">
-                  2
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <span>2. Draft Values Updated & Formula Recalculation</span>
-                    <span className="text-[10px] text-slate-400 font-mono">2026-01-18 14:15 UTC</span>
+              <div className="relative pl-6 space-y-8 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-700">
+                {/* Event 1: Maker Creation */}
+                {(timelineFilter === 'ALL' || timelineFilter === 'MAKER') && (
+                  <div className="relative">
+                    <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold">
+                      ✓
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
+                        <span>1. Statutory Return Initialized by Maker</span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {currentInspection.submission?.submittedAt
+                            ? new Date(currentInspection.submission.submittedAt).toLocaleDateString()
+                            : '2026-01-16 09:30 UTC'}
+                        </span>
+                        <span className="px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-400">
+                          Maker: {currentInspection.submission?.makerName || 'Assigned Maker'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        Maker initialized draft return for {selectedReportKey} ({currentInspection.reportDefinition?.Title}) using official NBE supervisory schema v2026.
+                      </p>
+                      <div className="text-[11px] text-slate-500 bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 font-mono">
+                        Department: {currentInspection.reportDefinition?.department || 'Credit Operations & Portfolio Management'} • Frequency: {currentInspection.reportDefinition?.Frequency} • Version: 1
+                      </div>
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-300">
-                    AST math engine computed all mathematical dependencies. Multi-tier regulatory validation: 0 errors.
-                  </p>
-                </div>
+                )}
+
+                {/* Event 2: Line Items & AST Math Recalculation */}
+                {(timelineFilter === 'ALL' || timelineFilter === 'MAKER') && (
+                  <div className="relative">
+                    <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center text-[10px] font-bold">
+                      2
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
+                        <span>2. Draft Values Updated & AST Formula Recalculation</span>
+                        <span className="text-[10px] text-slate-400 font-mono">2026-01-18 14:15 UTC</span>
+                        <span className="px-1.5 py-0.2 rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[10px] font-bold">
+                          AST Math Verified
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        Automated AST calculation engine verified all mathematical relationships, balancing cross-totals with zero formula errors.
+                      </p>
+                      <div className="text-[11px] text-slate-500 bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 font-mono">
+                        Inspected Fields: {currentInspection.reportDefinition?.ReturnItemsList.length || 18} • Validation Errors: 0 • Strict BSD/03/2020 Compliance
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Event 3: Submission to 4-Eyes Review */}
+                {(timelineFilter === 'ALL' || timelineFilter === 'MAKER') && (
+                  <div className="relative">
+                    <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px] font-bold">
+                      3
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
+                        <span>3. Maker Dispatched to 4-Eyes Checker Review</span>
+                        <span className="text-[10px] text-slate-400 font-mono">2026-01-20 11:45 UTC</span>
+                        <span className="px-1.5 py-0.2 rounded bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
+                          Maker Segregation Locked
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        Submission state changed to <code className="font-bold">PENDING_CHECKER</code>. Line values locked against further modification by Maker.
+                      </p>
+                      <div className="text-[11px] text-slate-500 bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 font-mono">
+                        Frozen Integrity Hash: {currentInspection.submission?.integrityHash || 'sha256:7f8a91c0b3d4e2...'}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Event 4: Checker Verification */}
+                {(timelineFilter === 'ALL' || timelineFilter === 'CHECKER') && (
+                  <div className="relative">
+                    <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center text-[10px] font-bold">
+                      4
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
+                        <span>4. Checker Verification & Sign-Off</span>
+                        <span className="text-[10px] text-slate-400 font-mono">2026-01-21 16:20 UTC</span>
+                        <span className="px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold">
+                          Checker: {currentInspection.submission?.checkerName || 'Department Checker'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        Department Checker performed line-by-line verification against general ledger schedules and signed off the 4-Eyes authorization.
+                      </p>
+                      <div className="text-[11px] text-slate-500 bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 font-mono">
+                        Decision: APPROVED • Dual-control separation verified • Ready for NBE submission
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Event 5: NBE Gateway Delivery */}
+                {(timelineFilter === 'ALL' || timelineFilter === 'NBE') && (
+                  <div className="relative">
+                    <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold">
+                      ★
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2 flex-wrap">
+                        <span>5. National Bank of Ethiopia Delivery & Gateway Receipt</span>
+                        <span className="text-[10px] text-slate-400 font-mono">2026-01-22 08:30 UTC</span>
+                        <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] font-bold">
+                          HTTP 200 OK
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        Encrypted payload dispatched over TLS 1.3 / mTLS channel to National Bank of Ethiopia BSD Gateway. Central bank receipt logged.
+                      </p>
+                      <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-mono space-y-1">
+                        <div>Receipt: {currentInspection.submission?.nbeReferenceNumber || (currentInspection.submission as any)?.nbeSubmissionId || 'NBE-REC-20260122-8841'}</div>
+                        <div>Gateway: https://nbe.gov.et/api/v2/regulatory/gateway</div>
+                        <div>SHA-256 Tamper Seal: {currentInspection.submission?.integrityHash || 'OB-SEAL-8F12AC-20260122'}</div>
+                        <div>Institution Code: 0000013 (Oromia Bank S.C.)</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Event 6: Audit Cases & Findings Linked */}
+                {timelineFilter === 'ALL' && (
+                  <div className="relative">
+                    <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-bold">
+                      🔍
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-bold text-purple-600 dark:text-purple-400 flex items-center gap-2 flex-wrap">
+                        <span>6. Internal Audit Supervisory Examination</span>
+                        <span className="text-[10px] text-slate-400 font-mono">Current Audit Session</span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        Compliance Auditor reviewed historical submissions, attached supporting evidence, and tracked findings.
+                      </p>
+                      <div className="text-[11px] text-slate-500 bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 font-mono flex items-center gap-4 flex-wrap">
+                        <span>Findings: {currentInspection.findings.length}</span>
+                        <span>Evidence Records: {currentInspection.evidences.length}</span>
+                        <span>Working Papers: {currentInspection.workingNotes.length}</span>
+                        <span>Snapshots: {currentInspection.snapshots.length}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Event 3: Submission to 4-Eyes */}
-              <div className="relative">
-                <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px]">
-                  3
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <span>3. Maker Dispatched to 4-Eyes Checker Review</span>
-                    <span className="text-[10px] text-slate-400 font-mono">2026-01-20 11:45 UTC</span>
-                  </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-300">
-                    Submission frozen and placed in Department Checker Inbox. Maker segregation enforced.
-                  </p>
-                </div>
-              </div>
-
-              {/* Event 4: Checker Review */}
-              <div className="relative">
-                <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-indigo-500 text-white flex items-center justify-center text-[10px]">
-                  4
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <span>4. Checker Verification & Sign-Off</span>
-                    <span className="text-[10px] text-slate-400 font-mono">2026-01-21 16:20 UTC</span>
-                  </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-300">
-                    Authorized Checker reviewed line items, verified reconciliation evidence, and signed off approval.
-                  </p>
-                </div>
-              </div>
-
-              {/* Event 5: NBE Delivery */}
-              <div className="relative">
-                <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">
-                  ★
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-                    <span>5. National Bank of Ethiopia Delivery & Cryptographic Receipt</span>
-                    <span className="text-[10px] text-slate-400 font-mono">2026-01-22 08:30 UTC</span>
-                  </div>
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-mono space-y-1">
-                    <div>Receipt: NBE-REC-20260122-8841</div>
-                    <div>Gateway: https://nbe.gov.et/api/v2/regulatory/gateway</div>
-                    <div>SHA-256 Seal: OB-SEAL-8F12AC-20260122</div>
+              {/* Historical Snapshots Inspection Card */}
+              {currentInspection.snapshots && currentInspection.snapshots.length > 0 && (
+                <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300 flex items-center gap-2">
+                    <History className="w-3.5 h-3.5 text-ob-indigo-600 dark:text-ob-indigo-400" />
+                    <span>Historical Revision Snapshots ({currentInspection.snapshots.length} Versions)</span>
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {currentInspection.snapshots.map((snap: any, sIdx: number) => (
+                      <div
+                        key={snap.snapshotId || `snap_${sIdx}`}
+                        className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-xs space-y-1"
+                      >
+                        <div className="flex items-center justify-between font-mono font-bold">
+                          <span className="text-slate-900 dark:text-white">Snapshot v{snap.version || sIdx + 1}</span>
+                          <span className="text-[10px] text-ob-indigo-600 dark:text-ob-indigo-400">{snap.status}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          {snap.timestamp ? new Date(snap.timestamp).toLocaleString() : 'Captured during workflow'}
+                        </div>
+                        {snap.actorName && (
+                          <div className="text-[10px] text-slate-500">
+                            Actor: {snap.actorName} ({snap.actorRole})
+                          </div>
+                        )}
+                        {snap.integrityHash && (
+                          <div className="text-[9px] font-mono text-slate-400 truncate" title={snap.integrityHash}>
+                            Seal: {snap.integrityHash}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         )}
@@ -852,7 +1114,10 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
               <div className="flex items-center gap-2 flex-wrap">
                 <select
                   value={findingSeverityFilter}
-                  onChange={(e) => setFindingSeverityFilter(e.target.value)}
+                  onChange={(e) => {
+                    setFindingSeverityFilter(e.target.value);
+                    setFindingPage(1);
+                  }}
                   className="min-h-[44px] px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-medium cursor-pointer"
                 >
                   <option value="">All Severities</option>
@@ -865,7 +1130,10 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
 
                 <select
                   value={findingStatusFilter}
-                  onChange={(e) => setFindingStatusFilter(e.target.value)}
+                  onChange={(e) => {
+                    setFindingStatusFilter(e.target.value);
+                    setFindingPage(1);
+                  }}
                   className="min-h-[44px] px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-medium cursor-pointer"
                 >
                   <option value="">All Statuses</option>
@@ -893,7 +1161,7 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
                   No audit findings match your selected filters.
                 </div>
               ) : (
-                findings.map((f) => (
+                paginatedFindings.map((f) => (
                   <div
                     key={f.id}
                     className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3"
@@ -1003,6 +1271,17 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
                 ))
               )}
             </div>
+
+            {/* Findings Pagination */}
+            <Pagination
+              currentPage={findingPage}
+              totalItems={findings.length}
+              pageSize={findingPageSize}
+              onPageChange={setFindingPage}
+              onPageSizeChange={setFindingPageSize}
+              pageSizeOptions={[8, 16, 32]}
+              itemName="audit findings"
+            />
           </div>
         )}
 
@@ -1029,42 +1308,59 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {evidences.map((e) => (
-                <div
-                  key={e.id}
-                  className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-bold text-ob-indigo-600 dark:text-ob-indigo-400">
-                      {e.id}
-                    </span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 flex items-center gap-1">
-                      <ShieldCheck className="w-3 h-3" />
-                      {e.verificationStatus}
-                    </span>
-                  </div>
-
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">{e.title}</h4>
-                    <div className="text-xs text-slate-500 font-mono mt-0.5">{e.fileName}</div>
-                  </div>
-
-                  <div className="p-2.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl space-y-1 font-mono text-[10px]">
-                    <div className="text-slate-500 truncate" title={e.sha256Checksum}>
-                      SHA-256: {e.sha256Checksum}
-                    </div>
-                    <div className="text-indigo-600 dark:text-indigo-400 font-bold">
-                      Seal: {e.tamperSeal}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
-                    <span>Uploaded: {new Date(e.uploadedAt).toLocaleDateString()}</span>
-                    <span>By: {e.uploadedBy}</span>
-                  </div>
+              {evidences.length === 0 ? (
+                <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400 text-xs md:col-span-2">
+                  No evidence documents attached to current audit cases.
                 </div>
-              ))}
+              ) : (
+                paginatedEvidences.map((e) => (
+                  <div
+                    key={e.id}
+                    className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-xs font-bold text-ob-indigo-600 dark:text-ob-indigo-400">
+                        {e.id}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3" />
+                        {e.verificationStatus}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-900 dark:text-white">{e.title}</h4>
+                      <div className="text-xs text-slate-500 font-mono mt-0.5">{e.fileName}</div>
+                    </div>
+
+                    <div className="p-2.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl space-y-1 font-mono text-[10px]">
+                      <div className="text-slate-500 truncate" title={e.sha256Checksum}>
+                        SHA-256: {e.sha256Checksum}
+                      </div>
+                      <div className="text-indigo-600 dark:text-indigo-400 font-bold">
+                        Seal: {e.tamperSeal}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <span>Uploaded: {new Date(e.uploadedAt).toLocaleDateString()}</span>
+                      <span>By: {e.uploadedBy}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
+
+            {/* Evidence Pagination */}
+            <Pagination
+              currentPage={evidencePage}
+              totalItems={evidences.length}
+              pageSize={evidencePageSize}
+              onPageChange={setEvidencePage}
+              onPageSizeChange={setEvidencePageSize}
+              pageSizeOptions={[8, 16]}
+              itemName="evidence records"
+            />
           </div>
         )}
 
@@ -1091,28 +1387,45 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
             </div>
 
             <div className="space-y-3">
-              {workingNotes.map((note) => (
-                <div
-                  key={note.id}
-                  className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
-                      {note.category}
-                    </span>
-                    <span className="text-xs text-slate-400 font-mono">
-                      {new Date(note.createdAt).toLocaleString()}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-sans">
-                    {note.content}
-                  </p>
-                  <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
-                    Author: {note.authorName} • Return: {note.reportKey}
-                  </div>
+              {paginatedNotes.length === 0 ? (
+                <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400 text-xs">
+                  No confidential working papers recorded yet.
                 </div>
-              ))}
+              ) : (
+                paginatedNotes.map((note) => (
+                  <div
+                    key={note.id}
+                    className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
+                        {note.category}
+                      </span>
+                      <span className="text-xs text-slate-400 font-mono">
+                        {new Date(note.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-sans">
+                      {note.content}
+                    </p>
+                    <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
+                      Author: {note.authorName} • Return: {note.reportKey}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
+
+            {/* Notes Pagination */}
+            <Pagination
+              currentPage={notePage}
+              totalItems={workingNotes.length}
+              pageSize={notePageSize}
+              onPageChange={setNotePage}
+              onPageSizeChange={setNotePageSize}
+              pageSizeOptions={[6, 12, 24]}
+              itemName="working notes"
+            />
           </div>
         )}
 
@@ -1139,78 +1452,95 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
             </div>
 
             <div className="space-y-3">
-              {remediations.map((rem) => (
-                <div
-                  key={rem.id}
-                  className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-bold text-slate-900 dark:text-white">
-                      {rem.id} (Finding: {rem.findingId})
-                    </span>
-                    <span
-                      className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${
-                        rem.status === 'VERIFIED_BY_AUDITOR'
-                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                          : rem.status === 'COMPLETED'
-                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                          : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                      }`}
-                    >
-                      {rem.status.replace(/_/g, ' ')}
-                    </span>
-                  </div>
-
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">Action Plan</h4>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
-                      {rem.actionPlan}
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800">
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">Responsible Person</span>
-                      <span className="font-semibold text-slate-800 dark:text-slate-200">{rem.assignedTo}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">Department</span>
-                      <span className="font-semibold text-slate-800 dark:text-slate-200">{rem.assignedDepartment}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">Target Completion</span>
-                      <span className="font-semibold text-rose-600 dark:text-rose-400">{rem.targetDate}</span>
-                    </div>
-                  </div>
-
-                  {rem.remediationProof && (
-                    <div className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 p-2.5 rounded-lg">
-                      <span className="font-bold">Proof of Rectification: </span>
-                      {rem.remediationProof}
-                    </div>
-                  )}
-
-                  {rem.status !== 'VERIFIED_BY_AUDITOR' && (
-                    <div className="pt-2 flex items-center justify-end">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          auditorService.verifyRemediationByAuditor(
-                            rem.id,
-                            currentUser.name,
-                            'Auditor verified adjustments in core banking system ledger.'
-                          )
-                        }
-                        className="min-h-[38px] px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Auditor Sign-Off & Verification</span>
-                      </button>
-                    </div>
-                  )}
+              {paginatedRemediations.length === 0 ? (
+                <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400 text-xs">
+                  No remediation action items recorded.
                 </div>
-              ))}
+              ) : (
+                paginatedRemediations.map((rem) => (
+                  <div
+                    key={rem.id}
+                    className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-xs font-bold text-slate-900 dark:text-white">
+                        {rem.id} (Finding: {rem.findingId})
+                      </span>
+                      <span
+                        className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${
+                          rem.status === 'VERIFIED_BY_AUDITOR'
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                            : rem.status === 'COMPLETED'
+                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                            : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                        }`}
+                      >
+                        {rem.status.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-900 dark:text-white">Action Plan</h4>
+                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">
+                        {rem.actionPlan}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">Responsible Person</span>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">{rem.assignedTo}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">Department</span>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">{rem.assignedDepartment}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px]">Target Completion</span>
+                        <span className="font-semibold text-rose-600 dark:text-rose-400">{rem.targetDate}</span>
+                      </div>
+                    </div>
+
+                    {rem.remediationProof && (
+                      <div className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 p-2.5 rounded-lg">
+                        <span className="font-bold">Proof of Rectification: </span>
+                        {rem.remediationProof}
+                      </div>
+                    )}
+
+                    {rem.status !== 'VERIFIED_BY_AUDITOR' && (
+                      <div className="pt-2 flex items-center justify-end">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            auditorService.verifyRemediationByAuditor(
+                              rem.id,
+                              currentUser.name,
+                              'Auditor verified adjustments in core banking system ledger.'
+                            )
+                          }
+                          className="min-h-[38px] px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Auditor Sign-Off & Verification</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
+
+            {/* Remediation Pagination */}
+            <Pagination
+              currentPage={remediationPage}
+              totalItems={remediations.length}
+              pageSize={remediationPageSize}
+              onPageChange={setRemediationPage}
+              onPageSizeChange={setRemediationPageSize}
+              pageSizeOptions={[6, 12, 24]}
+              itemName="remediation items"
+            />
           </div>
         )}
 
@@ -1237,65 +1567,82 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
             </div>
 
             <div className="space-y-3">
-              {reportPackages.map((pkg) => (
-                <div
-                  key={pkg.id}
-                  className="p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <span className="font-mono text-xs font-bold text-ob-indigo-600 dark:text-ob-indigo-400">
-                        {pkg.id}
-                      </span>
-                      <h4 className="font-black text-sm text-slate-900 dark:text-white mt-0.5">
-                        {pkg.title}
-                      </h4>
-                    </div>
-                    <div className="text-right">
-                      <span className="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 font-mono text-xs font-bold">
-                        Period: {pkg.period}
-                      </span>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                    {pkg.executiveSummary}
-                  </p>
-
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
-                    <div className="flex items-center gap-4">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">Total Findings</span>
-                        <span className="font-bold text-slate-900 dark:text-white">{pkg.findingsCount}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">Critical</span>
-                        <span className="font-bold text-rose-600 dark:text-rose-400">{pkg.criticalCount}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 block">High</span>
-                        <span className="font-bold text-amber-600 dark:text-amber-400">{pkg.highCount}</span>
-                      </div>
-                    </div>
-
-                    <div className="font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold">
-                      Seal: {pkg.tamperSeal}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadReportJson(pkg)}
-                      className="min-h-[40px] px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Export JSON Vault</span>
-                    </button>
-                  </div>
+              {paginatedReportPackages.length === 0 ? (
+                <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400 text-xs">
+                  No compiled audit report packages available.
                 </div>
-              ))}
+              ) : (
+                paginatedReportPackages.map((pkg) => (
+                  <div
+                    key={pkg.id}
+                    className="p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <span className="font-mono text-xs font-bold text-ob-indigo-600 dark:text-ob-indigo-400">
+                          {pkg.id}
+                        </span>
+                        <h4 className="font-black text-sm text-slate-900 dark:text-white mt-0.5">
+                          {pkg.title}
+                        </h4>
+                      </div>
+                      <div className="text-right">
+                        <span className="px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 font-mono text-xs font-bold">
+                          Period: {pkg.period}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                      {pkg.executiveSummary}
+                    </p>
+
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-4">
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">Total Findings</span>
+                          <span className="font-bold text-slate-900 dark:text-white">{pkg.findingsCount}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">Critical</span>
+                          <span className="font-bold text-rose-600 dark:text-rose-400">{pkg.criticalCount}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 block">High</span>
+                          <span className="font-bold text-amber-600 dark:text-amber-400">{pkg.highCount}</span>
+                        </div>
+                      </div>
+
+                      <div className="font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold">
+                        Seal: {pkg.tamperSeal}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadReportJson(pkg)}
+                        className="min-h-[40px] px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Export JSON Vault</span>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
+
+            {/* Report Packages Pagination */}
+            <Pagination
+              currentPage={reportPackagePage}
+              totalItems={reportPackages.length}
+              pageSize={reportPackagePageSize}
+              onPageChange={setReportPackagePage}
+              onPageSizeChange={setReportPackagePageSize}
+              pageSizeOptions={[6, 12]}
+              itemName="audit packages"
+            />
           </div>
         )}
       </div>

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   History,
   Clock,
@@ -23,6 +23,7 @@ import {
   ReportVersionRecord,
 } from '../services/departmentService.ts';
 import { vibrate } from '../utils/haptics.ts';
+import { Pagination } from './Pagination.tsx';
 
 interface ReportVersionHistoryModalProps {
   isOpen: boolean;
@@ -44,17 +45,25 @@ export const ReportVersionHistoryModal: React.FC<ReportVersionHistoryModalProps>
   const [history, setHistory] = useState<ReportVersionRecord[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<ReportVersionRecord | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [historyPage, setHistoryPage] = useState<number>(1);
+  const [historyPageSize, setHistoryPageSize] = useState<number>(5);
 
   useEffect(() => {
     if (!isOpen || !reportKey) return;
     const records = departmentService.getReportVersionHistory(reportKey);
     setHistory(records);
+    setHistoryPage(1);
     if (records.length > 0) {
       setSelectedVersion(records[0]);
     } else {
       setSelectedVersion(null);
     }
   }, [isOpen, reportKey]);
+
+  const paginatedHistory = useMemo(() => {
+    const start = (historyPage - 1) * historyPageSize;
+    return history.slice(start, start + historyPageSize);
+  }, [history, historyPage, historyPageSize]);
 
   if (!isOpen) return null;
 
@@ -141,55 +150,71 @@ export const ReportVersionHistoryModal: React.FC<ReportVersionHistoryModalProps>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             {/* Version List Timeline */}
-            <div className="md:col-span-5 space-y-2 max-h-96 overflow-y-auto pr-1">
-              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
-                Version Log ({history.length} Revisions)
-              </span>
+            <div className="md:col-span-5 space-y-2 max-h-96 overflow-y-auto pr-1 flex flex-col justify-between">
+              <div className="space-y-2">
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
+                  Version Log ({history.length} Revisions)
+                </span>
 
-              {history.map((ver, idx) => {
-                const isSelected = selectedVersion?.versionId === ver.versionId;
-                const isLatest = idx === 0;
-                return (
-                  <button
-                    key={ver.versionId}
-                    type="button"
-                    onClick={() => setSelectedVersion(ver)}
-                    className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-ob-indigo-50/80 dark:bg-ob-indigo-950/60 border-ob-indigo-400 dark:border-ob-indigo-600 shadow-xs'
-                        : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-xs font-bold text-slate-900 dark:text-white">
-                          v{ver.versionNumber}
-                        </span>
-                        {isLatest && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500 text-white">
-                            Current
+                {paginatedHistory.map((ver) => {
+                  const isSelected = selectedVersion?.versionId === ver.versionId;
+                  const isLatest = history[0]?.versionId === ver.versionId;
+                  return (
+                    <button
+                      key={ver.versionId}
+                      type="button"
+                      onClick={() => setSelectedVersion(ver)}
+                      className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-ob-indigo-50/80 dark:bg-ob-indigo-950/60 border-ob-indigo-400 dark:border-ob-indigo-600 shadow-xs'
+                          : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-xs font-bold text-slate-900 dark:text-white">
+                            v{ver.versionNumber}
                           </span>
-                        )}
+                          {isLatest && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500 text-white">
+                              Current
+                            </span>
+                          )}
+                        </div>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${getChangeTypeBadge(ver.changeType)}`}>
+                          {ver.changeType}
+                        </span>
                       </div>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${getChangeTypeBadge(ver.changeType)}`}>
-                        {ver.changeType}
-                      </span>
-                    </div>
 
-                    <p className="text-[11px] text-slate-700 dark:text-slate-300 font-medium line-clamp-1">
-                      {ver.changeSummary}
-                    </p>
+                      <p className="text-[11px] text-slate-700 dark:text-slate-300 font-medium line-clamp-1">
+                        {ver.changeSummary}
+                      </p>
 
-                    <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
-                      <span className="flex items-center gap-1">
-                        <User className="w-2.5 h-2.5" />
-                        {ver.changedBy}
-                      </span>
-                      <span>{new Date(ver.timestamp).toLocaleString()}</span>
-                    </div>
-                  </button>
-                );
-              })}
+                      <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
+                        <span className="flex items-center gap-1">
+                          <User className="w-2.5 h-2.5" />
+                          {ver.changedBy}
+                        </span>
+                        <span>{new Date(ver.timestamp).toLocaleString()}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {history.length > historyPageSize && (
+                <div className="pt-2">
+                  <Pagination
+                    currentPage={historyPage}
+                    totalItems={history.length}
+                    pageSize={historyPageSize}
+                    onPageChange={setHistoryPage}
+                    onPageSizeChange={setHistoryPageSize}
+                    pageSizeOptions={[5, 10]}
+                    itemName="versions"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Version Snapshot Detail */}

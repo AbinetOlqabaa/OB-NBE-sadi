@@ -15,6 +15,7 @@ import {
   LogOut,
   Users,
   Menu,
+  ClipboardCheck,
 } from 'lucide-react';
 import { NbeHealthIndicator } from './NbeHealthIndicator.tsx';
 import { OfflineStatusIndicator } from './OfflineStatusIndicator.tsx';
@@ -147,6 +148,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Users className="w-3.5 h-3.5 text-ob-indigo-600 dark:text-ob-indigo-400 shrink-0" />
           ) : currentUser.role === 'CHECKER' ? (
             <Shield className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+          ) : currentUser.role === 'AUDITOR' ? (
+            <ClipboardCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
           ) : (
             <UserCheck className="w-3.5 h-3.5 text-ob-green-600 dark:text-ob-green-400 shrink-0" />
           )}
@@ -161,6 +164,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ? 'text-ob-indigo-700 dark:text-ob-indigo-300'
                   : currentUser.role === 'CHECKER'
                   ? 'text-amber-700 dark:text-amber-400'
+                  : currentUser.role === 'AUDITOR'
+                  ? 'text-purple-700 dark:text-purple-400'
                   : currentUser.role === 'NBE_OFFICER'
                   ? 'text-purple-700 dark:text-purple-400'
                   : 'text-ob-green-700 dark:text-ob-green-400'

@@ -4,6 +4,33 @@ All notable changes and engineering enhancements for the Oromia Bank NBE Regulat
 
 ---
 
+## [1.7.0-phase3-auditor-ux-and-pagination] - 2026-09-29
+
+### Added
+- **Design System Rule Injected into Master Prompts (`/.ai/02_MASTER_PROMPT.md`, `/.ai/MASTER_PROMPT.md`)**:
+  - Formal rule prohibiting page-specific overrides when solutions belong to shared design tokens, themes, components, or application shells.
+- **Account Migration Protocol (`/.ai/ACCOUNT_MIGRATION_PROTOCOL.md`)**:
+  - Permanent protocol guaranteeing self-contained project state reconstruction for subsequent AI Studio sessions.
+- **First-Class Auditor Workflow & Integration (`src/components/AuditorDashboard.tsx`)**:
+  - Full adherence to the shared OB design system (zero arbitrary custom color tokens).
+  - Complete integration of Auditor sub-views: Audit Summary KPIs, Audit Work Queue, Statutory Return Deep Inspection, Lifecycle Workflow Timeline, Audit Findings & Severity Tracker, Evidence Vault with SHA-256 seals, Confidential Working Papers, Remediation Action Tracker with Auditor verification, and Cryptographically Sealed Audit Package Generator.
+  - Added Auditor demo user (`usr_auditor_1`) to `DEMO_USERS` in `src/services/submissionService.ts` and Navbar role switcher for dual-control testing.
+- **Standalone Server & Client Pagination Architecture (`src/utils/paginationUtils.ts`)**:
+  - Contract: `{ items, total, page, page_size, total_pages, has_next, has_previous }`.
+  - Backend integration: Express routes (`server.ts`) and Django views (`backend/apps/audit/views.py`) supporting query parameters `page`, `page_size`, and `limit`.
+- **Responsive Standard Pagination UI (`src/components/Pagination.tsx`)**:
+  - Desktop: `[First] [Previous] [1] [2] [3] ... [Next] [Last]` with `Page X of Y` indicator and configurable page sizes.
+  - Mobile: Compact responsive representation `[Previous] Page X / Y [Next]` with $\ge 44$px touch targets.
+  - Automatic control hiding when all items fit on a single page.
+- **Application-Wide List Audit & Pagination Implementation**:
+  - Auditor Dashboard: Work Queue, Findings, Evidence Vault, Working Papers, Remediation Tracker, and Audit Packages.
+  - Version History: `ReportVersionHistoryModal.tsx` paginated with dynamic sizing.
+  - Audit Trail Ledger: `AuditTrailView.tsx` resets to Page 1 upon search query or filter modifications.
+- **Automated Test Suite for Pagination (`src/tests/pagination-suite.test.ts`)**:
+  - Unit tests covering 0 records, 1 record, exact 1 page, exact 2 pages, safe out-of-bounds page clamping, 1,250-record datasets, and dynamic page-size changes.
+
+---
+
 ## [1.6.0-phase2-responsive-viewport-and-application-shell] - 2026-09-29
 
 ### Added

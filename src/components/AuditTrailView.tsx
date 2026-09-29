@@ -464,13 +464,19 @@ export const AuditTrailView: React.FC = () => {
             type="text"
             placeholder="Search action, actor, entity ID..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             className="w-full pl-8 pr-2.5 py-1 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-ob-indigo-500 focus:bg-white dark:focus:bg-slate-800"
           />
           {searchQuery && (
             <button
               type="button"
-              onClick={() => setSearchQuery('')}
+              onClick={() => {
+                setSearchQuery('');
+                setPage(1);
+              }}
               className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600"
             >
               <X className="w-3 h-3" />
@@ -487,7 +493,10 @@ export const AuditTrailView: React.FC = () => {
             </span>
             <select
               value={actionFilter}
-              onChange={(e) => setActionFilter(e.target.value)}
+              onChange={(e) => {
+                setActionFilter(e.target.value);
+                setPage(1);
+              }}
               className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-slate-700 dark:text-slate-200 font-medium focus:outline-none focus:ring-1 focus:ring-ob-indigo-500 cursor-pointer max-w-[150px]"
             >
               <option value="ALL">All Actions ({logs.length})</option>
@@ -507,13 +516,17 @@ export const AuditTrailView: React.FC = () => {
             </span>
             <select
               value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
+              onChange={(e) => {
+                setRoleFilter(e.target.value);
+                setPage(1);
+              }}
               className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-slate-700 dark:text-slate-200 font-medium focus:outline-none focus:ring-1 focus:ring-ob-indigo-500 cursor-pointer"
             >
               <option value="ALL">All Roles</option>
               <option value="ADMIN">ADMIN</option>
               <option value="MAKER">MAKER</option>
               <option value="CHECKER">CHECKER</option>
+              <option value="AUDITOR">AUDITOR</option>
               <option value="SYSTEM">SYSTEM</option>
               <option value="NBE_OFFICER">NBE_OFFICER</option>
             </select>
@@ -528,7 +541,10 @@ export const AuditTrailView: React.FC = () => {
               </span>
               <select
                 value={entityFilter}
-                onChange={(e) => setEntityFilter(e.target.value)}
+                onChange={(e) => {
+                  setEntityFilter(e.target.value);
+                  setPage(1);
+                }}
                 className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-slate-700 dark:text-slate-200 font-medium focus:outline-none focus:ring-1 focus:ring-ob-indigo-500 cursor-pointer"
               >
                 {distinctEntityTypes.map((ent) => (
