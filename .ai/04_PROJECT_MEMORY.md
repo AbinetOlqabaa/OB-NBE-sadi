@@ -38,4 +38,4 @@
 - `npm run lint` (`tsc --noEmit`): Static type checking (0 errors).
 - `npm run build`: Production Vite build compilation (Passes).
 - `npx tsx src/tests/run-all-tests.ts`: Complete automated test suite covering Theme Mount Sync, Regulatory Core, Formula AST, Validation Engine, Security/RBAC, Department Isolation, Special Access, Maker/Checker Segregation, Workflow, NBE Simulator & Adapter, Phase 2 SSOT Ingestion, and GL Reconciliation.
-- See `.ai/COMPLETION_EVIDENCE.md` for executable gate-by-gate verification logs.
+- See `.ai/28_COMPLETION_EVIDENCE.md` for executable gate-by-gate verification logs.

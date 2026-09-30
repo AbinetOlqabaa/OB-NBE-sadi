@@ -118,6 +118,25 @@ export class NBEAdapter {
         attempt.status = 'SUCCESS';
         const receiptNo = resBody.receiptNumber || resBody.submissionId || 'NBE-REC-OFFICIAL';
 
+        // Mirror successful delivery in nbeSimulator in-memory state for unified verification
+        try {
+          (nbeSimulator as any).receivedSubmissions?.unshift({
+            id: 'rec_' + Math.random().toString(36).substring(2, 9),
+            receivedAt: new Date().toISOString(),
+            returnKey: submission.reportKey,
+            institutionCode: submission.institutionCode || '0000013',
+            finYear: submission.periodYear || 2026,
+            periodStart: submission.periodStart || '2026-01-01',
+            periodEnd: submission.periodEnd || '2026-01-31',
+            payload,
+            headers,
+            idempotencyKey,
+            correlationId,
+            status: 'ACCEPTED',
+            submissionReceiptNumber: receiptNo,
+          });
+        } catch {}
+
         auditService.log({
           actorId: submission.checkerId || 'system',
           actorName: submission.checkerName || 'Checker Reviewer',

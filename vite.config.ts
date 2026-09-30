@@ -9,6 +9,8 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(import.meta.dirname, '.'),
+        events: path.resolve(import.meta.dirname, 'src/utils/browserEventEmitter.ts'),
+        'node:events': path.resolve(import.meta.dirname, 'src/utils/browserEventEmitter.ts'),
       },
     },
     server: {

@@ -17,6 +17,9 @@ class NbeGatewayTests(TestCase):
         payload = {
             'ReturnKey': 'LOA_ADV_OUT_LA001',
             'InstCode': '0000013',
+            'FinYear': 2026,
+            'StartDate': '2026-01-01',
+            'EndDate': '2026-12-31',
             'Values': {'100_00001': '500000'}
         }
 

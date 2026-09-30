@@ -497,7 +497,7 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
                 <span>{tab.label}</span>
                 {tab.count !== null && (
                   <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                    className={`px-1.5 py-0.2 rounded-md font-mono font-bold text-[10px] ${
                       isActive
                         ? 'bg-white/20 text-white'
                         : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'

@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import fs from 'node:fs';
 import { Navbar } from '../components/Navbar.tsx';
 import { Sidebar } from '../components/Sidebar.tsx';
 import { BottomNavigation } from '../components/BottomNavigation.tsx';
@@ -197,6 +198,41 @@ export async function runResponsiveUiAndLayoutTests() {
   assert(Boolean(tabletLandscape), 'Tablet Landscape 1024x768 validated in test matrix');
   assert(true, 'Tablet 768px portrait: Header controls preserve breathing room with compact indicators, sidebar collapse togglable');
   assert(true, 'Tablet 1024px landscape: Content width (768px available) verified with horizontal table scroll protection');
+
+  // --- 13. PHASE 1: LOGIN & REGISTRATION TERMINOLOGY VERIFICATION ---
+  console.log('--- 13. Phase 1: Login & Registration Terminology & Auditor Role Verification ---');
+  const loginSrc = fs.readFileSync(new URL('../components/LoginPage.tsx', import.meta.url), 'utf-8');
+  const registerSrc = fs.readFileSync(new URL('../components/RegisterPage.tsx', import.meta.url), 'utf-8');
+
+  assert(
+    loginSrc.includes('Need access as a new Maker / Checker / Auditor?'),
+    'LoginPage contains exact prompt: "Need access as a new Maker / Checker / Auditor?"'
+  );
+  assert(
+    loginSrc.includes('Register for Maker / Checker / Auditor Account'),
+    'LoginPage contains exact button label: "Register for Maker / Checker / Auditor Account"'
+  );
+  assert(
+    registerSrc.includes('Request Maker / Checker / Auditor Credentials'),
+    'RegisterPage contains exact title: "Request Maker / Checker / Auditor Credentials"'
+  );
+  assert(
+    registerSrc.includes('<option value="AUDITOR">'),
+    'RegisterPage provides AUDITOR as a registration role in the regulatory segregation dropdown'
+  );
+  assert(
+    !loginSrc.includes('Need access as a new Maker or Checker?'),
+    'Obsolete login registration prompt ("Need access as a new Maker or Checker?") is completely eliminated'
+  );
+  assert(
+    !loginSrc.includes('Register for Maker / Checker Account'),
+    'Obsolete registration button ("Register for Maker / Checker Account") is completely eliminated'
+  );
+  assert(
+    !registerSrc.includes('Request Maker / Checker Credentials</h1>') &&
+    !registerSrc.includes('Request Maker / Checker Credentials\n'),
+    'Obsolete registration title ("Request Maker / Checker Credentials") is completely eliminated'
+  );
 
   console.log('✓ All Responsive UI/UX, Multi-Device Layout, and Design Constitution tests passed successfully.');
 }

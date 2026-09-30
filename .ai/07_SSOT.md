@@ -17,11 +17,15 @@
 ---
 
 ## 2. Core SSOT Entities & Registries
-- **Department SSOT**: `src/data/organizationHierarchy.ts` (`OROMIA_BANK_DEPARTMENTS`)
-- **Report Definitions SSOT**: `src/data/report-registry.ts` (`NBE_REPORTS`)
-- **User & RBAC SSOT**: `src/services/userService.ts`
-- **Workflow State Machine SSOT**: `src/services/workflowEngine.ts`
+- **Dynamic Configuration & SSOT Engine**: `src/services/configService.ts` & `backend/apps/*` (Documented in `.ai/29_CONFIGURATION_SSOT_AND_METADATA_ARCHITECTURE.md`)
+- **Department Hierarchy SSOT**: `configService.getDepartments()` & `/api/config/departments` (supports divisions, parent-child, levels, and paths)
+- **Report Definitions & Metadata SSOT**: `configService.getReports()` & `/api/config/reports` (24 returns, fields, data types, columns, formulas, validations)
+- **Report Versioning SSOT**: `configService.getReportVersions()` & `/api/config/reports/:key/versions` (immutable version snapshots, historical preservation)
+- **Relationship Assignments SSOT**: `DepartmentReportAssignment` and `UserReportAssignment` (explicit M:N ownership and duties)
+- **User & RBAC SSOT**: `src/services/userService.ts` & `/api/config/roles`
+- **Workflow State Machine SSOT**: `src/services/workflowEngine.ts` & `/api/config/workflows`
 - **Data Integration SSOT**: `src/services/ssotRegistry.ts`
-- **Audit Logging SSOT**: `src/services/auditService.ts`
+- **Audit Logging & Governance SSOT**: `src/services/auditService.ts` & `/api/config/changes`
+- **Real-Time Notification Stream**: `GET /api/config/events` (SSE update stream)
 
 The backend is authoritative for identity, roles, permissions, department access, report ownership, workflow transitions, audit records and NBE submission authorization. The frontend is a presentation/client layer and must never be trusted to enforce security-sensitive rules.

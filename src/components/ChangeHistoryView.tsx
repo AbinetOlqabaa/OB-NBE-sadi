@@ -283,7 +283,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
   return (
     <div className="space-y-4">
       {/* Header & Main Controls Card */}
-      <div className="bg-white dark:bg-[#121428] border border-slate-200 dark:border-[#22284D] rounded-2xl p-4 shadow-xs space-y-3.5">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3.5">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-ob-indigo-500/10 dark:bg-ob-indigo-500/20 text-ob-indigo-600 dark:text-ob-indigo-400 border border-ob-indigo-500/30 flex items-center justify-center shrink-0">
@@ -294,10 +294,10 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                   Regulatory Governance Audit Trail & Compliance Log
                 </h3>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
                   NBE Directive BSD/03/2020
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-[#1E234B] text-slate-600 dark:text-slate-300">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                   {filteredLogs.length} Events ({logs.length} Total)
                 </span>
               </div>
@@ -346,7 +346,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                   setSearchQuery(e.target.value);
                   setPage(1);
                 }}
-                className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-[#161933] border border-slate-200 dark:border-[#262D55] rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-ob-indigo-500 transition-all"
+                className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-ob-indigo-500 transition-all"
               />
               {searchQuery && (
                 <button
@@ -387,7 +387,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                   setDepartmentFilter(e.target.value);
                   setPage(1);
                 }}
-                className="w-full py-1.5 px-2 bg-slate-50 dark:bg-[#161933] border border-slate-200 dark:border-[#262D55] rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:border-ob-indigo-500"
+                className="w-full py-1.5 px-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:border-ob-indigo-500"
               >
                 <option value="ALL">All Departments</option>
                 {departments.map((dept) => (
@@ -409,7 +409,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                   setReportTypeFilter(e.target.value);
                   setPage(1);
                 }}
-                className="w-full py-1.5 px-2 bg-slate-50 dark:bg-[#161933] border border-slate-200 dark:border-[#262D55] rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:border-ob-indigo-500"
+                className="w-full py-1.5 px-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:border-ob-indigo-500"
               >
                 <option value="ALL">All Report Types</option>
                 {reports.map((rep) => (
@@ -431,7 +431,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                   setUserIdFilter(e.target.value);
                   setPage(1);
                 }}
-                className="w-full py-1.5 px-2 bg-slate-50 dark:bg-[#161933] border border-slate-200 dark:border-[#262D55] rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:border-ob-indigo-500"
+                className="w-full py-1.5 px-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:border-ob-indigo-500"
               >
                 <option value="ALL">All Officers</option>
                 {availableUsers.map((user) => (
@@ -453,7 +453,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                   setEntityFilter(e.target.value);
                   setPage(1);
                 }}
-                className="w-full py-1.5 px-2 bg-slate-50 dark:bg-[#161933] border border-slate-200 dark:border-[#262D55] rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:border-ob-indigo-500"
+                className="w-full py-1.5 px-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:border-ob-indigo-500"
               >
                 <option value="ALL">All Categories</option>
                 <option value="DEPARTMENT">Departments</option>
@@ -473,7 +473,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                   setActionFilter(e.target.value);
                   setPage(1);
                 }}
-                className="w-full py-1.5 px-2 bg-slate-50 dark:bg-[#161933] border border-slate-200 dark:border-[#262D55] rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:border-ob-indigo-500"
+                className="w-full py-1.5 px-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:border-ob-indigo-500"
               >
                 <option value="ALL">All Actions</option>
                 <option value="CREATE">Created</option>
@@ -497,7 +497,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                   setDateRangeFilter(e.target.value as any);
                   setPage(1);
                 }}
-                className="w-full py-1.5 px-2 bg-slate-50 dark:bg-[#161933] border border-slate-200 dark:border-[#262D55] rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:border-ob-indigo-500"
+                className="w-full py-1.5 px-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-xs focus:outline-none focus:border-ob-indigo-500"
               >
                 <option value="ALL">All Time</option>
                 <option value="TODAY">Today Only</option>
@@ -575,7 +575,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
       </div>
 
       {/* Logs Timeline List */}
-      <div className="bg-white dark:bg-[#121428] border border-slate-200 dark:border-[#22284D] rounded-2xl shadow-xs overflow-hidden divide-y divide-slate-100 dark:divide-[#1C203F]">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
         {filteredLogs.length === 0 ? (
           <div className="p-12 text-center text-xs text-slate-400 space-y-2">
             <Clock className="w-9 h-9 mx-auto text-slate-300 dark:text-slate-600" />
@@ -601,11 +601,11 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
             return (
               <div
                 key={log.id}
-                className="p-3.5 hover:bg-slate-50/70 dark:hover:bg-[#161933]/50 transition-colors text-xs space-y-2"
+                className="p-3.5 hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors text-xs space-y-2"
               >
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="flex items-start gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-[#1B2042] border border-slate-200 dark:border-[#2B3369] flex items-center justify-center shrink-0 mt-0.5">
+                    <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0 mt-0.5">
                       {getEntityIcon(log.entityType)}
                     </div>
 
@@ -617,7 +617,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                         <span className={`px-2 py-0.2 rounded text-[10px] font-bold border ${getActionBadge(log.action)}`}>
                           {log.action}
                         </span>
-                        <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-slate-100 dark:bg-[#1E234B] text-slate-500">
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
                           {log.entityType}
                         </span>
                         <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold text-ob-indigo-600 dark:text-ob-indigo-400 bg-ob-indigo-50 dark:bg-ob-indigo-950/60 border border-ob-indigo-200 dark:border-ob-indigo-800">
@@ -637,7 +637,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                     <div className="flex items-center gap-1 text-slate-600 dark:text-slate-300 font-medium">
                       <User className="w-3 h-3 text-slate-400" />
                       <span>{log.actor}</span>
-                      <span className="text-[9px] px-1 rounded bg-slate-100 dark:bg-[#1E234B] text-slate-400 font-normal">
+                      <span className="text-[9px] px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-400 font-normal">
                         {log.actorRole}
                       </span>
                     </div>
@@ -651,7 +651,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                       <button
                         type="button"
                         onClick={() => toggleExpand(log.id)}
-                        className="p-1 hover:bg-slate-200 dark:hover:bg-[#1E234B] rounded-md transition-colors text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer flex items-center gap-0.5"
+                        className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md transition-colors text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer flex items-center gap-0.5"
                       >
                         <span className="text-[10px] font-bold">{isExpanded ? 'Hide Diff' : 'View Diff'}</span>
                         <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
@@ -664,7 +664,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                 {isExpanded && (
                   <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2 animate-in fade-in">
                     {log.diff && log.diff.length > 0 && (
-                      <div className="bg-slate-50 dark:bg-[#101226] border border-slate-200 dark:border-[#22284D] rounded-xl p-2.5 space-y-1.5">
+                      <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 space-y-1.5">
                         <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wide block">
                           Field-Level Modification Diff:
                         </span>
@@ -672,7 +672,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                           {log.diff.map((d, i) => (
                             <div
                               key={i}
-                              className="text-[11px] font-mono p-1.5 rounded bg-white dark:bg-[#14162B] border border-slate-200 dark:border-[#262D55] flex items-center justify-between gap-2 flex-wrap"
+                              className="text-[11px] font-mono p-1.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2 flex-wrap"
                             >
                               <span className="font-bold text-slate-800 dark:text-slate-200">
                                 {d.field}:
@@ -699,7 +699,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
         )}
 
         {/* Pagination */}
-        <div className="p-3 bg-slate-50/50 dark:bg-[#121428]">
+        <div className="p-3 bg-slate-50/50 dark:bg-slate-900">
           <Pagination
             currentPage={page}
             totalItems={filteredLogs.length}
@@ -718,7 +718,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
       {/* ========================================================================= */}
       {isExportModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
-          <div className="bg-white dark:bg-[#161933] rounded-2xl max-w-lg w-full border border-slate-200 dark:border-[#262D55] shadow-2xl p-5 space-y-4 max-h-[92vh] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4 max-h-[92vh] overflow-y-auto">
             {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2.5">
@@ -744,7 +744,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
             </div>
 
             {/* Scope Summary */}
-            <div className="bg-slate-50 dark:bg-[#101226] border border-slate-200 dark:border-[#262D55] rounded-xl p-3 text-xs space-y-1">
+            <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs space-y-1">
               <div className="flex items-center justify-between font-bold text-slate-900 dark:text-white">
                 <span>Selected Export Scope:</span>
                 <span className="text-ob-indigo-600 dark:text-ob-indigo-400">
@@ -767,7 +767,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                   className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
                     exportFormat === 'PDF_SIGNED'
                       ? 'bg-ob-indigo-50/70 dark:bg-ob-indigo-950/50 border-ob-indigo-500 ring-1 ring-ob-indigo-500'
-                      : 'bg-white dark:bg-[#13162C] border-slate-200 dark:border-[#262D55] hover:border-slate-300'
+                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300'
                   }`}
                 >
                   <input
@@ -794,7 +794,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                   className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
                     exportFormat === 'CSV_ENCRYPTED'
                       ? 'bg-ob-indigo-50/70 dark:bg-ob-indigo-950/50 border-ob-indigo-500 ring-1 ring-ob-indigo-500'
-                      : 'bg-white dark:bg-[#13162C] border-slate-200 dark:border-[#262D55] hover:border-slate-300'
+                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300'
                   }`}
                 >
                   <input
@@ -821,7 +821,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                   className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
                     exportFormat === 'CSV_STANDARD'
                       ? 'bg-ob-indigo-50/70 dark:bg-ob-indigo-950/50 border-ob-indigo-500 ring-1 ring-ob-indigo-500'
-                      : 'bg-white dark:bg-[#13162C] border-slate-200 dark:border-[#262D55] hover:border-slate-300'
+                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300'
                   }`}
                 >
                   <input
@@ -856,7 +856,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                   value={officerName}
                   onChange={(e) => setOfficerName(e.target.value)}
                   placeholder="Officer full legal name"
-                  className="w-full text-xs p-2.5 bg-slate-50 dark:bg-[#101226] border border-slate-200 dark:border-[#2B3369] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-ob-indigo-500"
+                  className="w-full text-xs p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-ob-indigo-500"
                 />
               </div>
 
@@ -869,7 +869,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                   value={officerRole}
                   onChange={(e) => setOfficerRole(e.target.value)}
                   placeholder="e.g. Senior Compliance Auditor / Risk Manager"
-                  className="w-full text-xs p-2.5 bg-slate-50 dark:bg-[#101226] border border-slate-200 dark:border-[#2B3369] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-ob-indigo-500"
+                  className="w-full text-xs p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-ob-indigo-500"
                 />
               </div>
 
@@ -882,7 +882,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
                   value={complianceNotes}
                   onChange={(e) => setComplianceNotes(e.target.value)}
                   placeholder="e.g. Quarterly NBE On-Site Examination Submission"
-                  className="w-full text-xs p-2.5 bg-slate-50 dark:bg-[#101226] border border-slate-200 dark:border-[#2B3369] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-ob-indigo-500"
+                  className="w-full text-xs p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-ob-indigo-500"
                 />
               </div>
             </div>

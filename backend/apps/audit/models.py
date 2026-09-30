@@ -187,3 +187,46 @@ class AuditReportPackage(models.Model):
         ordering = ['-created_at']
         verbose_name = 'Audit Report Package'
         verbose_name_plural = 'Audit Report Packages'
+
+
+class ConfigurationChange(models.Model):
+    """
+    Dedicated audit record of changes to configuration Single Source of Truth
+    (Departments, Reports, Versions, Roles, Permissions, Assignments, Workflows).
+    Guarantees non-repudiation and temporal traceability for compliance officers.
+    """
+    ENTITY_TYPE_CHOICES = [
+        ('DEPARTMENT', 'Department Hierarchy & Identity'),
+        ('REPORT_DEFINITION', 'Regulatory Report Definition'),
+        ('REPORT_VERSION', 'Report Version & Schema Snapshot'),
+        ('ROLE', 'System Role & Privilege Set'),
+        ('PERMISSION', 'Granular Permission'),
+        ('ASSIGNMENT', 'Department or User Report Assignment'),
+        ('SPECIAL_ACCESS', 'Special Access Grant Delegation'),
+        ('WORKFLOW', 'Workflow Definition or Step'),
+    ]
+
+    id = models.CharField(max_length=64, primary_key=True, default=uuid.uuid4)
+    timestamp = models.DateTimeField(default=timezone.now, db_index=True)
+    actor_id = models.CharField(max_length=64)
+    actor_name = models.CharField(max_length=255)
+    actor_role = models.CharField(max_length=32)
+    entity_type = models.CharField(max_length=32, choices=ENTITY_TYPE_CHOICES, db_index=True)
+    entity_id = models.CharField(max_length=128, db_index=True)
+    entity_name = models.CharField(max_length=255, blank=True)
+    action = models.CharField(max_length=64, db_index=True)  # 'CREATE', 'UPDATE', 'DELETE', 'VERSION_BUMP', 'ASSIGN', 'REVOKE'
+    summary = models.CharField(max_length=512)
+    details = models.TextField(blank=True)
+    diff = models.JSONField(default=list, blank=True)
+    old_state = models.JSONField(null=True, blank=True)
+    new_state = models.JSONField(null=True, blank=True)
+    reason = models.TextField(blank=True)
+    correlation_id = models.CharField(max_length=128, blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = 'Configuration Change Audit'
+        verbose_name_plural = 'Configuration Change Audits'
+
+    def __str__(self):
+        return f"[{self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}] {self.action} on {self.entity_type} {self.entity_id} by {self.actor_name}"

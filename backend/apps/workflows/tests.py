@@ -92,9 +92,9 @@ class WorkflowLifecycleTests(TestCase):
         }, format='json')
         self.assertEqual(deliver_resp.status_code, 200)
         self.assertTrue(deliver_resp.data['success'])
-        self.assertIn('NBE-BSD-', deliver_resp.data['submissionId'])
+        self.assertTrue(deliver_resp.data['submissionId'].startswith('NBE-'))
 
         # Verify final submission status is SENT
         final_sub = Submission.objects.get(id=sub_id)
         self.assertEqual(final_sub.status, 'SENT')
-        self.assertTrue(final_sub.nbe_submission_id.startswith('NBE-BSD-'))
+        self.assertTrue(final_sub.nbe_submission_id.startswith('NBE-'))

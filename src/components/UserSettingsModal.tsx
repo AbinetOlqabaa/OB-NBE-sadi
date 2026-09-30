@@ -175,7 +175,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex border-b border-slate-200 dark:border-[#202752] bg-slate-100/60 dark:bg-[#101228] px-5 pt-2 gap-2">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-100/60 dark:bg-slate-900 px-5 pt-2 gap-2">
           <button
             type="button"
             onClick={() => {
@@ -184,7 +184,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
             }}
             className={`py-2 px-3 text-xs font-bold rounded-t-xl border-b-2 transition-all flex items-center gap-1.5 cursor-pointer touch-press ${
               activeTab === 'SETTINGS'
-                ? 'border-ob-indigo-600 text-ob-indigo-600 dark:text-ob-indigo-400 bg-white dark:bg-[#12152E]'
+                ? 'border-ob-indigo-600 text-ob-indigo-600 dark:text-ob-indigo-400 bg-white dark:bg-slate-900'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
@@ -200,7 +200,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
             }}
             className={`py-2 px-3 text-xs font-bold rounded-t-xl border-b-2 transition-all flex items-center gap-1.5 cursor-pointer touch-press relative ${
               activeTab === 'HISTORY'
-                ? 'border-ob-indigo-600 text-ob-indigo-600 dark:text-ob-indigo-400 bg-white dark:bg-[#12152E]'
+                ? 'border-ob-indigo-600 text-ob-indigo-600 dark:text-ob-indigo-400 bg-white dark:bg-slate-900'
                 : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
@@ -216,7 +216,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
         {activeTab === 'SETTINGS' && (
           <div className="p-5 overflow-y-auto space-y-4">
             {/* Biometric Toggle Switch Card */}
-            <div className="bg-slate-50 dark:bg-[#171B3B] border border-slate-200 dark:border-[#283163] rounded-2xl p-4 space-y-3">
+            <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-500/30">
@@ -251,7 +251,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
                 </button>
               </div>
 
-              <div className="p-3 bg-white dark:bg-[#11132B] rounded-xl border border-slate-200 dark:border-[#222852] text-xs space-y-2">
+              <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 text-xs space-y-2">
                 <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
                   <span>Current Setting:</span>
                   <span className="font-bold flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
@@ -279,7 +279,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
 
             {/* Hardware Telemetry Summary */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-[#283163] bg-slate-50 dark:bg-[#171B3B] space-y-1.5">
+              <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 dark:text-white">
                     <Fingerprint className="w-4 h-4 text-emerald-500" />
@@ -294,7 +294,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
                 </p>
               </div>
 
-              <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-[#283163] bg-slate-50 dark:bg-[#171B3B] space-y-1.5">
+              <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 dark:text-white">
                     <ScanFace className="w-4 h-4 text-teal-500" />
@@ -311,7 +311,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
             </div>
 
             {/* Quick Test Simulation Tool */}
-            <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-[#283163] bg-slate-50/60 dark:bg-[#151833] space-y-2">
+            <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800 space-y-2">
               <span className="text-xs font-bold text-slate-900 dark:text-white block">
                 Audit Log Self-Test & Simulation:
               </span>
@@ -349,7 +349,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
         {activeTab === 'HISTORY' && (
           <div className="p-4 sm:p-5 overflow-y-auto space-y-3.5 flex-1 flex flex-col">
             {/* Filter Controls Bar */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-slate-50 dark:bg-[#161A36] p-2.5 rounded-2xl border border-slate-200 dark:border-[#262D59]">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-slate-50 dark:bg-slate-800 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-700">
               <div className="flex items-center gap-2 flex-1">
                 <div className="relative flex-1">
                   <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -358,7 +358,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search device ID, timestamp, status..."
-                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-[#101228] border border-slate-200 dark:border-[#262D55] rounded-xl text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-ob-indigo-500"
+                    className="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-ob-indigo-500"
                   />
                 </div>
 
@@ -366,7 +366,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
                 <select
                   value={methodFilter}
                   onChange={(e) => setMethodFilter(e.target.value)}
-                  className="text-xs py-1.5 px-2.5 bg-white dark:bg-[#101228] border border-slate-200 dark:border-[#262D55] rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none"
+                  className="text-xs py-1.5 px-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none"
                 >
                   <option value="ALL">All Methods</option>
                   <option value="FINGERPRINT">Fingerprint</option>
@@ -378,7 +378,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="text-xs py-1.5 px-2.5 bg-white dark:bg-[#101228] border border-slate-200 dark:border-[#262D55] rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none"
+                  className="text-xs py-1.5 px-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-200 focus:outline-none"
                 >
                   <option value="ALL">All Status</option>
                   <option value="SUCCESS">Success Only</option>
@@ -412,7 +412,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
                   return (
                     <div
                       key={rec.id}
-                      className="p-3 rounded-2xl border border-slate-200 dark:border-[#262D59] bg-white dark:bg-[#151833] hover:border-ob-indigo-400/50 transition-colors space-y-2"
+                      className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-ob-indigo-400/50 transition-colors space-y-2"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2">
@@ -473,7 +473,7 @@ export const UserSettingsModal: React.FC<UserSettingsModalProps> = ({
                       </div>
 
                       {/* Hardware Device ID & Failure Details */}
-                      <div className="pt-1.5 border-t border-slate-100 dark:border-[#21274F] flex flex-wrap items-center justify-between gap-1 text-[10px]">
+                      <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-1 text-[10px]">
                         <div className="flex items-center gap-1 text-slate-500 dark:text-slate-400">
                           <Smartphone className="w-3 h-3 text-slate-400" />
                           <span className="font-mono text-ob-indigo-600 dark:text-ob-indigo-300 bg-slate-100 dark:bg-black/30 px-1.5 py-0.5 rounded">

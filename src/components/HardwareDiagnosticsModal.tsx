@@ -133,7 +133,7 @@ export const HardwareDiagnosticsModal: React.FC<HardwareDiagnosticsModalProps> =
         </div>
 
         {/* Overview Banner */}
-        <div className="p-3 bg-slate-50 dark:bg-[#181C3B] rounded-2xl border border-slate-200 dark:border-[#2B3369] space-y-1.5 text-xs">
+        <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-1.5 text-xs">
           <div className="flex items-center justify-between">
             <span className="font-semibold text-slate-700 dark:text-slate-300">
               Active Sign-In Mode for this Device:
@@ -152,7 +152,7 @@ export const HardwareDiagnosticsModal: React.FC<HardwareDiagnosticsModalProps> =
         </div>
 
         {/* Section 1: Fingerprint Scanner */}
-        <div className="p-3.5 bg-slate-50 dark:bg-[#161A36] border border-slate-200 dark:border-[#262D55] rounded-2xl space-y-3">
+        <div className="p-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
@@ -185,7 +185,7 @@ export const HardwareDiagnosticsModal: React.FC<HardwareDiagnosticsModalProps> =
             </span>
           </div>
 
-          <div className="bg-white dark:bg-[#101226] p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 text-[11px] space-y-1">
+          <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 text-[11px] space-y-1">
             <div className="text-slate-700 dark:text-slate-300">
               <span className="font-semibold text-slate-500 dark:text-slate-400">Status: </span>
               {fingerprintStatus.label}
@@ -268,7 +268,7 @@ export const HardwareDiagnosticsModal: React.FC<HardwareDiagnosticsModalProps> =
         </div>
 
         {/* Section 2: Webcam / Camera */}
-        <div className="p-3.5 bg-slate-50 dark:bg-[#161A36] border border-slate-200 dark:border-[#262D55] rounded-2xl space-y-3">
+        <div className="p-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center">
@@ -301,7 +301,7 @@ export const HardwareDiagnosticsModal: React.FC<HardwareDiagnosticsModalProps> =
             </span>
           </div>
 
-          <div className="bg-white dark:bg-[#101226] p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 text-[11px] space-y-1">
+          <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 text-[11px] space-y-1">
             <div className="text-slate-700 dark:text-slate-300">
               <span className="font-semibold text-slate-500 dark:text-slate-400">Status: </span>
               {cameraStatus.label}

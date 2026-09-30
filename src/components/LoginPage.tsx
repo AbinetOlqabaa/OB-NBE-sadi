@@ -661,15 +661,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           {/* Registration Link */}
           <div className="pt-3 border-t border-slate-200 dark:border-slate-800 text-center space-y-1">
             <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
-              Need access as a new Maker or Checker?
+              Need access as a new Maker / Checker / Auditor?
             </p>
             <button
               type="button"
               onClick={onNavigateRegister}
-              className="min-h-[40px] inline-flex items-center justify-center gap-1.5 text-xs font-bold text-ob-indigo-700 dark:text-ob-green-400 hover:text-ob-indigo-800 dark:hover:text-ob-green-300 transition-colors cursor-pointer touch-press px-2 py-1"
+              className="min-h-[44px] inline-flex items-center justify-center gap-1.5 text-xs font-bold text-ob-indigo-700 dark:text-ob-green-400 hover:text-ob-indigo-800 dark:hover:text-ob-green-300 transition-colors cursor-pointer touch-press px-2 py-1"
             >
               <UserPlus className="w-4 h-4" />
-              <span>Register for Maker / Checker Account</span>
+              <span>Register for Maker / Checker / Auditor Account</span>
             </button>
           </div>
 

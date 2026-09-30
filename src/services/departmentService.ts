@@ -60,8 +60,14 @@ export interface DepartmentInput {
   shortCode: string;
   division: string;
   description?: string;
+  parentId?: string | null;
+  hierarchyLevel?: number;
+  path?: string;
+  status?: 'ACTIVE' | 'INACTIVE' | 'RESTRUCTURED' | 'PLANNED';
   primaryResponsibilities?: string[];
   reportKeys?: string[];
+  effectiveFrom?: string;
+  effectiveTo?: string | null;
 }
 
 export interface DepartmentUpdateInput {
@@ -69,8 +75,14 @@ export interface DepartmentUpdateInput {
   shortCode?: string;
   division?: string;
   description?: string;
+  parentId?: string | null;
+  hierarchyLevel?: number;
+  path?: string;
+  status?: 'ACTIVE' | 'INACTIVE' | 'RESTRUCTURED' | 'PLANNED';
   primaryResponsibilities?: string[];
   reportKeys?: string[];
+  effectiveFrom?: string;
+  effectiveTo?: string | null;
 }
 
 export interface ReportTypeInput {
@@ -634,6 +646,130 @@ class DepartmentServiceClass {
     return this.updateDepartment(dept.id, { name: newName }, adminName);
   }
 
+  private submissionProvider?: { getAll: () => Array<{ department?: string; departmentId?: string }> };
+  private userProvider?: { getAll: () => Array<{ department?: string; id?: string }> };
+
+  public setSubmissionProvider(provider: { getAll: () => Array<{ department?: string; departmentId?: string }> }): void {
+    this.submissionProvider = provider;
+  }
+
+  public setUserProvider(provider: { getAll: () => Array<{ department?: string; id?: string }> }): void {
+    this.userProvider = provider;
+  }
+
+  /**
+   * Pre-flight safety check determining whether a department can be destructively removed,
+   * or whether historical reporting references prohibit deletion under NBE compliance rules.
+   */
+  public canDeleteDepartment(id: string): {
+    canDelete: boolean;
+    reason?: string;
+    submissionsCount?: number;
+    usersCount?: number;
+    department?: DepartmentDefinition;
+  } {
+    const dept = this.departments.find((d) => d.id === id || d.name.toLowerCase() === id.toLowerCase());
+    if (!dept) {
+      return { canDelete: false, reason: 'Department not found.' };
+    }
+    if (this.departments.length <= 1) {
+      return { canDelete: false, reason: 'Cannot remove the last remaining department in the institution.' };
+    }
+
+    // Historical Safety Check: check submissions
+    if (this.submissionProvider && typeof this.submissionProvider.getAll === 'function') {
+      const subs = this.submissionProvider.getAll().filter(
+        (s: any) =>
+          (s.department && s.department.toLowerCase() === dept.name.toLowerCase()) ||
+          s.departmentId === dept.id
+      );
+      if (subs.length > 0) {
+        return {
+          canDelete: false,
+          submissionsCount: subs.length,
+          department: dept,
+          reason: `Historical safety violation: Department "${dept.name}" is referenced in ${subs.length} historical statutory report submission(s). NBE regulatory retention and non-repudiation directives prohibit destructive deletion. Please set status to 'INACTIVE' or specify an effective-to retirement date instead.`,
+        };
+      }
+    }
+
+    // Check assigned users
+    if (this.userProvider && typeof this.userProvider.getAll === 'function') {
+      const users = this.userProvider.getAll().filter(
+        (u: any) =>
+          u.department &&
+          (u.department.toLowerCase() === dept.name.toLowerCase() || u.department === dept.id)
+      );
+      if (users.length > 0) {
+        return {
+          canDelete: false,
+          usersCount: users.length,
+          department: dept,
+          reason: `Department "${dept.name}" has ${users.length} active assigned user account(s). Please reassign officers before deleting.`,
+        };
+      }
+    }
+
+    return { canDelete: true, department: dept };
+  }
+
+  /**
+   * Sets department operational lifecycle status (ACTIVE, INACTIVE, RESTRUCTURED, PLANNED)
+   */
+  public setDepartmentStatus(
+    id: string,
+    status: 'ACTIVE' | 'INACTIVE' | 'RESTRUCTURED' | 'PLANNED',
+    adminName = 'Administrator',
+    effectiveTo?: string | null
+  ): { success: boolean; department?: DepartmentDefinition; message?: string } {
+    const dept = this.departments.find((d) => d.id === id);
+    if (!dept) {
+      return { success: false, message: 'Department not found.' };
+    }
+    const oldStatus = dept.status || 'ACTIVE';
+    dept.status = status;
+    if (effectiveTo !== undefined) {
+      dept.effectiveTo = effectiveTo;
+    } else if (status === 'INACTIVE' && !dept.effectiveTo) {
+      dept.effectiveTo = new Date().toISOString();
+    } else if (status === 'ACTIVE') {
+      dept.effectiveTo = null;
+    }
+    dept.updatedAt = new Date().toISOString();
+
+    this.saveToStorage();
+
+    this.logChange({
+      actor: adminName,
+      actorRole: 'ADMIN',
+      entityType: 'DEPARTMENT',
+      entityId: dept.id,
+      entityName: dept.name,
+      action: 'UPDATE',
+      summary: `Changed department "${dept.name}" status from ${oldStatus} to ${status}`,
+      oldState: { status: oldStatus },
+      newState: { status, effectiveTo: dept.effectiveTo },
+    });
+
+    auditService.log({
+      actorId: 'usr_admin',
+      actorName: adminName,
+      actorRole: 'ADMIN',
+      action: 'DEPARTMENT_STATUS_CHANGE',
+      entityType: 'DEPARTMENT',
+      entityId: dept.id,
+      correlationId: `corr_dept_status_${dept.id}`,
+      details: `Changed department "${dept.name}" status from ${oldStatus} to ${status}${dept.effectiveTo ? ` (Effective To: ${dept.effectiveTo})` : ''}`,
+      newState: dept,
+    });
+
+    return {
+      success: true,
+      department: dept,
+      message: `Department "${dept.name}" status updated to ${status}.`,
+    };
+  }
+
   /**
    * Removes a department from the bank structure gently and gracefully.
    * If officers currently belong to it, reassigns them to the fallback department.
@@ -648,6 +784,13 @@ class DepartmentServiceClass {
     fallbackDepartment?: string;
     message?: string;
   } {
+    const safetyCheck = this.canDeleteDepartment(id);
+    if (!safetyCheck.canDelete) {
+      return {
+        success: false,
+        message: safetyCheck.reason,
+      };
+    }
     if (this.departments.length <= 1) {
       return { success: false, message: 'Cannot remove the last remaining department in the institution.' };
     }

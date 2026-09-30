@@ -256,7 +256,7 @@ export const BiometricRecoveryModal: React.FC<BiometricRecoveryModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleSelectRecoveryMethod('FINGERPRINT')}
-                  className="p-3 rounded-2xl border border-slate-200 dark:border-[#262D55] bg-slate-50 dark:bg-[#161936] hover:border-emerald-500/50 hover:bg-emerald-500/5 text-left transition-all flex items-center gap-3 cursor-pointer touch-press"
+                  className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-emerald-500/50 hover:bg-emerald-500/5 text-left transition-all flex items-center gap-3 cursor-pointer touch-press"
                 >
                   <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
                     <Fingerprint className="w-5 h-5" />
@@ -281,7 +281,7 @@ export const BiometricRecoveryModal: React.FC<BiometricRecoveryModalProps> = ({
                       handleSelectRecoveryMethod('FACE');
                     }
                   }}
-                  className="p-3 rounded-2xl border border-slate-200 dark:border-[#262D55] bg-slate-50 dark:bg-[#161936] hover:border-teal-500/50 hover:bg-teal-500/5 text-left transition-all flex items-center gap-3 cursor-pointer touch-press"
+                  className="p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-teal-500/50 hover:bg-teal-500/5 text-left transition-all flex items-center gap-3 cursor-pointer touch-press"
                 >
                   <div className="w-9 h-9 rounded-xl bg-teal-500/15 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
                     <ScanFace className="w-5 h-5" />
@@ -358,7 +358,7 @@ export const BiometricRecoveryModal: React.FC<BiometricRecoveryModalProps> = ({
               </div>
 
               {/* Recovery Seal Card */}
-              <div className="p-3 bg-slate-50 dark:bg-[#151833] rounded-2xl border border-slate-200 dark:border-[#262D55] text-left space-y-1.5">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 text-left space-y-1.5">
                 <div className="flex items-center justify-between text-[10px] text-slate-400">
                   <span>Cryptographic Recovery Seal:</span>
                   <span className="text-ob-green-600 dark:text-ob-green-400 font-bold">VERIFIED</span>

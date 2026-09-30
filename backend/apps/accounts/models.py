@@ -109,3 +109,100 @@ class OtpVerification(models.Model):
         if timezone.now() > self.expires_at:
             return False
         return self.code.strip() == code_input.strip()
+
+
+class Role(models.Model):
+    """
+    Authoritative system-wide and business role definitions.
+    Decoupled from hardcoded user choices to allow configurable enterprise RBAC.
+    """
+    code = models.CharField(max_length=64, primary_key=True)  # e.g. 'MAKER', 'CHECKER', 'ADMIN', 'AUDITOR'
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    permissions = models.JSONField(default=list, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['code']
+        verbose_name = 'Role Definition'
+        verbose_name_plural = 'Role Definitions'
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
+class Permission(models.Model):
+    """
+    Granular functional and compliance permissions.
+    """
+    code = models.CharField(max_length=64, primary_key=True)  # e.g. 'REPORT_CREATE_DRAFT'
+    name = models.CharField(max_length=255)
+    category = models.CharField(max_length=64)  # 'REPORT', 'WORKFLOW', 'ADMIN', 'AUDIT'
+    description = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['category', 'code']
+        verbose_name = 'Permission'
+        verbose_name_plural = 'Permissions'
+
+    def __str__(self):
+        return f"[{self.category}] {self.name} ({self.code})"
+
+
+class UserReportAssignment(models.Model):
+    """
+    Explicit, auditable assignment linking a User to specific regulatory returns
+    with specific operational duties (Maker / Checker / Auditor).
+    """
+    DUTY_CHOICES = [
+        ('MAKER', 'Designated Report Maker / Preparer'),
+        ('CHECKER', 'Designated Report Reviewer / Approver'),
+        ('AUDITOR', 'Assigned Compliance Inspector'),
+        ('VIEWER', 'Read-Only Departmental Viewer'),
+    ]
+
+    id = models.CharField(max_length=64, primary_key=True, default=uuid.uuid4)
+    user = models.ForeignKey(UserAccount, on_delete=models.CASCADE, related_name='report_assignments')
+    report_key = models.CharField(max_length=64, db_index=True)
+    department_id = models.CharField(max_length=64, db_index=True)
+    duty = models.CharField(max_length=32, choices=DUTY_CHOICES, default='MAKER')
+    is_active = models.BooleanField(default=True, db_index=True)
+    effective_from = models.DateTimeField(default=timezone.now)
+    effective_to = models.DateTimeField(null=True, blank=True)
+    assigned_by = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['user', 'report_key', 'duty']
+        unique_together = ('user', 'report_key', 'duty')
+        verbose_name = 'User Report Assignment'
+        verbose_name_plural = 'User Report Assignments'
+
+    def __str__(self):
+        return f"{self.user.email} -> {self.report_key} ({self.duty})"
+
+
+class DepartmentMember(models.Model):
+    """
+    Explicit membership connecting a user to a department,
+    supporting secondary or matrixed department assignments.
+    """
+    id = models.CharField(max_length=64, primary_key=True, default=uuid.uuid4)
+    user = models.ForeignKey(UserAccount, on_delete=models.CASCADE, related_name='department_memberships')
+    department = models.ForeignKey('departments.Department', on_delete=models.CASCADE, related_name='members')
+    is_primary = models.BooleanField(default=True)
+    effective_from = models.DateTimeField(default=timezone.now)
+    effective_to = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['user', '-is_primary']
+        unique_together = ('user', 'department')
+        verbose_name = 'Department Member'
+        verbose_name_plural = 'Department Members'
+
+    def __str__(self):
+        primary_tag = " (Primary)" if self.is_primary else ""
+        return f"{self.user.email} in {self.department.name}{primary_tag}"

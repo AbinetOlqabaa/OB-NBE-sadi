@@ -12,6 +12,7 @@ import {
 } from './types/regulatory';
 import { getAllReports, getReportByKey, subscribeReports } from './data/report-registry';
 import { submissionService, DEMO_USERS } from './services/submissionService';
+import { auditService } from './services/auditService';
 import { indexedDbStorage } from './services/indexedDbStorage';
 import { userService } from './services/userService';
 import { departmentService } from './services/departmentService';
@@ -45,6 +46,7 @@ import {
   Fingerprint,
   Camera,
   ShieldCheck,
+  ShieldAlert,
   CheckCircle2,
   X,
 } from 'lucide-react';
@@ -82,9 +84,49 @@ export default function App() {
     return 'MAKER_WORKSPACE';
   };
 
+  const isTabAuthorizedForRole = (tab: ViewTab, role?: string): boolean => {
+    if (!role) return false;
+    switch (tab) {
+      case 'ADMIN_DASHBOARD':
+      case 'DEPT_REPORT_MANAGEMENT':
+        return role === 'ADMIN';
+      case 'MAKER_WORKSPACE':
+        return role === 'ADMIN' || role === 'MAKER';
+      case 'CHECKER_INBOX':
+        return role === 'ADMIN' || role === 'CHECKER';
+      case 'AUDITOR_DASHBOARD':
+        return role === 'ADMIN' || role === 'AUDITOR';
+      case 'NBE_SIMULATOR':
+        return role === 'ADMIN' || role === 'CHECKER';
+      case 'PHASE2_SSOT':
+      case 'AUDIT_TRAIL':
+      case 'SYSTEM_HEALTH':
+      case 'DOCUMENTATION':
+        return true;
+      default:
+        return true;
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<ViewTab>(() =>
     currentUser ? getInitialTabForRole(currentUser.role) : 'MAKER_WORKSPACE'
   );
+
+  // Security: audit unauthorized view access attempts
+  useEffect(() => {
+    if (currentUser && !isTabAuthorizedForRole(activeTab, currentUser.role)) {
+      auditService.log({
+        actorId: currentUser.id,
+        actorName: currentUser.name,
+        actorRole: currentUser.role,
+        action: 'UNAUTHORIZED_ACCESS_ATTEMPT',
+        entityType: 'SECURITY_RBAC',
+        entityId: activeTab,
+        correlationId: `corr_sec_${Date.now()}`,
+        details: `Access denied to protected view ${activeTab} for role ${currentUser.role} under NBE BSD/03/2020 segregation rules.`,
+      });
+    }
+  }, [activeTab, currentUser]);
 
   const [templates, setTemplates] = useState<ReportMetadata[]>(getAllReports());
   const [submissions, setSubmissions] = useState<ReportSubmission[]>(submissionService.getAll());
@@ -155,9 +197,13 @@ export default function App() {
       // 4. Ctrl+M or Cmd+M: Jump to Maker Workspace
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'm') {
         e.preventDefault();
-        setActiveTab('MAKER_WORKSPACE');
-        setEditingSubmission(null);
-        showToast('Navigated to Maker Workspace (Ctrl+M)');
+        if (currentUser.role === 'MAKER' || currentUser.role === 'ADMIN') {
+          setActiveTab('MAKER_WORKSPACE');
+          setEditingSubmission(null);
+          showToast('Navigated to Maker Workspace (Ctrl+M)');
+        } else {
+          showToast('Access restricted: Maker Workspace requires MAKER or ADMIN role.');
+        }
         return;
       }
 
@@ -197,9 +243,13 @@ export default function App() {
       // 7. Ctrl+Shift+N / Cmd+Shift+N: Jump to NBE Simulator
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'n') {
         e.preventDefault();
-        setActiveTab('NBE_SIMULATOR');
-        setEditingSubmission(null);
-        showToast('Navigated to NBE API Gateway Simulator (Ctrl+Shift+N)');
+        if (currentUser.role === 'CHECKER' || currentUser.role === 'ADMIN') {
+          setActiveTab('NBE_SIMULATOR');
+          setEditingSubmission(null);
+          showToast('Navigated to NBE API Gateway Simulator (Ctrl+Shift+N)');
+        } else {
+          showToast('Access restricted: NBE Simulator requires CHECKER or ADMIN role.');
+        }
         return;
       }
 
@@ -644,6 +694,36 @@ export default function App() {
                 handleSubmitToChecker(editingSubmission.id, comment);
               }}
             />
+          ) : !isTabAuthorizedForRole(activeTab, currentUser.role) ? (
+            <div className="flex-1 flex items-center justify-center p-4">
+              <div className="max-w-md w-full bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/50 rounded-2xl p-6 shadow-xl text-center space-y-4">
+                <div className="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center border border-amber-200 dark:border-amber-800">
+                  <ShieldAlert className="w-7 h-7" />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-bold font-mono bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300">
+                    NBE DIRECTIVE BSD/03/2020 SEGREGATION OF DUTIES
+                  </div>
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                    403 — Unauthorized Role Access
+                  </h2>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                    Your current operational role (<strong className="font-mono text-amber-600 dark:text-amber-400">{currentUser.role}</strong>) is restricted from accessing the{' '}
+                    <strong className="text-slate-800 dark:text-slate-200">{activeTab.replace(/_/g, ' ')}</strong> workspace. Under National Bank of Ethiopia prudential governance standards, Maker preparation, Checker sign-off, Auditor inspection, and Administrator governance functions are strictly segregated.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(getInitialTabForRole(currentUser.role));
+                    setEditingSubmission(null);
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+                >
+                  Return to Authorized Workspace ({getInitialTabForRole(currentUser.role).replace(/_/g, ' ')})
+                </button>
+              </div>
+            </div>
           ) : (
             <>
               {activeTab === 'ADMIN_DASHBOARD' && (

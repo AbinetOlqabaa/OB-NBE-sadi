@@ -1100,7 +1100,7 @@ ${catalogRows.join("\n")}
 - **Formulas & Auto-computation**: Math engine automatically computes totals, percentages of capital, loan provisioning requirements (1%, 3%, 20%, 50%, 100%), and net market values.
 `;
 
-fs.writeFileSync(path.resolve(process.cwd(), '.ai/REPORT_CATALOG.md'), reportCatalogMd, 'utf-8');
+fs.writeFileSync(path.resolve(process.cwd(), '.ai/09_REPORT_CATALOG.md'), reportCatalogMd, 'utf-8');
 
 const reportSchemaAnalysisMd = `# NBE REPORT SCHEMA & CONTRACT DISCOVERY ANALYSIS
 
@@ -1145,6 +1145,6 @@ All supplied report files share a standardized top-level JSON envelope:
 ${schemaDetails.join("\n\n")}
 `;
 
-fs.writeFileSync(path.resolve(process.cwd(), '.ai/REPORT_SCHEMA_ANALYSIS.md'), reportSchemaAnalysisMd, 'utf-8');
+fs.writeFileSync(path.resolve(process.cwd(), '.ai/10_REPORT_SCHEMA_ANALYSIS.md'), reportSchemaAnalysisMd, 'utf-8');
 
-console.log("Successfully generated .ai/REPORT_CATALOG.md and .ai/REPORT_SCHEMA_ANALYSIS.md");
+console.log("Successfully generated .ai/09_REPORT_CATALOG.md and .ai/10_REPORT_SCHEMA_ANALYSIS.md");

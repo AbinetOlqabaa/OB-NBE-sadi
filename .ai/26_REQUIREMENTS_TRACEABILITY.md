@@ -2,7 +2,7 @@
 
 | ID | Requirement | Source | Code Files | Test & Evidence | Status |
 |---|---|---|---|---|---|
-| R001 | All supplied report assets inventoried | Report files | \`report-assets/\`, \`data/report-definitions/\`, \`src/data/report-registry.ts\` | Hash verification in \`.ai/REPORT_CATALOG.md\` | DONE |
+| R001 | All supplied report assets inventoried | Report files | \`report-assets/\`, \`data/report-definitions/\`, \`src/data/report-registry.ts\` | Hash verification in \`.ai/09_REPORT_CATALOG.md\` | DONE |
 | R002 | JSON structures parsed | Report files | \`scripts/build-registry-and-docs.ts\`, \`src/data/report-registry.ts\` | 24 reports validated with 0 parse errors | DONE |
 | R003 | Metadata registry | Proposal/assets | \`src/data/report-registry.ts\` | 24 registered templates with frequencies, categories | DONE |
 | R004 | Dynamic forms | Proposal | \`src/components/DynamicReportForm.tsx\` | Form rendering for both flat and dynamic tables | DONE |

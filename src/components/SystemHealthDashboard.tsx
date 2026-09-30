@@ -258,13 +258,13 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
   return (
     <div className="p-4 sm:p-7 max-w-6xl mx-auto space-y-6 animate-in fade-in duration-200">
       {/* Top Banner & Health Score */}
-      <div className="bg-gradient-to-r from-[#161B3D] via-[#1B2352] to-[#121633] border border-[#2B3573] rounded-3xl p-5 sm:p-7 shadow-xl text-white relative overflow-hidden">
+      <div className="bg-gradient-to-r from-ob-indigo-950 via-slate-900 to-slate-950 border border-ob-indigo-800/60 rounded-3xl p-5 sm:p-7 shadow-xl text-white relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-80 bg-ob-green-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-ob-green-500/20 text-ob-green-300 border border-ob-green-500/40 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-ob-green-500/20 text-ob-green-300 border border-ob-green-500/40 uppercase tracking-wider flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-ob-green-400 animate-pulse"></span>
                 Real-Time Telemetry
               </span>
@@ -361,7 +361,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
       {/* 3 Core Hardware Subsystems Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
         {/* 1. Camera / Optical Subsystem (Face ID) */}
-        <div className="bg-white dark:bg-[#161A36] border border-slate-200 dark:border-[#272F5E] rounded-3xl p-5 shadow-md space-y-4 transition-all">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-md space-y-4 transition-all">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-2xl bg-teal-500/15 text-teal-600 dark:text-teal-400 flex items-center justify-center border border-teal-500/30">
@@ -378,7 +378,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
             </div>
 
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+              className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
                 deviceCaps?.isCameraSupported
                   ? 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30'
                   : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30'
@@ -389,7 +389,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
           </div>
 
           {/* Subsystem Specifications List */}
-          <div className="space-y-2 text-xs bg-slate-50 dark:bg-[#11132B] p-3 rounded-2xl border border-slate-100 dark:border-[#21274F]">
+          <div className="space-y-2 text-xs bg-slate-50 dark:bg-slate-800/70 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
             <div className="flex items-center justify-between">
               <span className="text-slate-500 dark:text-slate-400">Permission:</span>
               <span className="font-semibold text-slate-800 dark:text-slate-200">
@@ -449,7 +449,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
         </div>
 
         {/* 2. Fingerprint Scanner & Platform Biometrics */}
-        <div className="bg-white dark:bg-[#161A36] border border-slate-200 dark:border-[#272F5E] rounded-3xl p-5 shadow-md space-y-4 transition-all">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-md space-y-4 transition-all">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-500/30">
@@ -466,7 +466,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
             </div>
 
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+              className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
                 deviceCaps?.isFingerprintSupported
                   ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
                   : 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/30'
@@ -477,7 +477,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
           </div>
 
           {/* Subsystem Specifications List */}
-          <div className="space-y-2 text-xs bg-slate-50 dark:bg-[#11132B] p-3 rounded-2xl border border-slate-100 dark:border-[#21274F]">
+          <div className="space-y-2 text-xs bg-slate-50 dark:bg-slate-800/70 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
             <div className="flex items-center justify-between">
               <span className="text-slate-500 dark:text-slate-400">Touch Sensor:</span>
               <span className="font-semibold text-slate-800 dark:text-slate-200">
@@ -530,7 +530,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
         </div>
 
         {/* 3. Secure Enclave & Cryptographic Keystore */}
-        <div className="bg-white dark:bg-[#161A36] border border-slate-200 dark:border-[#272F5E] rounded-3xl p-5 shadow-md space-y-4 transition-all">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-md space-y-4 transition-all">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-2xl bg-ob-indigo-500/15 text-ob-indigo-600 dark:text-ob-indigo-400 flex items-center justify-center border border-ob-indigo-500/30">
@@ -546,13 +546,13 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
               </div>
             </div>
 
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-ob-indigo-500/15 text-ob-indigo-700 dark:text-ob-indigo-300 border border-ob-indigo-500/30">
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-ob-indigo-500/15 text-ob-indigo-700 dark:text-ob-indigo-300 border border-ob-indigo-500/30">
               Isolated
             </span>
           </div>
 
           {/* Subsystem Specifications List */}
-          <div className="space-y-2 text-xs bg-slate-50 dark:bg-[#11132B] p-3 rounded-2xl border border-slate-100 dark:border-[#21274F]">
+          <div className="space-y-2 text-xs bg-slate-50 dark:bg-slate-800/70 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
             <div className="flex items-center justify-between">
               <span className="text-slate-500 dark:text-slate-400">WebAuthn API:</span>
               <span className="font-semibold text-slate-800 dark:text-slate-200">
@@ -600,7 +600,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
       </div>
 
       {/* Troubleshooting & Bottleneck Resolution Matrix */}
-      <div className="bg-white dark:bg-[#161A36] border border-slate-200 dark:border-[#272F5E] rounded-3xl p-5 sm:p-6 shadow-md space-y-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-md space-y-4">
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -625,11 +625,11 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
 
         <div className="space-y-2.5">
           {/* Bottleneck 1 */}
-          <div className="border border-slate-200 dark:border-[#2B3573] rounded-2xl overflow-hidden">
+          <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
             <button
               type="button"
               onClick={() => setExpandedBottleneck((prev) => (prev === 'camera' ? null : 'camera'))}
-              className="w-full p-3.5 bg-slate-50 dark:bg-[#181C3F] hover:bg-slate-100 dark:hover:bg-[#1F2552] flex items-center justify-between text-left transition-colors cursor-pointer"
+              className="w-full p-3.5 bg-slate-50 dark:bg-slate-800/90 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between text-left transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-3">
                 <div className="w-7 h-7 rounded-xl bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
@@ -652,7 +652,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
             </button>
 
             {expandedBottleneck === 'camera' && (
-              <div className="p-3.5 bg-white dark:bg-[#12152E] text-xs text-slate-600 dark:text-slate-300 space-y-2 border-t border-slate-200 dark:border-[#2B3573]">
+              <div className="p-3.5 bg-white dark:bg-slate-900 text-xs text-slate-600 dark:text-slate-300 space-y-2 border-t border-slate-200 dark:border-slate-800">
                 <p>
                   <strong>How to troubleshoot:</strong> In Android Chrome or desktop browsers, tap the lock icon (or tuning icon) in the URL address bar, ensure <strong>Camera</strong> is set to <em>Allow</em>, and refresh.
                 </p>
@@ -664,11 +664,11 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
           </div>
 
           {/* Bottleneck 2 */}
-          <div className="border border-slate-200 dark:border-[#2B3573] rounded-2xl overflow-hidden">
+          <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
             <button
               type="button"
               onClick={() => setExpandedBottleneck((prev) => (prev === 'webauthn' ? null : 'webauthn'))}
-              className="w-full p-3.5 bg-slate-50 dark:bg-[#181C3F] hover:bg-slate-100 dark:hover:bg-[#1F2552] flex items-center justify-between text-left transition-colors cursor-pointer"
+              className="w-full p-3.5 bg-slate-50 dark:bg-slate-800/90 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between text-left transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-3">
                 <div className="w-7 h-7 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
@@ -691,7 +691,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
             </button>
 
             {expandedBottleneck === 'webauthn' && (
-              <div className="p-3.5 bg-white dark:bg-[#12152E] text-xs text-slate-600 dark:text-slate-300 space-y-2 border-t border-slate-200 dark:border-[#2B3573]">
+              <div className="p-3.5 bg-white dark:bg-slate-900 text-xs text-slate-600 dark:text-slate-300 space-y-2 border-t border-slate-200 dark:border-slate-800">
                 <p>
                   <strong>How it works:</strong> Cross-origin iframes in development environments often restrict <code>navigator.credentials.create()</code>. The platform detects this policy restriction and seamlessly registers a secure platform touch passkey with live tactile haptics.
                 </p>
@@ -703,11 +703,11 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
           </div>
 
           {/* Bottleneck 3 */}
-          <div className="border border-slate-200 dark:border-[#2B3573] rounded-2xl overflow-hidden">
+          <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
             <button
               type="button"
               onClick={() => setExpandedBottleneck((prev) => (prev === 'timeout' ? null : 'timeout'))}
-              className="w-full p-3.5 bg-slate-50 dark:bg-[#181C3F] hover:bg-slate-100 dark:hover:bg-[#1F2552] flex items-center justify-between text-left transition-colors cursor-pointer"
+              className="w-full p-3.5 bg-slate-50 dark:bg-slate-800/90 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between text-left transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-3">
                 <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
@@ -730,7 +730,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
             </button>
 
             {expandedBottleneck === 'timeout' && (
-              <div className="p-3.5 bg-white dark:bg-[#12152E] text-xs text-slate-600 dark:text-slate-300 space-y-2 border-t border-slate-200 dark:border-[#2B3573]">
+              <div className="p-3.5 bg-white dark:bg-slate-900 text-xs text-slate-600 dark:text-slate-300 space-y-2 border-t border-slate-200 dark:border-slate-800">
                 <p>
                   Per regulatory standards, open biometric scanning prompts auto-cancel after 30 seconds of inactivity to prevent hardware locks and release camera/fingerprint sensors for other workstation processes. Tap <strong>Retry Biometric Scan</strong> or switch to password at any time.
                 </p>
@@ -739,11 +739,11 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
           </div>
 
           {/* Bottleneck 4 */}
-          <div className="border border-slate-200 dark:border-[#2B3573] rounded-2xl overflow-hidden">
+          <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
             <button
               type="button"
               onClick={() => setExpandedBottleneck((prev) => (prev === 'offline' ? null : 'offline'))}
-              className="w-full p-3.5 bg-slate-50 dark:bg-[#181C3F] hover:bg-slate-100 dark:hover:bg-[#1F2552] flex items-center justify-between text-left transition-colors cursor-pointer"
+              className="w-full p-3.5 bg-slate-50 dark:bg-slate-800/90 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between text-left transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-3">
                 <div className="w-7 h-7 rounded-xl bg-ob-indigo-500/20 text-ob-indigo-600 dark:text-ob-indigo-400 flex items-center justify-center shrink-0">
@@ -766,7 +766,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
             </button>
 
             {expandedBottleneck === 'offline' && (
-              <div className="p-3.5 bg-white dark:bg-[#12152E] text-xs text-slate-600 dark:text-slate-300 space-y-2 border-t border-slate-200 dark:border-[#2B3573]">
+              <div className="p-3.5 bg-white dark:bg-slate-900 text-xs text-slate-600 dark:text-slate-300 space-y-2 border-t border-slate-200 dark:border-slate-800">
                 <p>
                   When inspecting remote bank branches without network connectivity, passkey credentials and biometric audit records persist in the encrypted browser IndexedDB storage (<code>draft_submissions</code> and <code>audit_logs</code>) and automatically synchronize when returning online.
                 </p>

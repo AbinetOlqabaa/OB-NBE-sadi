@@ -15,7 +15,8 @@
     "test": "tsx src/tests/run-all-tests.ts",
     "simulator": "python3 nbe_simulator_service/manage.py runserver 0.0.0.0:8001",
     "test:simulator": "PYTHONPATH=nbe_simulator_service python3 nbe_simulator_service/manage.py test apps.simulator.tests",
-    "test:all": "npm test && npm run test:simulator"
+    "test:backend": "PYTHONPATH=backend python3 backend/manage.py test apps.accounts apps.audit apps.permissions apps.nbe_gateway apps.workflows",
+    "test:all": "npm test && npm run test:simulator && npm run test:backend"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

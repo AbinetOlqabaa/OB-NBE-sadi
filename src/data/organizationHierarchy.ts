@@ -3,14 +3,24 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export type DepartmentLifecycleStatus = 'ACTIVE' | 'INACTIVE' | 'RESTRUCTURED' | 'PLANNED';
+
 export interface DepartmentDefinition {
   id: string;
   name: string;
   shortCode: string;
   division: string;
   description: string;
+  parentId?: string | null;
+  hierarchyLevel?: number;
+  path?: string;
+  status?: DepartmentLifecycleStatus;
   primaryResponsibilities: string[];
   reportKeys: string[];
+  effectiveFrom?: string;
+  effectiveTo?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 /**

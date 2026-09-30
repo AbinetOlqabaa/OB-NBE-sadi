@@ -4,12 +4,184 @@ All notable changes and engineering enhancements for the Oromia Bank NBE Regulat
 
 ---
 
+## [3.0.0-phase3-admin-users-and-departments] - 2026-09-30
+
+### Added
+- **Administrator User Management Subsystem (`src/services/userService.ts`, `server.ts`, `src/components/AdminDashboard.tsx`)**:
+  - Full CRUD and lifecycle management for bank user accounts: Administrator, Maker, Checker, and Auditor.
+  - Server-side role enforcement on `POST /api/users`, `PUT /api/users/:id`, `POST /api/users/:id/status`, and `DELETE /api/users/:id` ensuring only callers with `ADMIN` role can mutate users.
+  - First-class support for `AUDITOR` creation with specific statutory scope (`auditScope`) and formal appointment justification (`auditorJustification`).
+  - Search, filter (by role, status, department), multi-column sorting (name, email, role, department, status, creation date), and standalone pagination contract (`page`, `page_size`, `limit`).
+  - Single User Inspector (`GET /api/users/:id`) returning full profile, credentials overview, and linked department.
+  - Dynamically resolved reporting authorization matrix (`GET /api/users/:id/authorized-reports`) computed from authoritative `configService` SSOT.
+  - Special cross-department delegation access grants (`POST /api/users/:id/special-access`) for specific returns or multi-department assignments.
+  - User-specific audit history compilation (`GET /api/users/:id/audit`).
+  - Pre-flight historical safety checks (`GET /api/users/:id/can-delete` / `canDeleteUser`) preventing destructive deletion of users referenced in past statutory submissions.
+- **Administrator Department Management Subsystem (`src/services/departmentService.ts`, `src/services/configService.ts`, `server.ts`, `src/components/AdminDashboard.tsx`)**:
+  - Full management of bank organizational structure: create, edit, rename, code/description validation, and parent-child hierarchy.
+  - Lifecycle statuses (`ACTIVE`, `INACTIVE`, `RESTRUCTURED`, `PLANNED`) and effective date management (`effectiveFrom`, `effectiveTo`).
+  - SSOT synchronization: changes made in `departmentService` are immediately synced with `configService.createDepartment` and `configService.updateDepartment`.
+  - Department inspection (`GET /api/departments/:id`) providing hierarchy ancestors, descendant units, assigned user rosters, and submission statistics.
+  - Department configuration audit trail (`GET /api/departments/:id/audit`).
+  - Pre-flight historical safety checks (`GET /api/departments/:id/can-delete` / `canDeleteDepartment`) blocking destructive deletion of departments referenced by historical reports or active assigned officers.
+- **Administrator UX Enhancements (`src/components/AdminDashboard.tsx`)**:
+  - Sub-tab navigation: Reports Oversight, Special Access & Delegation, Pending Authorizations, User Accounts & RBAC, Departments & Structure, Directives & Role Matrix.
+  - Custom responsive modals:
+    - `CreateUserModal`: Direct provisioning of officers with role selector and conditional Auditor scope inputs.
+    - `UserInspectorModal`: Detailed profile card, dynamic authorized returns list, special access grants, and audit activity history.
+    - `CreateDepartmentModal`: Operational unit creation with division, parent department, responsibilities, and statutory returns multi-selection.
+    - `EditDepartmentModal`: In-place editing of responsibilities, hierarchy, and retirement dates.
+    - `DepartmentInspectorModal`: Hierarchy tree position, live statistics cards, assigned officers list, and configuration audit trail.
+    - `HistoricalSafetyNoticeModal`: NBE-grounded modal explaining why destructive deletion was blocked and offering non-destructive deactivation (`DISABLED`/`INACTIVE`).
+    - `DeleteConfirmationModal`: Permanent deletion dialog for verified safe entities.
+- **Automated Verification & Regression Suite (`src/tests/phase3-admin-users-departments.test.ts`)**:
+  - Comprehensive automated tests covering user CRUD, role transitions, Auditor scopes, dynamic report authorization, user audit trail, user historical safety pre-flights, department creation/editing/hierarchy, lifecycle transitions, and department historical safety pre-flights.
+  - Integrated into `src/tests/run-all-tests.ts`.
+
+---
+
+## [2.0.0-phase2-dynamic-configuration-ssot] - 2026-09-30
+
+### Added
+- **Dynamic Configuration & SSOT Engine (`src/services/configService.ts`)**:
+  - Implemented authoritative in-memory & database-backed SSOT engine governing Departments, Reports, Versions, Roles, Permissions, Assignments, and Workflows.
+  - Implemented hierarchical department modeling with self-referential parent/children relations, hierarchy levels (0: Division, 1: Department, 2: Unit/Section), hierarchical path strings, and cycle prevention.
+  - Implemented metadata-driven report definitions capable of representing return identity, frequency, risk categories, central bank mappings, fixed fields, dynamic schedule columns, and mathematical formulas.
+  - Implemented non-destructive report versioning (Version 1, Version 2, etc.) ensuring historical regulatory submissions stay pinned to their original version schema snapshot without corruption.
+  - Implemented explicit relationship entities: `DepartmentReportAssignment` (roles: PRIMARY_OWNER, CONTRIBUTOR, REVIEWER, SUPERVISORY) and `UserReportAssignment` (duties: MAKER, CHECKER, AUDITOR, VIEWER).
+  - Implemented dynamic authorization matrix resolving user access across explicit duties, home departments, and time-bound special access grants.
+  - Implemented domain version counters and composite cache hash (`deptVersion`, `reportsVersion`, `workflowsVersion`, `rbacVersion`, `assignmentsVersion`, `globalConfigHash`) with atomic cache invalidation.
+  - Implemented real-time configuration event emitter broadcasting typed events (`CONFIG_CHANGED`, `CACHE_INVALIDATED`).
+- **REST Configuration API (`server.ts`)**:
+  - Exposed comprehensive configuration endpoints under `/api/config/*`: `/api/config/summary`, `/api/config/departments`, `/api/config/reports`, `/api/config/authorized-reports`, `/api/config/roles`, `/api/config/permissions`, `/api/config/workflows`, `/api/config/assignments/*`, `/api/config/changes`, and `/api/config/cache/invalidate`.
+  - Added real-time Server-Sent Events (SSE) notification stream (`GET /api/config/events`) enabling instantaneous client updates upon backend mutations.
+- **Frontend Configuration SSOT Client Hook (`src/hooks/useConfigurationSSOT.ts`)**:
+  - React hook querying authoritative backend `/api/config/*` endpoints on mount.
+  - Subscribes to `/api/config/events` SSE stream for automatic UI re-synchronization on backend updates.
+- **Django Backend Domain Architecture & Migrations (`backend/apps/`)**:
+  - Enhanced `Department` with `parent`, `hierarchy_level`, `path`, `status`, `effective_from`, and `effective_to`.
+  - Added `DepartmentReportAssignment` model in `departments/models.py`.
+  - Added `ReportDefinition`, `ReportVersion`, `ReportSection`, `ReportField`, `ReportColumn`, and `ReportRow` in `reports/models.py`.
+  - Added `Role`, `Permission`, `UserReportAssignment`, and `DepartmentMember` in `accounts/models.py`.
+  - Added `Submission`, `WorkflowDefinition`, and `WorkflowStep` in `workflows/models.py`.
+  - Added `ConfigurationChange` audit model in `audit/models.py`.
+  - Created safe Django migrations: `departments/0002_add_hierarchy_and_assignments.py`, `reports/0001_initial.py`, `accounts/0002_add_role_permission_and_assignments.py`, `workflows/0001_initial.py`, and `audit/0003_configurationchange.py`.
+  - Created Django seeding command `reports/management/commands/seed_ssot_configuration.py`.
+- **Dedicated Architecture Specification (`.ai/29_CONFIGURATION_SSOT_AND_METADATA_ARCHITECTURE.md`)**:
+  - Complete architectural specification detailing governance principles, entity models, hierarchy traversal, versioning mechanics, relationship schemas, and cache invalidation.
+- **Automated Verification Suite (`src/tests/phase2-configuration-ssot.test.ts`)**:
+  - 57 automated tests covering department hierarchy, report metadata, versioning historical integrity, explicit relationships, dynamic authorization boundaries, RBAC SSOT, workflow definitions, and cache consistency.
+  - Added to master test runner `src/tests/run-all-tests.ts`.
+
+---
+
+## [1.9.2-phase1-login-registration-terminology] - 2026-09-30
+
+### Changed
+- **Login Registration Prompt (`src/components/LoginPage.tsx`)**:
+  - Replaced prompt with exact required terminology: `"Need access as a new Maker / Checker / Auditor?"`.
+  - Maintained responsive typography (`text-[11px] sm:text-xs text-slate-500 dark:text-slate-400`).
+- **Login Registration Button (`src/components/LoginPage.tsx`)**:
+  - Replaced button label with exact required terminology: `"Register for Maker / Checker / Auditor Account"`.
+  - Preserved `min-h-[44px]` touch target, `UserPlus` icon, and smooth transition.
+- **Registration Page Title (`src/components/RegisterPage.tsx`)**:
+  - Updated page header with exact required terminology: `"Request Maker / Checker / Auditor Credentials"`.
+  - Maintained responsive typography (`text-base sm:text-xl font-bold tracking-tight`).
+- **Auditor Role Availability**:
+  - Verified `AUDITOR` option remains fully active in the registration role selection dropdown with Abinet Alemu directive permission boundary notice.
+- **Automated Verification**:
+  - Added dedicated test assertions in `src/tests/responsive-ui-and-layout.test.ts` verifying all three exact strings, absence of obsolete text, and active Auditor option.
+
+---
+
+## [1.9.1-phase0-ai-normalization] - 2026-09-30
+
+### Added
+- **Canonical Knowledge Base Map & Master AI Index (`.ai/00_START_HERE.md`)**:
+  - Ingested and indexed all 29 canonical engineering specifications (`00_` through `28_`).
+  - Defined explicit reading order, purpose, and trigger conditions for incoming AI agents.
+  - Formulated mandatory Account Migration and Quota Safety rules.
+- **Dedicated Continuation and Recovery Guide (`.ai/03_CONTINUATION_AND_RECOVERY.md`)**:
+  - Restored canonical quick verification commands and architectural layout map.
+- **Account Migration & Continuation Protocol (`.ai/20_ACCOUNT_MIGRATION_AND_CONTINUATION.md`)**:
+  - Consolidated multi-account handoff protocols, quota-safety discipline, and post-migration integrity rules.
+
+### Changed
+- **Standardized Canonical File Naming**:
+  - Standardized all 29 engineering documents with uniform two-digit numeric prefixes (`00_` to `28_`).
+- **Complete Reference Repair**:
+  - Repaired all internal Markdown cross-references across all `.ai/*.md` documents to use canonical numbered filenames.
+  - Eliminated broken and un-prefixed references.
+- **Duplicate & Redundant Document Elimination**:
+  - Merged unique content from unnumbered and partial duplicates into their canonical counterparts.
+  - Removed all redundant unnumbered clones and 0-byte placeholder files.
+
+---
+
+## [1.9.0-phase5-final-verification-and-completion-gate] - 2026-09-29
+
+### Added
+- **Phase 5 Automated End-to-End Verification Test Suite (`src/tests/phase5-final-verification.test.ts`)**:
+  - Implemented automated verification of all 14 mandatory end-to-end flows:
+    1. Admin Login & Dashboard Routing
+    2. Maker Login & Workspace Routing
+    3. Checker Login & Inbox Routing
+    4. Auditor Login & Independent Dashboard Routing
+    5. User Registration & Admin Approval Flow
+    6. Password Authentication & Zero-Bypass Checks
+    7. Biometric Passkey (WebAuthn) & Optical Face ID Enrollment
+    8. Biometric Authentication & Verification (distinguishing Code Verified from physical hardware unavailability in headless CI)
+    9. Complete Maker Reporting Lifecycle (Create -> Save -> Edit -> Submit)
+    10. Complete Checker Review Lifecycle (Review -> Request Correction -> Re-review -> Approve)
+    11. Auditor Independent Inspection Lifecycle (Work Queue -> Findings -> Evidence -> Remediations -> Working Notes -> Audit Package)
+    12. Central Bank Transmission to NBE Gateway (Receipt number, delivery timestamp, idempotency)
+    13. User Session Logout Flow & Audit Trail Attribution
+    14. Deliberate Unauthorized Access Attempts (Maker self-approval blocked, Checker NBE delivery blocked, Cross-department submission blocked)
+- **Unified Full-Stack Test Command (`npm run test:all`)**:
+  - Chains TypeScript/React unit & integration tests (`npm test`), Django backend app tests (`npm run test:backend`), and NBE simulator microservice tests (`npm run test:simulator`).
+- **Python Dependencies in Backend Requirements (`backend/requirements.txt`)**:
+  - Added `requests>=2.31.0` and validated execution against Django 5.2.
+
+### Verified
+- **Architectural & Security Integrity**:
+  - Multi-tier architecture: React SPA -> Node/Express Proxy -> Django Core Services -> SQLite DB -> NBE Gateway Service -> NBE Simulator Daemon.
+  - Zero-bypass authorization: Operational actions (create, edit, approve, deliver) rejected by backend when attempted by unauthorized roles or across department boundaries.
+  - 4-Eyes principle enforced both client-side and server-side.
+- **Completion Gates**:
+  - All 12 completion gates evaluated and certified **PASS**.
+
+---
+
+## [1.8.0-phase4-ui-ux-regression-and-hardening] - 2026-09-29
+
+### Added
+- **Automated Phase 4 Regression & Hardening Test Suite (`src/tests/phase4-regression-hardening.test.ts`)**:
+  - Full route and component inventory verification covering 22 distinct views, workspaces, and modals.
+  - Verification of authoritative brand tokens (`#8CC51F` green, `#5962AB` blue, `#2C3161` active item, `#47509A` border).
+  - Validation of zero isolated dark hex code policy across all application components.
+  - End-to-end reporting lifecycle and dual-control workflow test: Maker draft creation -> Checker approval -> Maker transmission to NBE simulator.
+  - Non-color accessibility and semantic status indicator audits.
+  - Standalone pagination contract verification with edge case clamping.
+- **Integrated Test Execution Runner**:
+  - Expanded `src/tests/run-all-tests.ts` to 12 comprehensive automated test suites (100% passing).
+
+### Changed
+- **Application-Wide Color Standardization & Hex Eradication**:
+  - Eliminated lingering isolated dark hex codes (`dark:bg-[#121428]`, `dark:bg-[#161933]`, `dark:bg-[#101226]`, `dark:border-[#22284D]`, `dark:border-[#262D55]`, `dark:border-[#2B3369]`, `dark:divide-[#1C203F]`) across `DepartmentReportManagement.tsx`, `ChangeHistoryView.tsx`, `BulkImportModal.tsx`, `HardwareDiagnosticsModal.tsx`, `BiometricRecoveryModal.tsx`, `SystemHealthDashboard.tsx`, `UserSettingsModal.tsx`, `BiometricPromptModal.tsx`, and `OfflineStorageModal.tsx`.
+  - Migrated entirely to unified design tokens (`dark:bg-slate-900`, `dark:bg-slate-800`, `dark:border-slate-800`, `dark:border-slate-700`, `dark:divide-slate-800`).
+- **Zero-Pill Discipline Across Workspace Badges & Tabs**:
+  - Replaced `rounded-full text-[10px]` with `rounded-md font-mono text-[10px]` on counts and status tags in `MakerWorkspace.tsx`, `CheckerInbox.tsx`, `AdminDashboard.tsx`, `AuditorDashboard.tsx`, `DepartmentReportManagement.tsx`, `ChangeHistoryView.tsx`, and `SystemHealthDashboard.tsx`.
+- **Viewport Immunity on Modal Dialogs**:
+  - Hardened `CommandPaletteModal.tsx` with dynamic height constraints (`max-h-[calc(100dvh-4rem)] flex flex-col overflow-hidden` and `overflow-y-auto` results) to eliminate any risk of viewport clipping on short displays or mobile landscape.
+
+---
+
 ## [1.7.0-phase3-auditor-ux-and-pagination] - 2026-09-29
 
 ### Added
-- **Design System Rule Injected into Master Prompts (`/.ai/02_MASTER_PROMPT.md`, `/.ai/MASTER_PROMPT.md`)**:
+- **Design System Rule Injected into Master Prompts (`/.ai/02_OB_SYSTEM_SPECIFICATION.md`, `/.ai/02_OB_SYSTEM_SPECIFICATION.md`)**:
   - Formal rule prohibiting page-specific overrides when solutions belong to shared design tokens, themes, components, or application shells.
-- **Account Migration Protocol (`/.ai/ACCOUNT_MIGRATION_PROTOCOL.md`)**:
+- **Account Migration Protocol (`/.ai/20_ACCOUNT_MIGRATION_AND_CONTINUATION.md`)**:
   - Permanent protocol guaranteeing self-contained project state reconstruction for subsequent AI Studio sessions.
 - **First-Class Auditor Workflow & Integration (`src/components/AuditorDashboard.tsx`)**:
   - Full adherence to the shared OB design system (zero arbitrary custom color tokens).
@@ -169,3 +341,44 @@ All notable changes and engineering enhancements for the Oromia Bank NBE Regulat
 - **Collapsible Development Test Reference UI**:
   - Added clean reference accordion on `LoginPage.tsx` displaying accounts and roles.
   - Provides "Use Email" filler (populates email only, preserving real password validation) and "Reset Seed Data" trigger.
+
+---
+
+## [1.1.0-ui-ux] - 2026-09-28
+
+### Added
+- **Dedicated Automated Responsive UI & Layout Test Suite** (`src/tests/responsive-ui-and-layout.test.ts`):
+  - 9 viewport classification matrix (Small Mobile 320px to Large Desktop 1920px).
+  - 16-component React export and inventory verification.
+  - Minimum 44px mobile touch target enforcement (`min-h-[44px]`, `min-w-[44px]`).
+  - Horizontal page overflow prevention testing (`overflow-x-auto`, `truncate`, `line-clamp`).
+  - Zero-pill compliance audit on static metadata.
+  - Multi-breakpoint navigation adaptation verification.
+  - Dynamic area table dual card/table view mode verification.
+  - Non-color status indicator audit (dual icon + text pairing for WCAG AA).
+- **Integrated into Root Test Runner** (`src/tests/run-all-tests.ts`):
+  - Now executes 8 complete test suites sequentially with 100% green verification.
+
+### Changed
+- **Zero-Pill Discipline Refinements (Frontend Design Constitution)**:
+  - `src/components/DynamicReportForm.tsx`: Replaced static pill capsules (`rounded-full`) in validation summary strips with clean unboxed metadata and subtle rounded tags (`rounded-md`).
+  - `src/App.tsx`: Replaced `rounded-full` badge in toast hardware verification notifications with clean `rounded-md` metadata tags.
+  - `src/components/AdminDashboard.tsx`: Cleaned tab count indicators from `rounded-full` to clean `rounded-md` indicators.
+  - `src/components/OfflineStorageModal.tsx`: Replaced `rounded-full` sync status tags with clean unboxed/rounded-md tags.
+  - `src/components/UserSettingsModal.tsx`: Replaced `rounded-full` authentication history count tag with clean `rounded-md` tag.
+  - `src/components/NbeHealthIndicator.tsx`: Updated status telemetry badge from `rounded-full` to `rounded-md`.
+  - `src/components/KeyboardShortcutsModal.tsx`: Updated badge tag from `rounded-full` to `rounded-md`.
+  - `src/components/OfflineStatusIndicator.tsx`: Updated sync counter from `rounded-full` to `rounded-md`.
+
+### Verified
+- `compile_applet`: Succeeded cleanly.
+- `lint_applet` (`npm run lint` / `tsc --noEmit`): Exited with 0 errors.
+- `npx tsx src/tests/run-all-tests.ts`: All 8 automated test suites passed 100% green.
+
+---
+
+## [1.0.0-audit] - 2026-09-28
+### Added
+- Comprehensive recovery assessment answering all 10 architectural inquiries.
+- Confirmation of Express/Node.js architecture and clarification of Django non-existence.
+- Verified test suites for core regulatory engines, RBAC, NBE simulator, biometrics, PDF generation, and IndexedDB storage.

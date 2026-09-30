@@ -11,6 +11,7 @@ import {
 } from '../data/organizationHierarchy.ts';
 import { departmentService } from './departmentService.ts';
 import { getAllReports } from '../data/report-registry.ts';
+import { auditService } from './auditService.ts';
 
 export type UserRole = 'ADMIN' | 'MAKER' | 'CHECKER' | 'AUDITOR';
 export type UserStatus = 'ACTIVE' | 'PENDING_APPROVAL' | 'DISABLED';
@@ -695,9 +696,111 @@ class UserServiceClass {
     return this.updateUserStatus(userId, 'ACTIVE', adminName);
   }
 
+  public createUser(
+    data: {
+      name: string;
+      email: string;
+      role: UserRole;
+      department: string;
+      employeeId?: string;
+      phoneNumber?: string;
+      password?: string;
+      status?: UserStatus;
+      auditorJustification?: string;
+      auditScope?: string;
+    },
+    adminName = 'System Administrator'
+  ): { success: boolean; user?: UserAccount; message?: string } {
+    if (!data.name || !data.name.trim()) {
+      return { success: false, message: 'Full name is required.' };
+    }
+    if (!data.email || !data.email.trim()) {
+      return { success: false, message: 'Corporate email address is required.' };
+    }
+    const emailNorm = data.email.trim().toLowerCase();
+    if (this.getByEmail(emailNorm)) {
+      return { success: false, message: `An account with email '${emailNorm}' already exists.` };
+    }
+    if (!['ADMIN', 'MAKER', 'CHECKER', 'AUDITOR'].includes(data.role)) {
+      return { success: false, message: 'Valid role (ADMIN, MAKER, CHECKER, AUDITOR) is required.' };
+    }
+    if (!data.department || !data.department.trim()) {
+      return { success: false, message: 'Department assignment is required.' };
+    }
+
+    const id = `usr_${data.role.toLowerCase()}_${Date.now()}_${Math.floor(10 + Math.random() * 90)}`;
+    const now = new Date().toISOString();
+    const newUser: UserAccount = {
+      id,
+      name: data.name.trim(),
+      email: emailNorm,
+      password: data.password || 'password',
+      role: data.role,
+      status: data.status || 'ACTIVE',
+      institutionCode: '0000013',
+      department: data.department.trim(),
+      employeeId: data.employeeId?.trim() || `OB-${data.role.substring(0, 3)}-${Math.floor(100 + Math.random() * 900)}`,
+      phoneNumber: data.phoneNumber?.trim() || '',
+      specialAccessGrants: [],
+      createdAt: now,
+      approvedAt: (data.status || 'ACTIVE') === 'ACTIVE' ? now : undefined,
+      approvedBy: (data.status || 'ACTIVE') === 'ACTIVE' ? `${adminName} (ADMIN)` : undefined,
+      auditorJustification: data.role === 'AUDITOR' ? data.auditorJustification : undefined,
+      auditScope: data.role === 'AUDITOR' ? (data.auditScope || 'ALL_DEPARTMENTS') : undefined,
+      biometricCredentials: [],
+    };
+
+    this.users.set(id, newUser);
+
+    const { password, ...safe } = newUser;
+
+    auditService.log({
+      actorId: 'usr_admin',
+      actorName: adminName,
+      actorRole: 'ADMIN',
+      action: 'USER_CREATED',
+      entityType: 'USER',
+      entityId: newUser.id,
+      correlationId: `corr_usr_create_${newUser.id}`,
+      details: `Administrator created user account for ${newUser.name} (${newUser.email}) with role ${newUser.role} in department ${newUser.department}.`,
+      newState: safe,
+    });
+
+    return {
+      success: true,
+      user: safe as UserAccount,
+      message: `User '${newUser.name}' (${newUser.role}) created successfully.`,
+    };
+  }
+
+  private submissionProvider?: {
+    getAll: () => Array<{
+      makerId?: string;
+      checkerId?: string;
+      makerName?: string;
+      checkerName?: string;
+      makerEmail?: string;
+      checkerEmail?: string;
+    }>;
+  };
+
+  public setSubmissionProvider(provider: {
+    getAll: () => Array<{
+      makerId?: string;
+      checkerId?: string;
+      makerName?: string;
+      checkerName?: string;
+      makerEmail?: string;
+      checkerEmail?: string;
+    }>;
+  }): void {
+    this.submissionProvider = provider;
+  }
+
   public updateUser(
     userId: string,
-    updates: Partial<UserAccount>
+    updates: Partial<UserAccount>,
+    adminName: string = 'Administrator'
   ): { success: boolean; user?: UserAccount; message?: string } {
     const user = this.users.get(userId);
     if (!user) {
@@ -707,30 +810,163 @@ class UserServiceClass {
     if (updates.name) user.name = updates.name.trim();
     if (updates.department) user.department = updates.department.trim();
     if (updates.employeeId) user.employeeId = updates.employeeId.trim();
-    if (updates.phoneNumber) user.phoneNumber = updates.phoneNumber.trim();
-    if (updates.role && ['ADMIN', 'MAKER', 'CHECKER'].includes(updates.role)) {
+    if (updates.phoneNumber !== undefined) user.phoneNumber = updates.phoneNumber.trim();
+    if (updates.role && ['ADMIN', 'MAKER', 'CHECKER', 'AUDITOR'].includes(updates.role)) {
       user.role = updates.role;
     }
     if (updates.status && ['ACTIVE', 'PENDING_APPROVAL', 'DISABLED'].includes(updates.status)) {
       user.status = updates.status;
     }
+    if (updates.auditorJustification !== undefined) {
+      user.auditorJustification = updates.auditorJustification;
+    }
+    if (updates.auditScope !== undefined) {
+      user.auditScope = updates.auditScope;
+    }
 
     const { password, ...safe } = user;
+
+    auditService.log({
+      actorId: 'usr_admin',
+      actorName: adminName,
+      actorRole: 'ADMIN',
+      action: 'USER_UPDATED',
+      entityType: 'USER',
+      entityId: user.id,
+      correlationId: `corr_usr_upd_${user.id}_${Date.now()}`,
+      details: `User account details updated for ${user.name} (${user.email}) [Role: ${user.role}, Dept: ${user.department}].`,
+      newState: safe,
+    });
+
     return { success: true, user: safe as UserAccount };
   }
 
-  public deleteUser(userId: string): { success: boolean; message?: string } {
+  /**
+   * Pre-flight safety check determining whether an entity can be destructively removed,
+   * or whether historical reporting references prohibit true deletion under NBE compliance rules.
+   */
+  public canDeleteUser(userId: string): {
+    canDelete: boolean;
+    reason?: string;
+    submissionsCount?: number;
+    user?: UserAccount;
+  } {
     const user = this.users.get(userId);
     if (!user) {
-      return { success: false, message: 'User not found.' };
+      return { canDelete: false, reason: 'User account not found.' };
     }
-
     if (user.role === 'ADMIN' && user.id === 'usr_admin_1') {
-      return { success: false, message: 'Cannot delete the primary System Administrator account.' };
+      return { canDelete: false, reason: 'Cannot delete the primary System Administrator governance account.' };
     }
 
+    // Historical Safety Check: inspect statutory submissions authored or checked by this user
+    if (this.submissionProvider && typeof this.submissionProvider.getAll === 'function') {
+      const allSubs = this.submissionProvider.getAll();
+      const userSubs = allSubs.filter(
+        (s: any) =>
+          s.makerId === user.id ||
+          s.checkerId === user.id ||
+          s.makerName === user.name ||
+          s.checkerName === user.name ||
+          (s.makerEmail && s.makerEmail.toLowerCase() === user.email.toLowerCase())
+      );
+      if (userSubs.length > 0) {
+        return {
+          canDelete: false,
+          submissionsCount: userSubs.length,
+          user,
+          reason: `Historical safety violation: User "${user.name}" is referenced in ${userSubs.length} statutory report submission(s). NBE regulatory retention and non-repudiation directives prohibit destructive deletion. Please deactivate (set status to 'DISABLED') instead to preserve historical integrity.`,
+        };
+      }
+    }
+
+    return { canDelete: true, user };
+  }
+
+  public deleteUser(userId: string): { success: boolean; message?: string } {
+    const check = this.canDeleteUser(userId);
+    if (!check.canDelete) {
+      return { success: false, message: check.reason };
+    }
+
+    const targetUser = this.users.get(userId);
     this.users.delete(userId);
-    return { success: true, message: 'User account removed.' };
+
+    auditService.log({
+      actorId: 'usr_admin',
+      actorName: 'Administrator',
+      actorRole: 'ADMIN',
+      action: 'USER_DELETED',
+      entityType: 'USER',
+      entityId: userId,
+      correlationId: `corr_usr_del_${userId}_${Date.now()}`,
+      details: `User account ${targetUser?.name || userId} permanently removed from registry.`,
+    });
+
+    return { success: true, message: 'User account permanently removed.' };
+  }
+
+  public getFilteredUsers(filter?: {
+    search?: string;
+    role?: string;
+    status?: string;
+    department?: string;
+    sortBy?: 'name' | 'email' | 'role' | 'department' | 'status' | 'createdAt' | 'lastLoginAt';
+    sortOrder?: 'asc' | 'desc';
+  }): UserAccount[] {
+    let list = this.getAll();
+    if (filter?.role && filter.role !== 'ALL') {
+      list = list.filter((u) => u.role === filter.role);
+    }
+    if (filter?.status && filter.status !== 'ALL') {
+      list = list.filter((u) => u.status === filter.status);
+    }
+    if (filter?.department && filter.department !== 'ALL') {
+      const targetDept = filter.department.toLowerCase().trim();
+      list = list.filter((u) => u.department.toLowerCase().trim() === targetDept);
+    }
+    if (filter?.search && filter.search.trim()) {
+      const q = filter.search.toLowerCase().trim();
+      list = list.filter(
+        (u) =>
+          u.name.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          u.employeeId.toLowerCase().includes(q) ||
+          u.department.toLowerCase().includes(q) ||
+          (u.phoneNumber && u.phoneNumber.toLowerCase().includes(q))
+      );
+    }
+    if (filter?.sortBy) {
+      const key = filter.sortBy;
+      const order = filter.sortOrder === 'desc' ? -1 : 1;
+      list.sort((a, b) => {
+        const valA = (a as any)[key] || '';
+        const valB = (b as any)[key] || '';
+        if (typeof valA === 'string') {
+          return valA.localeCompare(String(valB)) * order;
+        }
+        return (valA > valB ? 1 : valA < valB ? -1 : 0) * order;
+      });
+    }
+    return list;
+  }
+
+  public getUserAuditHistory(userId: string): any[] {
+    const user = this.users.get(userId);
+    if (!user) return [];
+    const allLogs = auditService.getAll();
+    const userEmailNorm = user.email.toLowerCase();
+    const userNameNorm = user.name.toLowerCase();
+    return allLogs.filter(
+      (l: any) =>
+        l.actorId === user.id ||
+        (l.actorName && l.actorName.toLowerCase().includes(userNameNorm)) ||
+        l.entityId === user.id ||
+        (l.details &&
+          (l.details.toLowerCase().includes(userEmailNorm) ||
+            l.details.toLowerCase().includes(userNameNorm) ||
+            l.details.includes(user.id)))
+    );
   }
 
   // -------------------------------------------------------------

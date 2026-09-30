@@ -227,7 +227,7 @@ export const CheckerInbox: React.FC<CheckerInboxProps> = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="space-y-0.5">
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-400 text-slate-950 uppercase tracking-wider">
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-400 text-slate-950 uppercase tracking-wider">
                 Checker 4-Eyes Queue
               </span>
               <span className="text-xs text-emerald-200 font-mono">

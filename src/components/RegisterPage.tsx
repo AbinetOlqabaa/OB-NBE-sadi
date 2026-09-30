@@ -645,7 +645,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
             <>
               <div className="text-center space-y-1">
                 <h1 className="text-base sm:text-xl font-bold text-slate-900 dark:text-white tracking-tight">
-                  Request Maker / Checker Credentials
+                  Request Maker / Checker / Auditor Credentials
                 </h1>
                 <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-300">
                   Fill in your official bank officer details for supervisory registration

@@ -2,8 +2,8 @@
 
 | ID | Description | Priority | Dependencies | Files | Acceptance Criteria | Status | Test Evidence | Known Blockers | Next Action |
 |---|---|---|---|---|---|---|---|---|---|
-| T01 | Ingest & catalog all 24 report assets | P0 | None | \`report-assets/*\`, \`data/report-definitions/*\`, \`.ai/REPORT_CATALOG.md\`, \`.ai/REPORT_SCHEMA_ANALYSIS.md\` | 24 reports parsed as valid JSON, SHA256 computed, catalog generated | DONE | 24 files in data/report-definitions/ with valid hashes | None | Complete |
-| T02 | Discover NBE Contract & map assumptions | P0 | T01 | \`.ai/NBE_CONTRACT.md\` | Confirmed, proposal-defined, inferred, missing, configurable items separated | DONE | Verified against supplied files | None | Complete |
+| T01 | Ingest & catalog all 24 report assets | P0 | None | \`report-assets/*\`, \`data/report-definitions/*\`, \`.ai/09_REPORT_CATALOG.md\`, \`.ai/10_REPORT_SCHEMA_ANALYSIS.md\` | 24 reports parsed as valid JSON, SHA256 computed, catalog generated | DONE | 24 files in data/report-definitions/ with valid hashes | None | Complete |
+| T02 | Discover NBE Contract & map assumptions | P0 | T01 | \`.ai/11_NBE_CONTRACT.md\` | Confirmed, proposal-defined, inferred, missing, configurable items separated | DONE | Verified against supplied files | None | Complete |
 | T03 | Establish Type Definitions & Data Model | P0 | T02 | \`src/types/regulatory.ts\`, \`src/types/ssot.ts\` | Comprehensive TypeScript definitions for submissions, items, dynamic rows, audit, users | DONE | Type checks cleanly | None | Complete |
 | T04 | Safe Formula Engine & AST Parser | P0 | T03 | \`src/utils/formulaEngine.ts\` | Evaluates formulas (D=B+C, E=A-D, G=E*F, ratios, sums) without \`eval\` or arbitrary code execution | DONE | Formula tests pass | None | Complete |
 | T05 | Validation Engine & Cross-Field Rules | P0 | T03, T04 | \`src/utils/validationEngine.ts\` | Validates required fields, numbers, dates, ranges, totals | DONE | Validation test suite | None | Complete |
@@ -15,7 +15,7 @@
 | T11 | Frontend UI: Maker, Checker, Admin, Simulator | P0 | T06, T07, T08, T09 | \`src/components/*\`, \`src/App.tsx\` | Complete, responsive dashboard obeying frontend design constitution (zero pills, 1440px desktop baseline, tabular figures) | DONE | Full browser UI operational | None | Complete |
 | T12 | Phase 2 SSOT, Ingestion & Data Quality | P1 | T06 | \`src/services/phase2* , src/types/ssot.ts\` | Core Banking & ERP connectors, Bronze/Silver/Gold pipeline, reconciliation, on-demand report generation | DONE | SSOT tests pass | None | Complete |
 | T13 | Comprehensive Automated Test Suite | P0 | All | \`src/tests/*\` | Unit tests, API tests, negative tests, E2E Golden Path test, security tests | DONE | All tests pass with detailed output | None | Complete |
-| T14 | Final Verification & Completion Report | P0 | T13 | \`.ai/COMPLETION_REPORT.md\` | Zero error compile, clean verification evidence | DONE | Evidence documented | None | Final signoff |
+| T14 | Final Verification & Completion Report | P0 | T13 | \`.ai/28_COMPLETION_EVIDENCE.md\` | Zero error compile, clean verification evidence | DONE | Evidence documented | None | Final signoff |
 
 
 # OB AUTONOMOUS TASK QUEUE
@@ -29,7 +29,7 @@ DONE
 VERIFIED
 
 A task may only become VERIFIED after executable evidence exists.
-All tasks below are VERIFIED with executable evidence recorded in `.ai/COMPLETION_EVIDENCE.md`.
+All tasks below are VERIFIED with executable evidence recorded in `.ai/28_COMPLETION_EVIDENCE.md`.
 
 ---
 
@@ -38,11 +38,11 @@ All tasks below are VERIFIED with executable evidence recorded in `.ai/COMPLETIO
 - [x] Inspect complete repository (VERIFIED)
 - [x] Inspect all authoritative NBE files (VERIFIED - 24 canonical returns)
 - [x] Inspect organizational chart (VERIFIED - 8 bank departments)
-- [x] Build SSOT (VERIFIED - `.ai/SSOT.md`, `src/services/ssotRegistry.ts`)
-- [x] Build department catalog (VERIFIED - `.ai/DEPARTMENT_CATALOG.md`)
-- [x] Build report catalog (VERIFIED - `.ai/REPORT_CATALOG.md`)
-- [x] Build RBAC matrix (VERIFIED - `.ai/RBAC_MATRIX.md`)
-- [x] Build workflow model (VERIFIED - `.ai/WORKFLOW_MODEL.md`)
+- [x] Build SSOT (VERIFIED - `.ai/07_SSOT.md`, `src/services/ssotRegistry.ts`)
+- [x] Build department catalog (VERIFIED - `.ai/08_DEPARTMENT_CATALOG.md`)
+- [x] Build report catalog (VERIFIED - `.ai/09_REPORT_CATALOG.md`)
+- [x] Build RBAC matrix (VERIFIED - `.ai/12_RBAC_MATRIX.md`)
+- [x] Build workflow model (VERIFIED - `.ai/21_WORKFLOW_MODEL.md`)
 
 ## P0 — SECURITY
 
@@ -129,4 +129,4 @@ All tasks below are VERIFIED with executable evidence recorded in `.ai/COMPLETIO
 - [x] Audit works (VERIFIED - non-repudiation compliance logs)
 - [x] Security tests pass (VERIFIED - `run-all-tests.ts` 100% green)
 - [x] E2E tests pass (VERIFIED - end-to-end golden path confirmed)
-- [x] Completion evidence recorded (VERIFIED - recorded in `.ai/COMPLETION_EVIDENCE.md`)
+- [x] Completion evidence recorded (VERIFIED - recorded in `.ai/28_COMPLETION_EVIDENCE.md`)

@@ -299,7 +299,7 @@ export const MakerWorkspace: React.FC<MakerWorkspaceProps> = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="space-y-0.5">
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-400 text-slate-950 uppercase tracking-wider">
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-400 text-slate-950 uppercase tracking-wider">
                 Maker Portal
               </span>
               <span className="text-xs text-ob-indigo-200 font-mono">
@@ -385,7 +385,7 @@ export const MakerWorkspace: React.FC<MakerWorkspaceProps> = ({
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span>Authorized Department Returns</span>
               <span
-                className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                className={`ml-1 px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
                   activeTab === 'TEMPLATES'
                     ? 'bg-ob-indigo-700 text-white'
                     : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
@@ -406,7 +406,7 @@ export const MakerWorkspace: React.FC<MakerWorkspaceProps> = ({
               <Clock className="w-3.5 h-3.5" />
               <span>Department Submissions</span>
               <span
-                className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                className={`ml-1 px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold ${
                   activeTab === 'SUBMISSIONS'
                     ? 'bg-ob-indigo-700 text-white'
                     : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'

@@ -261,7 +261,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
             <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
               Format
             </label>
-            <div className="flex rounded-xl bg-slate-100 dark:bg-[#101226] p-1 border border-slate-200 dark:border-[#262D55]">
+            <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700">
               <button
                 type="button"
                 onClick={() => {
@@ -304,7 +304,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
             <select
               value={conflictMode}
               onChange={(e) => setConflictMode(e.target.value as any)}
-              className="w-full text-xs p-2 bg-slate-50 dark:bg-[#101226] border border-slate-200 dark:border-[#2B3369] rounded-xl text-slate-900 dark:text-white"
+              className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
             >
               <option value="UPDATE">Update / Merge Existing</option>
               <option value="SKIP">Skip Duplicates</option>
@@ -318,14 +318,14 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
             <button
               type="button"
               onClick={handleFillSample}
-              className="px-2.5 py-1 bg-slate-100 dark:bg-[#1E234B] hover:bg-slate-200 dark:hover:bg-[#282F65] text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors cursor-pointer"
+              className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors cursor-pointer"
             >
               Load Sample Template
             </button>
             <button
               type="button"
               onClick={handleCopySample}
-              className="px-2.5 py-1 bg-slate-100 dark:bg-[#1E234B] hover:bg-slate-200 dark:hover:bg-[#282F65] text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors flex items-center gap-1 cursor-pointer"
+              className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-medium transition-colors flex items-center gap-1 cursor-pointer"
             >
               {copiedSample ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
               <span>{copiedSample ? 'Copied' : 'Copy Template'}</span>
@@ -351,13 +351,13 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
             placeholder={`Paste ${target === 'DEPARTMENTS' ? 'departments' : 'report types'} ${format} content here or drop a file...`}
             value={payloadText}
             onChange={handleTextChange}
-            className="w-full p-3 font-mono text-xs bg-slate-50 dark:bg-[#101226] border border-slate-200 dark:border-[#2B3369] rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-ob-indigo-500"
+            className="w-full p-3 font-mono text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:border-ob-indigo-500"
           />
         </div>
 
         {/* Live Parsing Preview & Validation Status */}
         {parsedPreview && (
-          <div className="border border-slate-200 dark:border-[#262D55] rounded-xl p-3 bg-slate-50/50 dark:bg-[#121428] space-y-2 text-xs">
+          <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-slate-50/50 dark:bg-slate-900 space-y-2 text-xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {parsedPreview.errors.length === 0 ? (
@@ -385,18 +385,18 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
 
             {/* Quick Preview Table (first 3 items) */}
             {parsedPreview.data.length > 0 && (
-              <div className="max-h-28 overflow-y-auto border border-slate-200 dark:border-[#2B3369] rounded-lg">
+              <div className="max-h-28 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-lg">
                 <table className="w-full text-left text-[11px]">
-                  <thead className="bg-slate-100 dark:bg-[#181C3B] text-slate-600 dark:text-slate-400 sticky top-0">
+                  <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 sticky top-0">
                     <tr>
                       <th className="p-1.5">{target === 'DEPARTMENTS' ? 'Name & Code' : 'ReturnKey & Title'}</th>
                       <th className="p-1.5">{target === 'DEPARTMENTS' ? 'Division' : 'Category'}</th>
                       <th className="p-1.5">{target === 'DEPARTMENTS' ? 'Reports' : 'Departments'}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200 dark:divide-[#262D55]">
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                     {parsedPreview.data.slice(0, 5).map((row, idx) => (
-                      <tr key={idx} className="hover:bg-slate-100/50 dark:hover:bg-[#1B2042]">
+                      <tr key={idx} className="hover:bg-slate-100/50 dark:hover:bg-slate-800/60">
                         <td className="p-1.5 font-medium text-slate-900 dark:text-white">
                           {target === 'DEPARTMENTS' ? `${row.name} (${row.shortCode})` : `${row.ReturnKey} - ${row.Title}`}
                         </td>

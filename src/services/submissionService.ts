@@ -24,6 +24,8 @@ import { nbeAdapter } from './nbeAdapter.ts';
 import type { DeliveryResult } from './nbeAdapter.ts';
 import { auditService } from './auditService.ts';
 import { userService } from './userService.ts';
+import { departmentService } from './departmentService.ts';
+import { configService } from './configService.ts';
 import { indexedDbStorage } from './indexedDbStorage.ts';
 
 // Default Demo User Accounts with verified Oromia Bank departments
@@ -1369,3 +1371,8 @@ class SubmissionServiceClass {
 }
 
 export const submissionService = new SubmissionServiceClass();
+userService.setSubmissionProvider(submissionService);
+departmentService.setSubmissionProvider(submissionService);
+departmentService.setUserProvider(userService);
+configService.setSubmissionProvider(submissionService);
+configService.setUserProvider(userService);

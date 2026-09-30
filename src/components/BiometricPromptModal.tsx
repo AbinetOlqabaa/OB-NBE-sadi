@@ -495,7 +495,7 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
         </div>
 
         {/* User Account Info with Mode Switcher Tag */}
-        <div className="bg-slate-50 dark:bg-[#181C3B] border border-slate-200 dark:border-[#2B3369] rounded-2xl p-2.5 flex items-center justify-between gap-3 text-left">
+        <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-2.5 flex items-center justify-between gap-3 text-left">
           <div className="min-w-0">
             <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
               {userName}
@@ -531,7 +531,7 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
             onClick={() => handleSwitchType('FINGERPRINT')}
             className={`min-h-[48px] p-2 flex flex-col items-center justify-center rounded-xl text-xs font-bold transition-all relative cursor-pointer touch-press ${
               authType === 'FINGERPRINT'
-                ? 'bg-white dark:bg-[#1C2145] text-emerald-600 dark:text-emerald-400 shadow-sm border border-emerald-500/40 ring-1 ring-emerald-500/20'
+                ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm border border-emerald-500/40 ring-1 ring-emerald-500/20'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
@@ -551,7 +551,7 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
             onClick={() => handleSwitchType('FACE')}
             className={`min-h-[48px] p-2 flex flex-col items-center justify-center rounded-xl text-xs font-bold transition-all relative cursor-pointer touch-press ${
               authType === 'FACE'
-                ? 'bg-white dark:bg-[#1C2145] text-teal-600 dark:text-teal-400 shadow-sm border border-teal-500/40 ring-1 ring-teal-500/20'
+                ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-sm border border-teal-500/40 ring-1 ring-teal-500/20'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >

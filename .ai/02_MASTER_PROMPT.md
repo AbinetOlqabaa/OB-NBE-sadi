@@ -1,40 +1,6 @@
 # OB NBE REPORTING SYSTEM
 # AUTONOMOUS FULL-STACK ENGINEERING MASTER PROMPT
 
-## DESIGN SYSTEM RULE
-
-Never fix a visual inconsistency by creating a page-specific styling exception
-when the underlying problem belongs to a shared design system, shared layout,
-shared component, theme token or application shell.
-
-Fix the lowest appropriate architectural layer.
-
-Prefer:
-
-design token
-    ↓
-theme
-    ↓
-shared component
-    ↓
-layout
-    ↓
-page
-
-Avoid:
-
-page-specific override
-    ↓
-another page-specific override
-    ↓
-mobile exception
-    ↓
-tablet exception
-    ↓
-special Auditor exception
-
----
-
 ## VERSION
 
 OB Autonomous Engineering Protocol v1.0
