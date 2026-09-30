@@ -58,6 +58,7 @@ import {
   getDepartmentForReport,
 } from '../data/organizationHierarchy.ts';
 import { departmentService } from '../services/departmentService.ts';
+import { ReportTemplateStudioModal } from './ReportTemplateStudioModal.tsx';
 
 interface AdminDashboardProps {
   currentUser: UserSession;
@@ -77,6 +78,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [templates, setTemplates] = useState<ReportMetadata[]>(getAllReports());
   const [departments, setDepartments] = useState<DepartmentDefinition[]>(() => departmentService.getAll());
   const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>('REPORTS_OVERSIGHT');
+  const [isStudioOpen, setIsStudioOpen] = useState(false);
+  const [studioReportKey, setStudioReportKey] = useState<string | undefined>(undefined);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
@@ -1074,6 +1077,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* 3. Sub-Tab Navigation Header */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0 transition-colors">
         <div className="flex items-center gap-1.5 overflow-x-auto touch-scroll-x pb-1 sm:pb-0">
+          <button
+            type="button"
+            onClick={() => {
+              setStudioReportKey(undefined);
+              setIsStudioOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 touch-manipulation touch-press bg-ob-green-50 dark:bg-ob-green-950 text-ob-green-800 dark:text-ob-green-300 border border-ob-green-300 dark:border-ob-green-700 hover:bg-ob-green-100 dark:hover:bg-ob-green-900"
+            title="Open Dynamic Template Studio to configure report return structure, formulas, and versioning"
+          >
+            <Layers className="w-3.5 h-3.5 text-ob-green-600" />
+            <span>Template Studio</span>
+          </button>
+
           <button
             onClick={() => setActiveSubTab('REPORTS_OVERSIGHT')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 touch-manipulation touch-press ${
@@ -3653,6 +3669,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
         </div>
+      )}
+      {/* DYNAMIC REPORT DEFINITION & TEMPLATE STUDIO MODAL */}
+      {isStudioOpen && (
+        <ReportTemplateStudioModal
+          isOpen={isStudioOpen}
+          onClose={() => setIsStudioOpen(false)}
+          reportKey={studioReportKey}
+          currentUser={currentUser}
+          onSuccess={(msg) => {
+            showNotice('success', msg);
+            refreshAllData();
+          }}
+        />
       )}
     </div>
   );

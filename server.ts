@@ -211,6 +211,100 @@ app.post('/api/config/reports/:key/versions', (req, res) => {
   }
 });
 
+// Admin creates new report definition
+app.post('/api/config/reports', (req, res) => {
+  const actor = req.body.actor || { id: 'usr_admin', name: 'Compliance Administrator', role: 'ADMIN' };
+  if (!req.body.returnKey || !req.body.name) {
+    res.status(400).json({ error: 'ReturnKey and Name are required to create a report definition.' });
+    return;
+  }
+  try {
+    const result = configService.createReportDefinition(req.body, actor);
+    res.status(201).json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Admin updates report definition metadata
+app.put('/api/config/reports/:key', (req, res) => {
+  const actor = req.body.actor || { id: 'usr_admin', name: 'Compliance Administrator', role: 'ADMIN' };
+  try {
+    const updated = configService.updateReportDefinition(req.params.key, req.body, actor);
+    res.json(updated);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Admin retires report definition
+app.post('/api/config/reports/:key/retire', (req, res) => {
+  const actor = req.body.actor || { id: 'usr_admin', name: 'Compliance Administrator', role: 'ADMIN' };
+  try {
+    const retired = configService.retireReport(req.params.key, actor, req.body.reason);
+    res.json(retired);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Create draft version
+app.post('/api/config/reports/:key/versions/draft', (req, res) => {
+  const actor = req.body.actor || { id: 'usr_admin', name: 'Compliance Administrator', role: 'ADMIN' };
+  try {
+    const draft = configService.createDraftVersion(req.params.key, req.body, actor);
+    res.status(201).json(draft);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Update draft version
+app.put('/api/config/reports/:key/versions/:version', (req, res) => {
+  const actor = req.body.actor || { id: 'usr_admin', name: 'Compliance Administrator', role: 'ADMIN' };
+  const vNum = parseInt(req.params.version, 10);
+  try {
+    const updated = configService.updateDraftVersion(req.params.key, vNum, req.body, actor);
+    res.json(updated);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Validate version (structural consistency, cycle detection, unique field codes)
+app.post('/api/config/reports/:key/versions/:version/validate', (req, res) => {
+  const vNum = parseInt(req.params.version, 10);
+  try {
+    const result = configService.validateReportVersion(req.params.key, vNum);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Preview version
+app.get('/api/config/reports/:key/versions/:version/preview', (req, res) => {
+  const vNum = parseInt(req.params.version, 10);
+  try {
+    const preview = configService.previewReportVersion(req.params.key, vNum);
+    res.json(preview);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Publish version
+app.post('/api/config/reports/:key/versions/:version/publish', (req, res) => {
+  const actor = req.body.actor || { id: 'usr_admin', name: 'Compliance Administrator', role: 'ADMIN' };
+  const vNum = parseInt(req.params.version, 10);
+  try {
+    const published = configService.publishReportVersion(req.params.key, vNum, actor, req.body.changelogSummary);
+    res.json(published);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // Dynamic Report Authorization Matrix for Current or Specified User
 app.get('/api/config/authorized-reports', (req, res) => {
   const { userId, role, department } = req.query as any;

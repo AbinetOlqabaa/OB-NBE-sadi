@@ -4,6 +4,40 @@ All notable changes and engineering enhancements for the Oromia Bank NBE Regulat
 
 ---
 
+## [4.0.0-phase4-dynamic-report-definition-and-template-management] - 2026-09-30
+
+### Added
+- **Metadata-Driven Report Definition Engine (`src/services/configService.ts`, `server.ts`)**:
+  - Full metadata representation of bank regulatory returns: ReturnKey, short code, title, description, category, frequency (`MONTHLY`, `QUARTERLY`, `ANNUAL`, `ON_DEMAND`), institution code, financial year, and department ownership.
+  - Granular schema definition: sections (title, code, repeating flags), return balance fields (data types, required status, calculated flags, formulas), dynamic schedule columns (column keys, header labels, widths, data types, required constraints), rows, and central bank NBE mapping.
+  - Formula dependency engine and cycle detection: Topological DFS graph analysis validates calculation expressions and catches circular formula dependencies before publishing.
+  - Field code uniqueness validation: Checks all balance field item codes and schedule column keys across the schema to prevent ambiguity.
+  - REST endpoints for report lifecycle: `POST /api/config/reports` (create), `PUT /api/config/reports/:key` (update metadata), `POST /api/config/reports/:key/retire` (retire), `POST /api/config/reports/:key/versions/draft` (create draft version), `PUT /api/config/reports/:key/versions/:version` (update draft), `POST /api/config/reports/:key/versions/:version/validate` (validate version), `GET /api/config/reports/:key/versions/:version/preview` (preview metadata), `POST /api/config/reports/:key/versions/:version/publish` (publish active version).
+- **Immutable Versioning Lifecycle (Draft → Validate → Preview → Publish → Active → Retired)**:
+  - Non-destructive evolution: Existing published versions used by historical submissions are strictly preserved and never mutated.
+  - Draft state: Working drafts can be saved and edited iteratively without affecting active reporting.
+  - Validation: Structural integrity, unique field codes, formula dependencies, and cycle detection.
+  - Preview: Live schema conversion to `ReportMetadata` preview format for inspection before publishing.
+  - Authoritative publishing: Transitions the target version to `ACTIVE`, supersedes the previous active version with an `effectiveTo` timestamp, and immediately syncs the active regulatory catalog.
+  - Safe retirement: Marks obsolete returns as `RETIRED` with statutory reasoning, archiving them while preserving past submissions for audit.
+- **Administrator Template Studio UX (`src/components/ReportTemplateStudioModal.tsx`, `src/components/DepartmentReportManagement.tsx`)**:
+  - Multi-tab studio: Metadata, Sections, Fields, Columns, Formulas, Validation, Preview, Publish.
+  - Visual field editor, column editor, section editor, and formula builder.
+  - Real-time DFS cycle detection and structural validation feedback.
+  - Version history comparison modal (`ReportVersionHistoryModal.tsx`) showing field-by-field deltas and changelog records.
+  - M:N department linkage management integrated with bank organizational structure.
+- **Dynamic Forms & Submission Reproducibility Integration (`src/components/DynamicReportForm.tsx`, `src/services/submissionService.ts`, `src/services/nbeAdapter.ts`)**:
+  - `submissionService.createSubmission` automatically queries `configService` to stamp the current active `templateVersion` and seals an immutable `templateSnapshot`.
+  - `DynamicReportForm.tsx` dynamically renders sections, fields, and dynamic schedules using the submission's `templateSnapshot`.
+  - Historical submissions remain frozen to their original template schema, while new submissions consume the latest published version.
+  - Maker-Checker-Auditor segregation of duties fully maintained across all dynamic returns.
+  - `NBEAdapter.buildNBEPayload` canonically translates dynamic metadata returns into the central bank BSD payload format (`ReturnItemsList`, `DynamicItemsList`).
+- **Comprehensive Automated Test Suite (`src/tests/dynamic-report-definition.test.ts`)**:
+  - 10-part automated test suite validating: 24 NBE preservation, metadata creation, cycle detection DFS, preview, publish, version bump (V1->V2), immutability, dual-template reproducibility, Auditor inspection, NBE payload, safe retirement.
+  - Integrated into `src/tests/run-all-tests.ts` (16/16 test suites passing cleanly with 100% success).
+
+---
+
 ## [3.0.0-phase3-admin-users-and-departments] - 2026-09-30
 
 ### Added

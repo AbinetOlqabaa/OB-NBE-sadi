@@ -608,13 +608,15 @@ class SubmissionServiceClass {
 
     const templateSnapshot = this.createTemplateSnapshot(report);
     const structuralHash = this.generateStructuralHash(report);
+    const activeDef = configService.getReportDefinition(report.ReturnKey);
+    const activeTmplVersion = activeDef?.currentVersion || 1;
     const initialValuesCopy = JSON.parse(JSON.stringify(initialValues));
     const initialDynamicCopy = JSON.parse(JSON.stringify(initialDynamicRows));
     const integrityHash = this.computeIntegrityHash({
       id,
       reportKey: report.ReturnKey,
       version: 1,
-      templateVersion: 1,
+      templateVersion: activeTmplVersion,
       values: initialValuesCopy,
       status: 'DRAFT',
     });
@@ -622,7 +624,7 @@ class SubmissionServiceClass {
     const initialSnapshot: SubmissionSnapshot = {
       snapshotId: `snap_${id}_v1_${Date.now()}`,
       version: 1,
-      templateVersion: 1,
+      templateVersion: activeTmplVersion,
       dataVersion: 1,
       timestamp: now,
       status: 'DRAFT',
@@ -646,7 +648,7 @@ class SubmissionServiceClass {
       institutionCode: report.InstCode,
       status: 'DRAFT',
       version: 1,
-      templateVersion: 1,
+      templateVersion: activeTmplVersion,
       dataVersion: 1,
       templateSnapshot,
       dataSnapshot: initialValuesCopy,

@@ -346,6 +346,7 @@ import { runPaginationSuiteTests } from './pagination-suite.test.ts';
 import { runPhase2ConfigurationSSOTTests } from './phase2-configuration-ssot.test.ts';
 import { runPhase3AdminUsersAndDepartmentsTests } from './phase3-admin-users-departments.test.ts';
 import { runPhase4RegressionHardeningTests } from './phase4-regression-hardening.test.ts';
+import { runDynamicReportDefinitionTests } from './dynamic-report-definition.test.ts';
 import { runPhase5FinalVerificationTests } from './phase5-final-verification.test.ts';
 
 async function runFullApplicationTestSuite() {
@@ -363,6 +364,7 @@ async function runFullApplicationTestSuite() {
   await runDesignSystemColorsTests();
   await runPaginationSuiteTests();
   await runPhase4RegressionHardeningTests();
+  await runDynamicReportDefinitionTests();
   await runPhase5FinalVerificationTests();
 
   console.log('\n========================================================================');

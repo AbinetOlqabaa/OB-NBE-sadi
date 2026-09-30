@@ -5,16 +5,17 @@
 
 import { BrowserSafeEventEmitter } from '../utils/browserEventEmitter.ts';
 import { OROMIA_BANK_DEPARTMENTS, DepartmentDefinition } from '../data/organizationHierarchy.ts';
-import { getAllReports, getReportByKey, NBE_REPORTS } from '../data/report-registry.ts';
+import { getAllReports, getReportByKey, NBE_REPORTS, syncSSOTReportToRegistry, retireSSOTReportInRegistry } from '../data/report-registry.ts';
 import { auditService } from './auditService.ts';
+import type { ReportMetadata } from '../types/regulatory.ts';
 
 // ============================================================================
 // 1. DATA CONTRACTS & SSOT TYPES
 // ============================================================================
 
 export type DepartmentStatus = 'ACTIVE' | 'INACTIVE' | 'RESTRUCTURED' | 'PLANNED';
-export type ReportStatus = 'ACTIVE' | 'INACTIVE' | 'DECOMMISSIONED' | 'DRAFT';
-export type VersionStatus = 'ACTIVE' | 'SUPERSEDED' | 'DRAFT' | 'RETIRED';
+export type ReportStatus = 'ACTIVE' | 'INACTIVE' | 'DECOMMISSIONED' | 'DRAFT' | 'RETIRED';
+export type VersionStatus = 'DRAFT' | 'VALIDATED' | 'PREVIEW' | 'PUBLISHED' | 'ACTIVE' | 'SUPERSEDED' | 'RETIRED';
 export type ReportFrequency = 'MONTHLY' | 'QUARTERLY' | 'ANNUAL' | 'ON_DEMAND';
 export type AssignmentRole = 'PRIMARY_OWNER' | 'CONTRIBUTOR' | 'REVIEWER' | 'SUPERVISORY';
 export type UserDuty = 'MAKER' | 'CHECKER' | 'AUDITOR' | 'VIEWER';
@@ -60,12 +61,14 @@ export interface ReportFieldSSOT {
   itemCode: string;
   itemDescription: string;
   sectionId?: string;
+  sectionTitle?: string;
   dataType: FieldDataType;
   isRequired: boolean;
   isCalculated: boolean;
   formulaExpression?: string;
   validationRules: any[];
   order: number;
+  defaultValue?: string | number;
   displayConfig?: Record<string, any>;
 }
 
@@ -77,6 +80,7 @@ export interface ReportColumnSSOT {
   isRequired: boolean;
   order: number;
   width?: string;
+  defaultValue?: string | number;
 }
 
 export interface ReportRowSSOT {
@@ -99,12 +103,20 @@ export interface ReportVersionSSOT {
   changeDiff: Array<{ field: string; oldValue: any; newValue: any }>;
   createdBy: string;
   createdAt: string;
+  publishedAt?: string | null;
   sections: ReportSectionSSOT[];
   fields: ReportFieldSSOT[];
   columns: ReportColumnSSOT[];
   rows: ReportRowSSOT[];
   formulas: any[];
   validationRules: any[];
+  nbeMapping?: Record<string, any>;
+  validationResults?: {
+    valid: boolean;
+    errors: string[];
+    warnings: string[];
+    validatedAt: string;
+  };
   schemaSnapshot: {
     itemCount: number;
     dynamicAreaCount: number;
@@ -127,6 +139,7 @@ export interface ReportDefinitionSSOT {
   instCode: string;
   finYear: number;
   defaultDepartmentId: string;
+  departmentIds?: string[];
   currentVersion: number;
   effectiveFrom: string;
   effectiveTo: string | null;
@@ -135,6 +148,63 @@ export interface ReportDefinitionSSOT {
   createdAt: string;
   updatedAt: string;
   activeVersionSnapshot?: ReportVersionSSOT;
+}
+
+/**
+ * Transforms an authoritative SSOT ReportDefinition and ReportVersion into a full ReportMetadata instance
+ * for dynamic form consumption, validation, calculation, and NBE transmission.
+ */
+export function versionToReportMetadata(
+  def: ReportDefinitionSSOT,
+  version: ReportVersionSSOT,
+  departmentName?: string
+): ReportMetadata {
+  return {
+    ReturnKey: def.returnKey,
+    Code: def.code || def.returnKey,
+    Title: def.name,
+    Category: (def.category || 'Credit & Lending') as any,
+    department: departmentName || def.defaultDepartmentId,
+    departments: def.departmentIds && def.departmentIds.length > 0 ? def.departmentIds : [departmentName || def.defaultDepartmentId],
+    Frequency: (def.frequency === 'ON_DEMAND' ? 'MONTHLY' : def.frequency) as any,
+    InstCode: def.instCode || '0000013',
+    FinYear: def.finYear || 2026,
+    StartDate: version.effectiveFrom || `${def.finYear || 2026}-01-01T00:00:00`,
+    EndDate: version.effectiveTo || `${def.finYear || 2026}-12-31T00:00:00`,
+    Description: def.description || `Prudential return for ${def.name}`,
+    ReturnItemsList: (version.fields || []).map((f) => ({
+      Code: f.itemCode,
+      Value: f.defaultValue !== undefined ? f.defaultValue : '',
+      _description: f.itemDescription || f.itemCode,
+      _dataType: (f.dataType === 'STRING' ? 'TEXT' : f.dataType === 'DATE' ? 'DATE' : 'NUMERIC') as any,
+      _required: f.isRequired ?? true,
+      section: f.sectionTitle || f.sectionId,
+      isTotal: f.isCalculated,
+    })),
+    DynamicItemsList: (version.columns && version.columns.length > 0) ? [
+      {
+        Area: 1,
+        _areaName: 'Schedule Breakdown',
+        DynamicItems: version.columns.map((c) => ({
+          Code: c.columnKey,
+          Value: c.defaultValue !== undefined ? c.defaultValue : '',
+          _description: c.headerLabel || c.columnKey,
+          _dataType: (c.dataType === 'STRING' || c.dataType === 'TEXT' ? 'TEXT' : c.dataType === 'DATE' ? 'DATE' : 'NUMERIC') as any,
+          _required: c.isRequired ?? true,
+        })),
+      },
+    ] : [],
+    Formulas: (version.formulas || []).map((form: any) => ({
+      targetCode: form.targetCode || form.targetField || form.code,
+      expression: form.expression,
+      description: form.description || `Calculation for ${form.targetCode || form.code}`,
+      dependencies: form.dependencies || [],
+    })),
+    ValidationRules: version.validationRules || [],
+    SourceFilename: `${def.returnKey}_v${version.versionNumber}.json`,
+    SourceHash: `sha256-v${version.versionNumber}-${Date.now()}`,
+    isCustom: true,
+  };
 }
 
 export interface DepartmentReportAssignmentSSOT {
@@ -1230,10 +1300,847 @@ class ConfigurationEngine {
     return list.find((v) => v.versionNumber === versionNumber) || null;
   }
 
-  private getActiveVersion(returnKey: string): ReportVersionSSOT | null {
+  public getActiveVersion(returnKey: string): ReportVersionSSOT | null {
     const list = this.versions.get(returnKey);
     if (!list || list.length === 0) return null;
     return list.find((v) => v.status === 'ACTIVE') || list[list.length - 1];
+  }
+
+  /**
+   * Creates a new metadata-driven report definition with initial version, sections, fields, and department ownership.
+   */
+  public createReportDefinition(
+    input: {
+      returnKey: string;
+      code?: string;
+      name: string;
+      description?: string;
+      category?: string;
+      frequency?: ReportFrequency;
+      status?: ReportStatus;
+      instCode?: string;
+      finYear?: number;
+      defaultDepartmentId?: string;
+      departmentIds?: string[];
+      sections?: ReportSectionSSOT[];
+      fields?: ReportFieldSSOT[];
+      columns?: ReportColumnSSOT[];
+      formulas?: any[];
+      validationRules?: any[];
+      nbeMapping?: Record<string, any>;
+      displayConfiguration?: Record<string, any>;
+      initialStatus?: VersionStatus;
+      changelogSummary?: string;
+    },
+    actor: ActorInfo
+  ): { report: ReportDefinitionSSOT; version: ReportVersionSSOT } {
+    const normKey = input.returnKey.trim().toUpperCase();
+    if (this.reports.has(normKey)) {
+      throw new Error(`Report definition with ReturnKey '${normKey}' already exists.`);
+    }
+
+    const now = new Date().toISOString();
+    const defaultDept = input.defaultDepartmentId || (input.departmentIds && input.departmentIds[0]) || 'dept_credit_ops';
+    const initialFields = input.fields && input.fields.length > 0 ? input.fields : [
+      {
+        id: `fld_${normKey}_00001`,
+        itemId: '00001',
+        itemCode: `${normKey}_00001`,
+        itemDescription: 'Principal Balance / Exposure Value',
+        dataType: 'NUMERIC' as FieldDataType,
+        isRequired: true,
+        isCalculated: false,
+        validationRules: [],
+        order: 1,
+      },
+      {
+        id: `fld_${normKey}_00002`,
+        itemId: '00002',
+        itemCode: `${normKey}_00002`,
+        itemDescription: 'Mandatory Provisioning Rate (%)',
+        dataType: 'PERCENTAGE' as FieldDataType,
+        isRequired: false,
+        isCalculated: false,
+        validationRules: [],
+        order: 2,
+      },
+      {
+        id: `fld_${normKey}_00003`,
+        itemId: '00003',
+        itemCode: `${normKey}_00003`,
+        itemDescription: 'Required Statutory Provision Amount',
+        dataType: 'NUMERIC' as FieldDataType,
+        isRequired: false,
+        isCalculated: true,
+        formulaExpression: `${normKey}_00001 * ${normKey}_00002`,
+        validationRules: [],
+        order: 3,
+      },
+    ];
+
+    const initialFormulas = input.formulas && input.formulas.length > 0 ? input.formulas : [
+      {
+        targetCode: `${normKey}_00003`,
+        expression: `${normKey}_00001 * ${normKey}_00002`,
+        description: 'Calculated Required Provision',
+        dependencies: [`${normKey}_00001`, `${normKey}_00002`],
+      },
+    ];
+
+    const vStatus: VersionStatus = input.initialStatus || 'ACTIVE';
+
+    const version1: ReportVersionSSOT = {
+      versionId: `ver_${normKey}_v1`,
+      reportKey: normKey,
+      versionNumber: 1,
+      status: vStatus,
+      effectiveFrom: now,
+      effectiveTo: null,
+      changelogSummary: input.changelogSummary || 'Initial metadata-driven report definition registered by Administrator',
+      changeDiff: [],
+      createdBy: actor.name,
+      createdAt: now,
+      publishedAt: vStatus === 'ACTIVE' ? now : null,
+      sections: input.sections && input.sections.length > 0 ? input.sections : [
+        {
+          id: `sec_${normKey}_main`,
+          code: 'MAIN',
+          title: input.name,
+          order: 1,
+          description: input.description || '',
+          isRepeating: false,
+        },
+      ],
+      fields: initialFields,
+      columns: input.columns || [],
+      rows: [],
+      formulas: initialFormulas,
+      validationRules: input.validationRules || [],
+      nbeMapping: input.nbeMapping || { returnKey: normKey, instCode: input.instCode || '0000013', finYear: input.finYear || 2026 },
+      schemaSnapshot: {
+        itemCount: initialFields.length,
+        dynamicAreaCount: (input.columns || []).length,
+        formulaCount: initialFormulas.length,
+        validationRuleCount: (input.validationRules || []).length,
+        ReturnItemsList: initialFields.map((f) => ({
+          ItemId: f.itemId,
+          ItemCode: f.itemCode,
+          ItemDescription: f.itemDescription,
+          IsCalculated: f.isCalculated,
+          FormulaExpression: f.formulaExpression,
+        })),
+        DynamicItemsList: (input.columns || []).map((c) => ({
+          ItemCode: c.columnKey,
+          ItemDescription: c.headerLabel,
+        })),
+      },
+    };
+
+    const report: ReportDefinitionSSOT = {
+      id: `rep_${normKey}`,
+      returnKey: normKey,
+      code: (input.code || normKey).toUpperCase(),
+      name: input.name,
+      description: input.description || `Prudential return for ${input.name}`,
+      category: input.category || 'Credit & Lending',
+      frequency: input.frequency || 'MONTHLY',
+      status: input.status || (vStatus === 'ACTIVE' ? 'ACTIVE' : 'DRAFT'),
+      instCode: input.instCode || '0000013',
+      finYear: input.finYear || 2026,
+      defaultDepartmentId: defaultDept,
+      departmentIds: input.departmentIds && input.departmentIds.length > 0 ? input.departmentIds : [defaultDept],
+      currentVersion: 1,
+      effectiveFrom: now,
+      effectiveTo: null,
+      nbeMapping: input.nbeMapping || { returnKey: normKey, instCode: input.instCode || '0000013', finYear: input.finYear || 2026 },
+      displayConfiguration: input.displayConfiguration || { layout: 'STANDARD_TABLE' },
+      createdAt: now,
+      updatedAt: now,
+      activeVersionSnapshot: vStatus === 'ACTIVE' ? version1 : undefined,
+    };
+
+    this.reports.set(normKey, report);
+    this.versions.set(normKey, [version1]);
+
+    // Create departmental assignments
+    const deptsToAssign = report.departmentIds && report.departmentIds.length > 0 ? report.departmentIds : [defaultDept];
+    deptsToAssign.forEach((dId, idx) => {
+      try {
+        this.assignDepartmentReport(
+          {
+            departmentId: dId,
+            reportKey: normKey,
+            role: idx === 0 ? 'PRIMARY_OWNER' : 'CONTRIBUTOR',
+            notes: `Initial departmental assignment for ${normKey}`,
+          },
+          actor
+        );
+      } catch {}
+    });
+
+    // If published active, sync into active catalog
+    if (vStatus === 'ACTIVE') {
+      const primaryDeptName = this.departments.get(defaultDept)?.name || 'Credit Operations & Portfolio Management';
+      const metadata = versionToReportMetadata(report, version1, primaryDeptName);
+      syncSSOTReportToRegistry(metadata);
+    }
+
+    this.recordChange({
+      actorId: actor.id,
+      actorName: actor.name,
+      actorRole: actor.role,
+      entityType: 'REPORT_DEFINITION',
+      entityId: normKey,
+      entityName: report.name,
+      action: 'CREATE',
+      summary: `Created new metadata-driven report definition '${report.name}' (${normKey}) v1`,
+      newState: report,
+    });
+
+    this.bumpVersion('REPORT');
+    return { report, version: version1 };
+  }
+
+  /**
+   * Updates report definition metadata and linkages.
+   */
+  public updateReportDefinition(
+    returnKey: string,
+    updates: {
+      name?: string;
+      code?: string;
+      description?: string;
+      category?: string;
+      frequency?: ReportFrequency;
+      status?: ReportStatus;
+      defaultDepartmentId?: string;
+      departmentIds?: string[];
+      nbeMapping?: Record<string, any>;
+      displayConfiguration?: Record<string, any>;
+    },
+    actor: ActorInfo
+  ): ReportDefinitionSSOT {
+    const report = this.reports.get(returnKey);
+    if (!report) throw new Error(`Report definition '${returnKey}' not found.`);
+
+    const oldState = { ...report };
+    const diff: Array<{ field: string; oldValue: any; newValue: any }> = [];
+
+    if (updates.name && updates.name !== report.name) {
+      diff.push({ field: 'name', oldValue: report.name, newValue: updates.name });
+      report.name = updates.name;
+    }
+    if (updates.code && updates.code !== report.code) {
+      diff.push({ field: 'code', oldValue: report.code, newValue: updates.code.toUpperCase() });
+      report.code = updates.code.toUpperCase();
+    }
+    if (updates.description !== undefined && updates.description !== report.description) {
+      diff.push({ field: 'description', oldValue: report.description, newValue: updates.description });
+      report.description = updates.description;
+    }
+    if (updates.category && updates.category !== report.category) {
+      diff.push({ field: 'category', oldValue: report.category, newValue: updates.category });
+      report.category = updates.category;
+    }
+    if (updates.frequency && updates.frequency !== report.frequency) {
+      diff.push({ field: 'frequency', oldValue: report.frequency, newValue: updates.frequency });
+      report.frequency = updates.frequency;
+    }
+    if (updates.status && updates.status !== report.status) {
+      diff.push({ field: 'status', oldValue: report.status, newValue: updates.status });
+      report.status = updates.status;
+    }
+    if (updates.defaultDepartmentId && updates.defaultDepartmentId !== report.defaultDepartmentId) {
+      diff.push({ field: 'defaultDepartmentId', oldValue: report.defaultDepartmentId, newValue: updates.defaultDepartmentId });
+      report.defaultDepartmentId = updates.defaultDepartmentId;
+    }
+    if (updates.departmentIds) {
+      diff.push({ field: 'departmentIds', oldValue: report.departmentIds, newValue: updates.departmentIds });
+      report.departmentIds = updates.departmentIds;
+      // Re-synchronize department assignments
+      updates.departmentIds.forEach((dId, idx) => {
+        try {
+          this.assignDepartmentReport(
+            {
+              departmentId: dId,
+              reportKey: returnKey,
+              role: idx === 0 ? 'PRIMARY_OWNER' : 'CONTRIBUTOR',
+              notes: `Departmental assignment updated for ${returnKey}`,
+            },
+            actor
+          );
+        } catch {}
+      });
+    }
+    if (updates.nbeMapping) {
+      diff.push({ field: 'nbeMapping', oldValue: report.nbeMapping, newValue: updates.nbeMapping });
+      report.nbeMapping = { ...report.nbeMapping, ...updates.nbeMapping };
+    }
+    if (updates.displayConfiguration) {
+      report.displayConfiguration = { ...report.displayConfiguration, ...updates.displayConfiguration };
+    }
+
+    report.updatedAt = new Date().toISOString();
+    this.reports.set(returnKey, report);
+
+    // Sync into active catalog if active version exists
+    const activeVersion = this.getActiveVersion(returnKey);
+    if (activeVersion && activeVersion.status === 'ACTIVE') {
+      const primaryDeptName = this.departments.get(report.defaultDepartmentId)?.name || 'Credit Operations & Portfolio Management';
+      const metadata = versionToReportMetadata(report, activeVersion, primaryDeptName);
+      syncSSOTReportToRegistry(metadata);
+    }
+
+    this.recordChange({
+      actorId: actor.id,
+      actorName: actor.name,
+      actorRole: actor.role,
+      entityType: 'REPORT_DEFINITION',
+      entityId: returnKey,
+      entityName: report.name,
+      action: 'UPDATE',
+      summary: `Updated metadata for report '${report.name}' (${diff.map((d) => d.field).join(', ')})`,
+      diff,
+      oldState,
+      newState: report,
+    });
+
+    this.bumpVersion('REPORT');
+    return report;
+  }
+
+  /**
+   * Creates a new working draft version for a report, copying previous schema or accepting modifications.
+   */
+  public createDraftVersion(
+    returnKey: string,
+    input: {
+      changelogSummary?: string;
+      fields?: ReportFieldSSOT[];
+      columns?: ReportColumnSSOT[];
+      sections?: ReportSectionSSOT[];
+      formulas?: any[];
+      validationRules?: any[];
+      nbeMapping?: Record<string, any>;
+    },
+    actor: ActorInfo
+  ): ReportVersionSSOT {
+    const report = this.reports.get(returnKey);
+    if (!report) throw new Error(`Report with ReturnKey '${returnKey}' not found.`);
+
+    const versionList = this.versions.get(returnKey) || [];
+    const currentActive = this.getActiveVersion(returnKey);
+
+    // If an existing un-published draft already exists, update it
+    const existingDraft = versionList.find(
+      (v) => v.status === 'DRAFT' || v.status === 'VALIDATED' || v.status === 'PREVIEW'
+    );
+    if (existingDraft) {
+      if (input.changelogSummary) existingDraft.changelogSummary = input.changelogSummary;
+      if (input.fields) existingDraft.fields = [...input.fields];
+      if (input.columns) existingDraft.columns = [...input.columns];
+      if (input.sections) existingDraft.sections = [...input.sections];
+      if (input.formulas) existingDraft.formulas = [...input.formulas];
+      if (input.validationRules) existingDraft.validationRules = [...input.validationRules];
+      if (input.nbeMapping) existingDraft.nbeMapping = input.nbeMapping;
+      existingDraft.status = 'DRAFT';
+      return existingDraft;
+    }
+
+    const nextVersionNumber = report.currentVersion + 1;
+    const now = new Date().toISOString();
+
+    const newVersion: ReportVersionSSOT = {
+      versionId: `ver_${returnKey}_v${nextVersionNumber}`,
+      reportKey: returnKey,
+      versionNumber: nextVersionNumber,
+      status: 'DRAFT',
+      effectiveFrom: now,
+      effectiveTo: null,
+      changelogSummary: input.changelogSummary || `Draft Version ${nextVersionNumber} revision`,
+      changeDiff: [],
+      createdBy: actor.name,
+      createdAt: now,
+      publishedAt: null,
+      sections: input.sections || (currentActive ? JSON.parse(JSON.stringify(currentActive.sections)) : []),
+      fields: input.fields || (currentActive ? JSON.parse(JSON.stringify(currentActive.fields)) : []),
+      columns: input.columns || (currentActive ? JSON.parse(JSON.stringify(currentActive.columns)) : []),
+      rows: currentActive?.rows || [],
+      formulas: input.formulas || (currentActive ? JSON.parse(JSON.stringify(currentActive.formulas)) : []),
+      validationRules: input.validationRules || (currentActive ? JSON.parse(JSON.stringify(currentActive.validationRules)) : []),
+      nbeMapping: input.nbeMapping || currentActive?.nbeMapping || report.nbeMapping,
+      schemaSnapshot: {
+        itemCount: (input.fields || currentActive?.fields || []).length,
+        dynamicAreaCount: (input.columns || currentActive?.columns || []).length,
+        formulaCount: (input.formulas || currentActive?.formulas || []).length,
+        validationRuleCount: (input.validationRules || currentActive?.validationRules || []).length,
+        ReturnItemsList: [],
+        DynamicItemsList: [],
+      },
+    };
+
+    versionList.push(newVersion);
+    this.versions.set(returnKey, versionList);
+
+    this.recordChange({
+      actorId: actor.id,
+      actorName: actor.name,
+      actorRole: actor.role,
+      entityType: 'REPORT_VERSION',
+      entityId: newVersion.versionId,
+      entityName: `${report.name} (v${nextVersionNumber} DRAFT)`,
+      action: 'CREATE',
+      summary: `Created draft Version ${nextVersionNumber} for '${returnKey}'`,
+      newState: newVersion,
+    });
+
+    this.bumpVersion('REPORT');
+    return newVersion;
+  }
+
+  /**
+   * Updates an in-flight working draft version.
+   */
+  public updateDraftVersion(
+    returnKey: string,
+    versionNumber: number,
+    updates: {
+      changelogSummary?: string;
+      sections?: ReportSectionSSOT[];
+      fields?: ReportFieldSSOT[];
+      columns?: ReportColumnSSOT[];
+      rows?: ReportRowSSOT[];
+      formulas?: any[];
+      validationRules?: any[];
+      nbeMapping?: Record<string, any>;
+    },
+    actor: ActorInfo
+  ): ReportVersionSSOT {
+    const version = this.getReportVersion(returnKey, versionNumber);
+    if (!version) throw new Error(`Version ${versionNumber} for report '${returnKey}' not found.`);
+
+    if (version.status === 'SUPERSEDED' || version.status === 'RETIRED') {
+      throw new Error(`Cannot modify version in '${version.status}' status (immutable historical record).`);
+    }
+
+    if (updates.changelogSummary !== undefined) version.changelogSummary = updates.changelogSummary;
+    if (updates.sections !== undefined) version.sections = updates.sections;
+    if (updates.fields !== undefined) version.fields = updates.fields;
+    if (updates.columns !== undefined) version.columns = updates.columns;
+    if (updates.rows !== undefined) version.rows = updates.rows;
+    if (updates.formulas !== undefined) version.formulas = updates.formulas;
+    if (updates.validationRules !== undefined) version.validationRules = updates.validationRules;
+    if (updates.nbeMapping !== undefined) version.nbeMapping = updates.nbeMapping;
+
+    // Reset status to DRAFT so re-validation is required before publishing
+    if (version.status === 'VALIDATED' || version.status === 'PREVIEW') {
+      version.status = 'DRAFT';
+    }
+
+    this.bumpVersion('REPORT');
+    return version;
+  }
+
+  /**
+   * Rigorously validates a report version for structural integrity, unique field codes, formula dependencies and cycle detection.
+   */
+  public validateReportVersion(returnKey: string, versionNumber: number): {
+    valid: boolean;
+    errors: string[];
+    warnings: string[];
+    summary: {
+      fieldCount: number;
+      columnCount: number;
+      formulaCount: number;
+      sectionCount: number;
+    };
+  } {
+    const version = this.getReportVersion(returnKey, versionNumber);
+    if (!version) {
+      throw new Error(`Version ${versionNumber} for report '${returnKey}' not found.`);
+    }
+
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    // 1. Check fields
+    if (!version.fields || version.fields.length === 0) {
+      errors.push('Report version must define at least one return field.');
+    }
+
+    const fieldCodes = new Set<string>();
+    (version.fields || []).forEach((f, idx) => {
+      if (!f.itemCode || !f.itemCode.trim()) {
+        errors.push(`Field at position ${idx + 1} has an empty field code.`);
+      } else {
+        const codeUpper = f.itemCode.trim().toUpperCase();
+        if (fieldCodes.has(codeUpper)) {
+          errors.push(`Duplicate field code '${f.itemCode}' detected in version fields.`);
+        }
+        fieldCodes.add(codeUpper);
+      }
+      if (!f.itemDescription || !f.itemDescription.trim()) {
+        warnings.push(`Field '${f.itemCode}' has no descriptive label.`);
+      }
+    });
+
+    // 2. Check dynamic columns
+    const columnKeys = new Set<string>();
+    (version.columns || []).forEach((c, idx) => {
+      if (!c.columnKey || !c.columnKey.trim()) {
+        errors.push(`Schedule column at position ${idx + 1} has an empty column key.`);
+      } else {
+        const colUpper = c.columnKey.trim().toUpperCase();
+        if (columnKeys.has(colUpper)) {
+          errors.push(`Duplicate schedule column key '${c.columnKey}' detected.`);
+        }
+        columnKeys.add(colUpper);
+      }
+    });
+
+    // 3. Formula dependencies & Cycle Detection
+    const formulaTargets = new Set<string>();
+    const formulaGraph: Record<string, string[]> = {};
+
+    (version.formulas || []).forEach((formula: any, idx: number) => {
+      const target = (formula.targetCode || formula.targetField || formula.code || '').trim().toUpperCase();
+      if (!target) {
+        errors.push(`Formula at index ${idx + 1} has an empty target code.`);
+        return;
+      }
+      if (!fieldCodes.has(target)) {
+        errors.push(`Formula target '${target}' does not exist among report return fields.`);
+      }
+      if (formulaTargets.has(target)) {
+        errors.push(`Multiple formulas target the same field '${target}'.`);
+      }
+      formulaTargets.add(target);
+
+      const deps: string[] = Array.isArray(formula.dependencies)
+        ? formula.dependencies.map((d: string) => d.trim().toUpperCase())
+        : [];
+
+      deps.forEach((dep) => {
+        if (!fieldCodes.has(dep)) {
+          errors.push(`Formula targeting '${target}' references non-existent dependency field '${dep}'.`);
+        }
+      });
+
+      formulaGraph[target] = deps;
+    });
+
+    // Cycle Detection in Formulas using DFS
+    const visited = new Set<string>();
+    const inStack = new Set<string>();
+
+    function hasCycle(node: string, path: string[]): boolean {
+      visited.add(node);
+      inStack.add(node);
+      path.push(node);
+
+      const neighbors = formulaGraph[node] || [];
+      for (const neighbor of neighbors) {
+        if (!visited.has(neighbor)) {
+          if (hasCycle(neighbor, path)) return true;
+        } else if (inStack.has(neighbor)) {
+          path.push(neighbor);
+          return true;
+        }
+      }
+
+      inStack.delete(node);
+      path.pop();
+      return false;
+    }
+
+    for (const node of Object.keys(formulaGraph)) {
+      if (!visited.has(node)) {
+        const cyclePath: string[] = [];
+        if (hasCycle(node, cyclePath)) {
+          errors.push(`Circular formula calculation dependency detected: ${cyclePath.join(' -> ')}.`);
+          break;
+        }
+      }
+    }
+
+    const valid = errors.length === 0;
+
+    version.validationResults = {
+      valid,
+      errors,
+      warnings,
+      validatedAt: new Date().toISOString(),
+    };
+
+    if (valid && (version.status === 'DRAFT' || version.status === 'VALIDATED')) {
+      version.status = 'VALIDATED';
+    }
+
+    return {
+      valid,
+      errors,
+      warnings,
+      summary: {
+        fieldCount: (version.fields || []).length,
+        columnCount: (version.columns || []).length,
+        formulaCount: (version.formulas || []).length,
+        sectionCount: (version.sections || []).length,
+      },
+    };
+  }
+
+  /**
+   * Generates a preview schema for a version and transitions status to PREVIEW if validated.
+   */
+  public previewReportVersion(returnKey: string, versionNumber: number): {
+    version: ReportVersionSSOT;
+    previewMetadata: ReportMetadata;
+  } {
+    const report = this.reports.get(returnKey);
+    if (!report) throw new Error(`Report definition '${returnKey}' not found.`);
+
+    const version = this.getReportVersion(returnKey, versionNumber);
+    if (!version) throw new Error(`Version ${versionNumber} for report '${returnKey}' not found.`);
+
+    if (version.status === 'VALIDATED') {
+      version.status = 'PREVIEW';
+    }
+
+    const primaryDept = this.departments.get(report.defaultDepartmentId)?.name || 'Credit Operations & Portfolio Management';
+    const previewMetadata = versionToReportMetadata(report, version, primaryDept);
+
+    return { version, previewMetadata };
+  }
+
+  /**
+   * Authoritatively publishes a version (Draft/Validated/Preview -> Active).
+   * Transitions any existing active version to SUPERSEDED, preserving historical submission reproducibility.
+   */
+  public publishReportVersion(
+    returnKey: string,
+    versionNumber: number,
+    actor: ActorInfo,
+    changelogSummary?: string
+  ): ReportVersionSSOT {
+    const report = this.reports.get(returnKey);
+    if (!report) throw new Error(`Report with ReturnKey '${returnKey}' not found.`);
+
+    const version = this.getReportVersion(returnKey, versionNumber);
+    if (!version) throw new Error(`Version ${versionNumber} for report '${returnKey}' not found.`);
+
+    // Pre-flight validation
+    const valResult = this.validateReportVersion(returnKey, versionNumber);
+    if (!valResult.valid) {
+      throw new Error(`Cannot publish version ${versionNumber}: structural validation failed with ${valResult.errors.length} error(s):\n${valResult.errors.join('\n')}`);
+    }
+
+    const now = new Date().toISOString();
+    const currentActive = this.getActiveVersion(returnKey);
+
+    // Transition previous active version to SUPERSEDED (Preserving historical integrity!)
+    if (currentActive && currentActive.versionNumber !== versionNumber) {
+      currentActive.status = 'SUPERSEDED';
+      currentActive.effectiveTo = now;
+    }
+
+    // Update this version
+    version.status = 'ACTIVE';
+    version.effectiveFrom = version.effectiveFrom || now;
+    version.effectiveTo = null;
+    version.publishedAt = now;
+    if (changelogSummary) {
+      version.changelogSummary = changelogSummary;
+    }
+
+    // Update ReportDefinition pointers
+    report.currentVersion = Math.max(report.currentVersion, versionNumber);
+    report.status = 'ACTIVE';
+    report.updatedAt = now;
+    report.activeVersionSnapshot = version;
+    this.reports.set(returnKey, report);
+
+    // Sync to active catalog so Maker, Checker, DynamicReportForm immediately consume active schema
+    const primaryDeptName = this.departments.get(report.defaultDepartmentId)?.name || 'Credit Operations & Portfolio Management';
+    const metadata = versionToReportMetadata(report, version, primaryDeptName);
+    syncSSOTReportToRegistry(metadata);
+
+    this.recordChange({
+      actorId: actor.id,
+      actorName: actor.name,
+      actorRole: actor.role,
+      entityType: 'REPORT_VERSION',
+      entityId: version.versionId,
+      entityName: `${report.name} (v${versionNumber})`,
+      action: 'VERSION_BUMP',
+      summary: `Published Version ${versionNumber} for '${returnKey}' (${version.changelogSummary})`,
+      newState: version,
+    });
+
+    this.bumpVersion('REPORT');
+    return version;
+  }
+
+  /**
+   * Safely retires an obsolete report return template while preserving historical audit trails.
+   */
+  public retireReport(returnKey: string, actor: ActorInfo, reason?: string): ReportDefinitionSSOT {
+    const report = this.reports.get(returnKey);
+    if (!report) throw new Error(`Report with ReturnKey '${returnKey}' not found.`);
+
+    const now = new Date().toISOString();
+    report.status = 'RETIRED';
+    report.effectiveTo = now;
+    report.updatedAt = now;
+
+    const currentActive = this.getActiveVersion(returnKey);
+    if (currentActive) {
+      currentActive.status = 'RETIRED';
+      currentActive.effectiveTo = now;
+    }
+
+    this.reports.set(returnKey, report);
+    retireSSOTReportInRegistry(returnKey);
+
+    this.recordChange({
+      actorId: actor.id,
+      actorName: actor.name,
+      actorRole: actor.role,
+      entityType: 'REPORT_DEFINITION',
+      entityId: returnKey,
+      entityName: report.name,
+      action: 'UPDATE',
+      summary: `Retired report return template '${report.name}' (${returnKey}). Reason: ${reason || 'Statutory obsolescence'}`,
+      newState: report,
+    });
+
+    this.bumpVersion('REPORT');
+    return report;
+  }
+
+  // --- Fine-Grained Structural Editing Helpers ---
+
+  public addField(returnKey: string, versionNumber: number, field: ReportFieldSSOT, actor: ActorInfo): ReportVersionSSOT {
+    const version = this.getReportVersion(returnKey, versionNumber);
+    if (!version) throw new Error(`Version ${versionNumber} for '${returnKey}' not found.`);
+    if (version.status === 'SUPERSEDED' || version.status === 'RETIRED') {
+      throw new Error(`Cannot modify version in '${version.status}' status.`);
+    }
+    const fields = version.fields || [];
+    if (fields.some((f) => f.itemCode.toUpperCase() === field.itemCode.toUpperCase())) {
+      throw new Error(`Field with code '${field.itemCode}' already exists in this version.`);
+    }
+    field.order = fields.length + 1;
+    fields.push(field);
+    version.fields = fields;
+    version.status = 'DRAFT';
+    this.bumpVersion('REPORT');
+    return version;
+  }
+
+  public updateField(returnKey: string, versionNumber: number, fieldId: string, updates: Partial<ReportFieldSSOT>, actor: ActorInfo): ReportVersionSSOT {
+    const version = this.getReportVersion(returnKey, versionNumber);
+    if (!version) throw new Error(`Version ${versionNumber} for '${returnKey}' not found.`);
+    if (version.status === 'SUPERSEDED' || version.status === 'RETIRED') {
+      throw new Error(`Cannot modify version in '${version.status}' status.`);
+    }
+    const field = (version.fields || []).find((f) => f.id === fieldId || f.itemCode === fieldId);
+    if (!field) throw new Error(`Field '${fieldId}' not found in version ${versionNumber}.`);
+    Object.assign(field, updates);
+    version.status = 'DRAFT';
+    this.bumpVersion('REPORT');
+    return version;
+  }
+
+  public removeField(returnKey: string, versionNumber: number, fieldId: string, actor: ActorInfo): ReportVersionSSOT {
+    const version = this.getReportVersion(returnKey, versionNumber);
+    if (!version) throw new Error(`Version ${versionNumber} for '${returnKey}' not found.`);
+    if (version.status === 'SUPERSEDED' || version.status === 'RETIRED') {
+      throw new Error(`Cannot modify version in '${version.status}' status.`);
+    }
+    version.fields = (version.fields || []).filter((f) => f.id !== fieldId && f.itemCode !== fieldId);
+    version.status = 'DRAFT';
+    this.bumpVersion('REPORT');
+    return version;
+  }
+
+  public reorderFields(returnKey: string, versionNumber: number, fieldIdsInOrder: string[], actor: ActorInfo): ReportVersionSSOT {
+    const version = this.getReportVersion(returnKey, versionNumber);
+    if (!version) throw new Error(`Version ${versionNumber} for '${returnKey}' not found.`);
+    const fieldMap = new Map((version.fields || []).map((f) => [f.id, f]));
+    const reordered: ReportFieldSSOT[] = [];
+    fieldIdsInOrder.forEach((id, idx) => {
+      const f = fieldMap.get(id);
+      if (f) {
+        f.order = idx + 1;
+        reordered.push(f);
+        fieldMap.delete(id);
+      }
+    });
+    // Append any omitted fields
+    fieldMap.forEach((f) => {
+      f.order = reordered.length + 1;
+      reordered.push(f);
+    });
+    version.fields = reordered;
+    version.status = 'DRAFT';
+    this.bumpVersion('REPORT');
+    return version;
+  }
+
+  public addColumn(returnKey: string, versionNumber: number, column: ReportColumnSSOT, actor: ActorInfo): ReportVersionSSOT {
+    const version = this.getReportVersion(returnKey, versionNumber);
+    if (!version) throw new Error(`Version ${versionNumber} for '${returnKey}' not found.`);
+    const columns = version.columns || [];
+    if (columns.some((c) => c.columnKey.toUpperCase() === column.columnKey.toUpperCase())) {
+      throw new Error(`Schedule column '${column.columnKey}' already exists in this version.`);
+    }
+    column.order = columns.length + 1;
+    columns.push(column);
+    version.columns = columns;
+    version.status = 'DRAFT';
+    this.bumpVersion('REPORT');
+    return version;
+  }
+
+  public updateColumn(returnKey: string, versionNumber: number, columnId: string, updates: Partial<ReportColumnSSOT>, actor: ActorInfo): ReportVersionSSOT {
+    const version = this.getReportVersion(returnKey, versionNumber);
+    if (!version) throw new Error(`Version ${versionNumber} for '${returnKey}' not found.`);
+    const col = (version.columns || []).find((c) => c.id === columnId || c.columnKey === columnId);
+    if (!col) throw new Error(`Column '${columnId}' not found.`);
+    Object.assign(col, updates);
+    version.status = 'DRAFT';
+    this.bumpVersion('REPORT');
+    return version;
+  }
+
+  public removeColumn(returnKey: string, versionNumber: number, columnId: string, actor: ActorInfo): ReportVersionSSOT {
+    const version = this.getReportVersion(returnKey, versionNumber);
+    if (!version) throw new Error(`Version ${versionNumber} for '${returnKey}' not found.`);
+    version.columns = (version.columns || []).filter((c) => c.id !== columnId && c.columnKey !== columnId);
+    version.status = 'DRAFT';
+    this.bumpVersion('REPORT');
+    return version;
+  }
+
+  public addSection(returnKey: string, versionNumber: number, section: ReportSectionSSOT, actor: ActorInfo): ReportVersionSSOT {
+    const version = this.getReportVersion(returnKey, versionNumber);
+    if (!version) throw new Error(`Version ${versionNumber} for '${returnKey}' not found.`);
+    const sections = version.sections || [];
+    section.order = sections.length + 1;
+    sections.push(section);
+    version.sections = sections;
+    version.status = 'DRAFT';
+    this.bumpVersion('REPORT');
+    return version;
+  }
+
+  public removeSection(returnKey: string, versionNumber: number, sectionId: string, actor: ActorInfo): ReportVersionSSOT {
+    const version = this.getReportVersion(returnKey, versionNumber);
+    if (!version) throw new Error(`Version ${versionNumber} for '${returnKey}' not found.`);
+    version.sections = (version.sections || []).filter((s) => s.id !== sectionId && s.code !== sectionId);
+    version.status = 'DRAFT';
+    this.bumpVersion('REPORT');
+    return version;
   }
 
   /**
@@ -1284,6 +2191,7 @@ class ConfigurationEngine {
       ],
       createdBy: actor.name,
       createdAt: now,
+      publishedAt: now,
       sections: currentActive?.sections || [],
       fields: newFields,
       columns: newColumns,
@@ -1317,6 +2225,11 @@ class ConfigurationEngine {
     report.updatedAt = now;
     report.activeVersionSnapshot = newVersion;
     this.reports.set(returnKey, report);
+
+    // Sync into active catalog
+    const primaryDeptName = this.departments.get(report.defaultDepartmentId)?.name || 'Credit Operations & Portfolio Management';
+    const metadata = versionToReportMetadata(report, newVersion, primaryDeptName);
+    syncSSOTReportToRegistry(metadata);
 
     this.recordChange({
       actorId: actor.id,

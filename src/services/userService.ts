@@ -1080,6 +1080,16 @@ class UserServiceClass {
     if (user.department) {
       const deptReports = departmentService.getReportsForDepartment(user.department);
       deptReports.forEach((k) => allowed.add(k));
+
+      const userDeptNorm = user.department.trim().toLowerCase();
+      getAllReports().forEach((r) => {
+        if (
+          (r.department && r.department.trim().toLowerCase() === userDeptNorm) ||
+          (Array.isArray(r.departments) && r.departments.some((d) => d.trim().toLowerCase() === userDeptNorm))
+        ) {
+          allowed.add(r.ReturnKey);
+        }
+      });
     }
 
     // 2. Special access grants

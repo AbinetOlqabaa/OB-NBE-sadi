@@ -1,4 +1,4 @@
-# 13 - CURRENT IMPLEMENTATION STATUS, PHASE 3 ADMINISTRATOR USER & DEPARTMENT MANAGEMENT
+# 13 - CURRENT IMPLEMENTATION STATUS: PHASE 4 DYNAMIC REPORT DEFINITION & TEMPLATE MANAGEMENT
 **Application**: Oromia Bank NBE Regulatory Reporting Platform  
 **Compliance Authority**: National Bank of Ethiopia (Bank Supervision Directorate)  
 **Licensed Institution**: Oromia Bank S.C. (InstCode: `0000013`)  
@@ -6,7 +6,7 @@
 **Execution Date**: 2026-09-30  
 **Build Status**: ✅ PASSING (`compile_applet` / `npm run build` 100% clean)  
 **TypeScript Lint Status**: ✅ PASSING (`npm run lint` / `tsc --noEmit` 0 errors)  
-**Automated Test Runner**: ✅ PASSING (13/13 TypeScript test suites green [100% pass], including `phase3-admin-users-departments.test.ts`)  
+**Automated Test Runner**: ✅ PASSING (16/16 comprehensive test suites green [100% pass], including `dynamic-report-definition.test.ts`)  
 
 ---
 
@@ -14,6 +14,7 @@
 
 | Module | Core Files | Status | Test Coverage |
 |---|---|---|---|
+| **Phase 4 Dynamic Report Definition & Template Management** | `src/services/configService.ts`, `src/components/ReportTemplateStudioModal.tsx`, `src/components/DepartmentReportManagement.tsx`, `src/data/report-registry.ts`, `server.ts` | COMPLETED & VERIFIED | 100% pass (`dynamic-report-definition.test.ts`): 10 test parts covering 24 NBE preservation, metadata creation, cycle detection DFS, preview, publish, version bump (V1->V2), immutability, dual-template reproducibility, Auditor inspection, NBE payload, safe retirement |
 | **Phase 3 Administrator Users & Departments** | `src/components/AdminDashboard.tsx`, `src/services/userService.ts`, `src/services/departmentService.ts`, `src/services/configService.ts`, `server.ts` | COMPLETED & VERIFIED | 100% pass (`phase3-admin-users-departments.test.ts`): User CRUD, roles, Auditor mandate, department hierarchy, historical safety |
 | **Report Assets & Catalog** | `data/report-definitions/*`, `src/data/report-registry.ts` | COMPLETED & VERIFIED | 24 reports validated with SHA256 hashes |
 | **Formula Engine AST** | `src/utils/formulaEngine.ts` | COMPLETED & VERIFIED | Arithmetic, percentages, compound expressions, zero division |
@@ -31,7 +32,47 @@
 
 ---
 
-## 0. Phase 3 Implementation Status: ADMINISTRATOR USER & DEPARTMENT MANAGEMENT
+## 0. Phase 4 Implementation Status: DYNAMIC REPORT DEFINITION & TEMPLATE MANAGEMENT
+
+**Phase 4 Status**: ✅ **COMPLETED & VERIFIED**
+
+### Summary of Completed Phase 4 Capabilities:
+
+1. **Metadata-Driven Report Definition Engine (`src/services/configService.ts`, `server.ts`)**:
+   - **Report Identity & Metadata**: Fully configurable ReturnKey, short code, title, description, regulatory category, reporting frequency (`MONTHLY`, `QUARTERLY`, `ANNUAL`, `ON_DEMAND`), institution code, financial year, and department ownership.
+   - **Structural Schema**: Declarative definition of sections (title, code, repeating behavior), return balance fields (data types, required status, calculated flags, formulas), dynamic schedule columns (column keys, header labels, widths, data types, required constraints), rows, and NBE mapping configurations.
+   - **Mathematical & Business Rule Engine**: Configurable formula expressions with explicit target fields and dependency tracking.
+   - **DFS Cycle Detection**: Authoritative topological DFS analysis detects and rejects circular calculation dependencies before publishing.
+   - **Field Code Uniqueness Enforcement**: Validates that all balance field item codes and schedule column keys are strictly unique across the report schema.
+
+2. **Immutable Versioning Lifecycle (Draft → Validate → Preview → Publish → Active → Retired)**:
+   - **Draft Versioning**: Administrators can initiate new version drafts (`createDraftVersion`), modify fields/columns/sections/formulas (`updateDraftVersion`), and save work-in-progress without impacting active reporting operations.
+   - **Pre-Flight Validation**: `validateReportVersion` executes structural integrity, required labels, formula dependency, and cycle checks, transitioning status to `VALIDATED`.
+   - **Schema Preview**: `previewReportVersion` generates an instant, interactive `ReportMetadata` preview to inspect form layout before publishing.
+   - **Publishing & Historical Preservation**: `publishReportVersion` authoritatively transitions the draft to `ACTIVE`, while marking the previous active version as `SUPERSEDED` with an immutable `effectiveTo` timestamp. Past submissions remain tied to their original `templateSnapshot` and `templateVersion`.
+   - **Safe Retirement**: `retireReport` marks obsolete returns and active versions as `RETIRED` with statutory obsolescence reasoning, updating registries while permanently preserving past submissions for regulatory audit.
+
+3. **Administrator Template Studio (`src/components/ReportTemplateStudioModal.tsx`, `src/components/DepartmentReportManagement.tsx`)**:
+   - Multi-tab professional studio: Metadata, Sections, Fields, Columns, Formulas, Validation, Preview, Publish.
+   - Interactive structural manipulation: Add, edit, remove, and reorder fields, columns, sections, and calculation formulas.
+   - Real-time DFS cycle detection and validation feedback with visual error callouts.
+   - Version history audit modal (`ReportVersionHistoryModal.tsx`) for comparing structural changes, field deltas, and changelog summaries across versions.
+   - Complete department linkage matrix (M:N) with multi-select and synchronization.
+
+4. **Dynamic Forms & Regulatory Submissions Integration (`src/components/DynamicReportForm.tsx`, `src/services/submissionService.ts`, `src/services/nbeAdapter.ts`)**:
+   - **Metadata Consumption**: Dynamic report form renders fields, sections, and schedule tables directly from the active metadata snapshot.
+   - **Dual-Template Reproducibility**: Newly created submissions consume the latest active version (stamped with `templateVersion`), while historical submissions retain their immutable frozen `templateSnapshot`.
+   - **Maker-Checker Dual Control**: Makers compile figures, Checkers perform 4-eyes review against the historical snapshot, and Auditors inspect findings and cryptographic tamper seals.
+   - **Canonical NBE Delivery**: `NBEAdapter.buildNBEPayload` canonically translates dynamic metadata returns into the central bank BSD payload format (`ReturnItemsList`, `DynamicItemsList`).
+
+5. **Automated Test Evidence**:
+   - Comprehensive test suite: `src/tests/dynamic-report-definition.test.ts` (100% pass across all 10 test parts).
+   - Full test suite: `run-all-tests.ts` running 16 test suites with 100% success.
+   - Completion gate satisfied: Report administrator can make safe structural changes without editing React source for every field, while historical report versions remain reproducible.
+
+---
+
+## 0.1 Phase 3 Implementation Status: ADMINISTRATOR USER & DEPARTMENT MANAGEMENT
 
 **Phase 3 Status**: ✅ **COMPLETED & VERIFIED**
 

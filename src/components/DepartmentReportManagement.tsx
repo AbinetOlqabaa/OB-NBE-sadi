@@ -51,6 +51,7 @@ import { vibrate, haptics } from '../utils/haptics.ts';
 import { BulkImportModal } from './BulkImportModal.tsx';
 import { ReportVersionHistoryModal } from './ReportVersionHistoryModal.tsx';
 import { ChangeHistoryView } from './ChangeHistoryView.tsx';
+import { ReportTemplateStudioModal } from './ReportTemplateStudioModal.tsx';
 
 // =========================================================================
 // SUB-COMPONENT: DepartmentEditor
@@ -1060,6 +1061,10 @@ export const ReportTypeEditor: React.FC<ReportTypeEditorProps> = ({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
+  // Template Studio state
+  const [isStudioOpen, setIsStudioOpen] = useState(false);
+  const [studioReportKey, setStudioReportKey] = useState<string | undefined>(undefined);
+
   const [activeReportForEdit, setActiveReportForEdit] = useState<ReportMetadata | null>(null);
   const [activeReportForDelete, setActiveReportForDelete] = useState<ReportMetadata | null>(null);
 
@@ -1355,6 +1360,18 @@ export const ReportTypeEditor: React.FC<ReportTypeEditorProps> = ({
             </div>
             <button
               type="button"
+              onClick={() => {
+                setStudioReportKey(undefined);
+                setIsStudioOpen(true);
+              }}
+              className="min-h-[36px] px-3.5 py-1.5 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer touch-press"
+              title="Open Dynamic Template Studio to configure fields, sections, formulas and versioning"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Template Studio</span>
+            </button>
+            <button
+              type="button"
               onClick={handleOpenAddModal}
               className="min-h-[36px] px-3.5 py-1.5 bg-ob-green-600 hover:bg-ob-green-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer touch-press"
             >
@@ -1442,6 +1459,17 @@ export const ReportTypeEditor: React.FC<ReportTypeEditorProps> = ({
 
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setStudioReportKey(report.ReturnKey);
+                                setIsStudioOpen(true);
+                              }}
+                              className="p-1.5 text-ob-green-700 dark:text-ob-green-400 hover:bg-ob-green-50 dark:hover:bg-ob-green-950/60 rounded-lg transition-colors cursor-pointer"
+                              title="Template Studio: Configure Structure, Sections, Fields, Formulas & Versioning"
+                            >
+                              <Layers className="w-4 h-4" />
+                            </button>
                             <button
                               type="button"
                               onClick={() => {
@@ -1935,6 +1963,17 @@ export const ReportTypeEditor: React.FC<ReportTypeEditorProps> = ({
         onSuccess={(msg) => triggerNotice(msg, 'SUCCESS')}
         adminName={currentUser.name}
       />
+
+      {/* MODAL: DYNAMIC REPORT DEFINITION & TEMPLATE STUDIO */}
+      {isStudioOpen && (
+        <ReportTemplateStudioModal
+          isOpen={isStudioOpen}
+          onClose={() => setIsStudioOpen(false)}
+          reportKey={studioReportKey}
+          currentUser={currentUser}
+          onSuccess={(msg) => triggerNotice(msg, 'SUCCESS')}
+        />
+      )}
     </div>
   );
 };
