@@ -232,17 +232,35 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     }
 
     // Authenticate user session
-    const targetEmail = targetUser?.email || email.trim();
-    const result = await login(targetEmail, method, faceData);
-    if (result.success && result.user) {
-      triggerHaptic('success');
-      onLoginSuccess(result.user, result.redirectTab);
-    } else if (result.error) {
-      setErrorMessage(result.error);
+    if (biometricModalMode === 'AUTHENTICATE') {
+      const stored = localStorage.getItem('ob_logged_in_user');
+      if (stored) {
+        try {
+          const loggedUser = JSON.parse(stored);
+          triggerHaptic('success');
+          const roleTabMap: Record<string, string> = {
+            ADMIN: 'ADMIN_DASHBOARD',
+            MAKER: 'MAKER_WORKSPACE',
+            CHECKER: 'CHECKER_INBOX',
+            AUDITOR: 'AUDITOR_DASHBOARD',
+          };
+          const redirectTab = loggedUser.redirectTab || roleTabMap[loggedUser.role] || 'MAKER_WORKSPACE';
+          onLoginSuccess(loggedUser, redirectTab);
+          return;
+        } catch {}
+      }
+      const targetEmail = targetUser?.email || email.trim();
+      const result = await login(targetEmail, method, faceData);
+      if (result.success && result.user) {
+        triggerHaptic('success');
+        onLoginSuccess(result.user, result.redirectTab);
+      } else if (result.error) {
+        setErrorMessage(result.error);
+      }
     }
   };
 
-  const handleLoginWithBiometrics = async (preferredType: 'FINGERPRINT' | 'FACE' = 'FINGERPRINT') => {
+  const handleLoginWithBiometrics = (preferredType: 'FINGERPRINT' | 'FACE' = 'FINGERPRINT') => {
     setErrorMessage(null);
     setBiometricNotice(null);
     const activeEmail = email.trim() || registeredEmail || localStorage.getItem('ob_regulatory_last_user') || '';
@@ -250,18 +268,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       setErrorMessage('Please enter your corporate email address above or register a biometric passkey.');
       return;
     }
-    const method = preferredType;
-    try {
-      const result = await login(activeEmail, method);
-      if (result.success && result.user) {
-        triggerHaptic('success');
-        onLoginSuccess(result.user, result.redirectTab);
-        return;
-      }
-    } catch {}
-    setSelectedBiometricMethod(preferredType);
-    setBiometricModalMode('AUTHENTICATE');
-    setIsBiometricModalOpen(true);
+    handleOpenBiometricModal('AUTHENTICATE', preferredType);
   };
 
   const handleDirectBiometricSignIn = async () => {

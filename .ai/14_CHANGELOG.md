@@ -4,6 +4,266 @@ All notable changes and engineering enhancements for the Oromia Bank NBE Regulat
 
 ---
 
+## [12.0.0-phase12-biometric-signin-authentication] - 2026-10-01
+
+### Added
+- **Production-Quality Biometric Sign-In & Authoritative Authentication (`src/services/biometricService.ts`, `src/services/userService.ts`, `src/hooks/useBiometricAuth.ts`, `src/components/BiometricPromptModal.tsx`, `src/components/LoginPage.tsx`, `server.ts`, `src/tests/phase12-biometric-signin-authentication.test.ts`, `12_BIOMETRIC_SIGN_IN_AND_AUTHENTICATION.md`)**:
+  - Independent & Coexistent Authentication Mechanisms:
+    - User selection strictly governs the executed mechanism: Password triggers password authentication, Fingerprint triggers WebAuthn assertion, Face ID triggers optical quality/liveness verification and server matching.
+    - Zero silent invocation or automatic silent fallback: biometric failure prompts active user choice (retry, switch method, or input password).
+  - Fingerprint / WebAuthn Authentication Engine:
+    - Secure challenge lifecycle with 60-second TTL and atomic single-use consumption.
+    - Assertion verification (`verifyWebAuthnAssertion` & `/api/auth/biometrics/webauthn/auth-verify`) validating credential ownership, RP ID, user binding, and signature assertion.
+    - Replay attack defenses: consumed challenges rejected immediately with audit logging; monotonic signature counters strictly enforced, rejecting counter duplicate or rollback anomalies.
+    - Comprehensive error handling for unsupported browser, no credential, user cancellation (`AbortError`), timeout, invalid assertion, suspended credential, revoked credential, and server errors.
+  - Optical Face ID Authentication Engine:
+    - Explicit camera consent and live video stream initialization.
+    - Client-side pre-flight checks: luminance, sharpness, single-face validation.
+    - Server-authoritative matching (`verifyFaceBiometric` & `/api/auth/biometrics/face/verify`): bounded thresholds for luminance ([35, 235]), sharpness (>= 0.35), single face (`faceCount === 1`), and spoof probability (<= 0.40).
+    - Protected feature processing: non-invertible salted HMAC template comparison; zero raw images stored.
+  - Anti-Brute Force Rate Limiting & Account Security:
+    - Progressive lockout: 5 consecutive failed attempts trigger a 15-minute lockout (`lockedOut: true`, countdown timer).
+    - Immediate block of all subsequent authentication attempts during active lockout, even with valid biometric data.
+    - Step-up password recovery (`unlockWithStepUp` & `/api/auth/biometrics/unlock`): supervisor/user password input clears biometric lockout and resets failure counters.
+    - Account enumeration prevention: uniform error responses avoiding disclosure of registered accounts or database details.
+  - Authoritative Session Creation & Role Redirection:
+    - Successful authentication (Password, Fingerprint, or Face) converges on canonical `UserSession` object with `sessionToken`, `sessionExpiresAt`, and explicit `authMethod`.
+    - Role-specific dashboard routing:
+      - `ADMIN` -> `ADMIN_DASHBOARD`
+      - `MAKER` -> `MAKER_WORKSPACE`
+      - `CHECKER` -> `CHECKER_INBOX`
+      - `AUDITOR` -> `AUDITOR_DASHBOARD`
+  - Automated Phase 12 Test Suite (`src/tests/phase12-biometric-signin-authentication.test.ts`):
+    - 6 comprehensive test suites covering explicit method selection, WebAuthn fingerprint assertion and anti-replay safeguards, optical Face ID quality/liveness and server template matching, anti-brute force rate limiting and step-up password recovery, direct API bypass defenses, and password login regression across all four banking roles.
+    - 100% pass across all 23 automated test suites in `run-all-tests.ts`.
+
+---
+
+## [11.0.0-phase11-biometric-registration-enrollment] - 2026-10-01
+
+### Added
+- **Genuine End-to-End Biometric Registration and Enrollment (`src/services/biometricService.ts`, `src/hooks/useBiometricAuth.ts`, `src/components/BiometricPromptModal.tsx`, `src/components/RegisterPage.tsx`, `src/tests/phase11-biometric-registration-enrollment.test.ts`, `11_BIOMETRIC_REGISTRATION_ENROLLMENT.md`)**:
+  - Complete authenticated Face ID and Fingerprint/WebAuthn enrollment with genuine end-to-end flows and zero simulated success.
+  - Independent Biometric Methods:
+    - User selects one method at a time; enrolling Fingerprint leaves Face ID independent, and enrolling Face ID leaves Fingerprint independent.
+    - Both methods can coexist on a single institutional account with distinct credential records and lifecycle states.
+    - Post-registration success screen allows users to independently enroll a second method or proceed with standard credentials.
+  - Optical Face ID Enrollment Pipeline:
+    - Supports both live camera stream (PC/webcam) and native mobile selfie camera (`input type="file" capture="user"`).
+    - Detects browser camera capabilities (`navigator.mediaDevices.getUserMedia`).
+    - Staged accessible animation pipeline: `preparing`, `permission`, `camera start`, `face search`, `quality`, `liveness`, `processing`, and `success/failure/retry`.
+    - Live optical frame preview with alignment guide reticle and oval guide.
+    - Real-time client-side frame quality analysis (`analyzeFaceQuality`): luminance, sharpness (spatial Laplacian edge variance), single face presence, and face bounding ratio.
+    - Real optical motion and liveness anti-spoofing analysis (`analyzeFaceLiveness`): temporal variance detection to prevent presentation attacks using static photos or simulated screens.
+    - Server-authoritative quality and liveness enforcement (`/api/auth/biometrics/face/enroll`): validates single face, luminance in [35, 235], sharpness >= 0.35, spoof probability <= 0.40.
+    - Protected template persistence: non-invertible salted HMAC feature signature (`computeProtectedFaceSignature`); zero raw camera frames or pixel buffers stored.
+    - Graceful error notifications and recovery actions for: permission granted/denied/dismissed, no camera (`NotFoundError`), camera busy (`NotReadableError`), unsupported browser, initialization failure, no face (`faceCount === 0`), multiple faces (`faceCount > 1`), poor quality (blurry, underexposed, overexposed glare), timeout (30-second inactivity auto-cancel), liveness failure, and server failure.
+    - Truthful hardware identity: does not claim exact device model unless the browser reliably provides it via `MediaDeviceInfo.label`.
+  - WebAuthn Platform Fingerprint Passkey Enrollment:
+    - Authenticated identity context binding: only active authorized institutional accounts can obtain challenges and register passkeys.
+    - Cryptographic server challenge issuance (`/api/auth/biometrics/webauthn/register-options`) with 60-second TTL.
+    - Standard `PublicKeyCredentialCreationOptions` with `platform` authenticator attachment and `userVerification: required`.
+    - Server verification endpoint (`/api/auth/biometrics/webauthn/register-verify`) with credential ID storage, monotonic counter initialization, and public-key metadata.
+    - Comprehensive error handling without simulated success: unsupported browser, unavailable platform authenticator, user cancellation (`AbortError`), timeout, iframe security policy restriction (`SecurityError`), and server verification failure.
+  - Cross-Account Isolation & Identity Safeguards:
+    - Prevents duplicate WebAuthn credential IDs across accounts (cross-account collision rejected with `BIOMETRIC_ENROLL_REJECTED` audit log).
+    - Prevents duplicate facial biometric templates across accounts (duplicate biometric identity rejected with `BIOMETRIC_ENROLL_REJECTED` audit log).
+    - Enrollment challenge cannot be hijacked or consumed by a different account identity.
+  - Automated Phase 11 Test Suite (`src/tests/phase11-biometric-registration-enrollment.test.ts`):
+    - 6 comprehensive test suites covering method independence, capability detection and truthful device reporting, Face ID quality and anti-spoofing liveness, WebAuthn authenticated enrollment, cross-account isolation and duplicate credential prevention, and persistence/audit logging.
+    - Integrated into master test runner (`src/tests/run-all-tests.ts`) with 100% clean pass across all 22 automated test suites.
+
+---
+
+## [10.0.0-phase10-biometric-architecture-security-foundation] - 2026-10-01
+
+### Added
+- **Biometric Architecture & Security Foundation (`src/services/biometricService.ts`, `src/types/biometrics.ts`, `10_BIOMETRIC_ARCHITECTURE_AND_SECURITY_FOUNDATION.md`)**:
+  - Full authoritative user biometric lifecycle state machine:
+    - States: `NOT_ENROLLED`, `ENROLLMENT_IN_PROGRESS`, `ENROLLED`, `SUSPENDED`, `REVOKED`, `RESET_REQUESTED`, `RESET_IN_PROGRESS`, `FAILED_LOCKED`, `CAPABILITY_UNAVAILABLE`.
+    - Strict architectural separation between physical hardware capability and account enrollment state.
+  - Cryptographic challenge lifecycle:
+    - 32-byte high-entropy nonces base64url encoded with 60-second TTL.
+    - Single-use consumption preventing replay attacks.
+    - Strict identity, purpose, and biometric type binding.
+  - WebAuthn / Passkey platform authenticator engine:
+    - ES256 (-7) and RS256 (-257) standard algorithms, RP ID binding, userVerification required.
+    - Monotonic signature counter tracking to detect and reject authenticator rollback/replay anomalies.
+    - Secure public-key credential metadata storage without sensitive private key exposure.
+  - Protected server-authoritative Face recognition engine:
+    - Multi-factor quality checks: luminance (40-220), sharpness (>= 0.35), single face requirement (0 or >1 rejected), aspect framing.
+    - Liveness and anti-spoofing verification: motion score and spoof probability evaluation rejecting static photos and synthetic spoof markers.
+    - Non-invertible salted HMAC feature representation (`computeProtectedFaceSignature`) with institutional salt.
+    - Zero raw camera frames or pixel buffers persisted in database or logs.
+    - Strict server-side matching threshold (>= 0.82) with immediate rejection of test mismatch markers (`wrong`, `mismatch`, `invalid`, `REJECT`).
+  - Progressive rate limiting and anti-brute-force defense:
+    - 5 consecutive failed attempts trigger 15-minute temporary lockout.
+    - Remaining lockout seconds reporting and generic error handling to prevent user enumeration.
+    - Step-up password verification unlock endpoint for compliance recovery.
+  - Step-up authenticated reset and recovery:
+    - Mandatory password re-authentication to authorize biometric reset.
+    - Single-use authorized reset tokens (5-minute TTL).
+    - Purges enrolled biometric credentials, transitions state to `NOT_ENROLLED`, and logs audit trail.
+  - Security audit logging:
+    - Standardized audit events (`BIOMETRIC_CHALLENGE_ISSUED`, `BIOMETRIC_ENROLLED`, `BIOMETRIC_AUTH_SUCCESS`, `BIOMETRIC_AUTH_FAILURE`, `BIOMETRIC_SUSPENDED`, `BIOMETRIC_REVOKED`, `BIOMETRIC_RESET_REQUESTED`, `BIOMETRIC_RESET_COMPLETED`, `BIOMETRIC_LOCKOUT`, `BIOMETRIC_MIGRATION`).
+    - Verified zero leakage of raw camera frames, biometric templates, or passwords in audit records.
+  - Legacy data migration engine:
+    - Automatically migrates existing credentials to normalized schema and synchronizes seed data resets.
+  - Automated security test suite (`src/tests/phase10-biometric-architecture-security.test.ts`):
+    - 10 test suites covering all lifecycle states, challenge lifecycle, replay defense, cross-account isolation, WebAuthn counters, face quality/liveness, rate limiting, suspension/revocation, reset, and audit trail (100% pass across 21/21 full test suites).
+
+---
+
+## [8.0.0-phase8-configuration-governance-versioning-rollback] - 2026-09-30
+
+### Added
+- **Configuration Governance & Versioning Engine (`src/services/configurationGovernanceService.ts`, `08_CONFIGURATION_GOVERNANCE_VERSIONING_ROLLBACK.md`)**:
+  - Full controlled lifecycle: `Draft → Validate → Impact Analysis → Dual Review/Approval → Publish → Effective → Audit`.
+  - Four-tier risk classification engine:
+    - `CRITICAL`: Role permissions, RBAC authorization, statutory return deletion.
+    - `HIGH`: Mathematical formula alteration, field deletion, department restructuring, workflow alteration, and rollbacks.
+    - `MEDIUM`: Description updates, optional field additions, non-critical assignments.
+    - `LOW`: Cosmetic notes, display order adjustments. Auto-approval permitted.
+  - Multi-domain impact analysis identifying affected:
+    - Users (by report duty, department membership, and compliance supervisory responsibilities).
+    - Departments (primary owners and contributing linked departments).
+    - Reports (return keys, frequencies, formulas, and dependent schedules).
+    - Workflows (submission review steps and role requirements).
+    - Permissions (modified roles and authorization matrix).
+    - Active and historical submissions (drafts, pending review, approved, sent), with explicit non-repudiation guarantees.
+  - Credential and secret sanitization (`sanitizeGovernanceState`): Deep recursive scrubbing of passwords, tokens, API keys, hashes, and PINs to `[REDACTED_FOR_SECURITY]` in all before/after states.
+  - Segregation of duties & 4-eyes rule enforcement:
+    - Strict prohibition: Proposer cannot approve their own high-impact configuration proposal (`SEGREGATION_OF_DUTIES_VIOLATION`).
+    - Review restricted strictly to authorized `ADMIN` or `CHECKER` roles (`UNAUTHORIZED_APPROVAL`).
+  - Optimistic concurrency locking & collision prevention:
+    - Automatic version tracking (`expectedEntityVersion` and config hash) prevents administrators from silently overwriting each other's changes (`CONCURRENCY_CONFLICT`, HTTP 409).
+  - Controlled governed rollback:
+    - A rollback is a new auditable change; past versions and historical submissions are NEVER rewritten or lost.
+    - Rollback creates a new version snapshot (Version N+1) reproducing the target historical schema.
+  - Material change user notifications:
+    - Users affected by material configuration changes receive targeted notifications detailing risk level, effective date, and impact rationale.
+  - Phase 8 Completion Gate: Official audit explanation engine (`explainChange`):
+    - Explains who changed what, when, from what, to what, under which approval/workflow, when it became effective, and what it affected.
+- **Native ConfigService Rollback Integration (`src/services/configService.ts`)**:
+  - `rollbackReportVersion(returnKey, targetVersionNumber, actor, reason)` safely recreates target schema as Version N+1 with permanent audit recording.
+- **Frontend Governance Component (`src/components/ConfigurationGovernanceView.tsx`)**:
+  - Rich split-pane workspace with proposal search, multi-level filters, 7-step visual lifecycle stepper, dependency impact cards, sanitized before/after diff table, 4-eyes review approval modal, rejection dialog, rollback modal with version picker, and the official "Explain Change" inspection modal.
+  - Embedded into `src/components/AdminDashboard.tsx` under the **Governance & Versioning** tab.
+  - Embedded into `src/components/ChangeHistoryView.tsx` with a top view-mode selector (**Governed Proposals & Approvals**).
+- **Server REST API Endpoints (`server.ts`)**:
+  - `/api/governance/proposals` (GET, POST)
+  - `/api/governance/proposals/:id` (GET)
+  - `/api/governance/proposals/:id/validate` (POST)
+  - `/api/governance/proposals/:id/approve` (POST)
+  - `/api/governance/proposals/:id/reject` (POST)
+  - `/api/governance/proposals/:id/publish` (POST)
+  - `/api/governance/proposals/rollback` (POST)
+  - `/api/governance/proposals/:id/explain` (GET)
+  - `/api/governance/notifications` (GET)
+  - `/api/governance/notifications/:id/read` (POST)
+- **Comprehensive Automated Test Suite (`src/tests/configuration-governance-versioning.test.ts`)**:
+  - 11 test sections (57 assertions, 100% pass) verifying secret sanitization, risk classification, impact analysis, structural validation, segregation of duties, optimistic concurrency collisions, publication, rejection, rollback, and the official audit explanation completion gate.
+
+---
+
+## [7.0.0-phase7-real-time-ssot-synchronization] - 2026-09-30
+
+### Added
+- **Authoritative Real-Time SSOT Engine (`src/services/realtimeSsotEngine.ts`, `server.ts`, `07_REAL_TIME_SSOT_SYNCHRONIZATION.md`)**:
+  - WebSocket (`/ws/ssot`) + SSE (`/api/config/events`) real-time communication pipeline strictly anchored to Django/database SSOT authority.
+  - Zero simulated timers or synthetic pollers; state changes propagate purely on committed transactional mutations.
+  - Monotonic event sequence counter (`sequenceNumber`) and UUID generation (`eventId`) with 1,000-event circular replay buffer.
+  - Comprehensive event taxonomy: `USER_CHANGED`, `DEPARTMENT_CHANGED`, `REPORT_CHANGED`, `ASSIGNMENT_CHANGED`, `SPECIAL_ACCESS_CHANGED`, `WORKFLOW_STATUS_CHANGED`, `CONFIG_SYNC_TRIGGER`.
+  - Sensitive credential scrubbing: Automatic removal of `password`, `passwordHash`, `token`, and auth headers from event payloads.
+  - Fine-grained topic subscription authorization (RBAC):
+    - `ADMIN:CONFIG` & `ADMIN:USERS`: Strict Admin-only access.
+    - `USER:<id>`: Strict individual officer isolation.
+    - `DEPT:<id>`: Department members and authorized multi-department delegates.
+    - `AUDIT:EVENTS`: Auditor and Admin inspection feed.
+    - `GLOBAL` & `REPORTS`: Authenticated bank officer broad catalog updates.
+- **Client Synchronization Service (`src/services/realtimeSsotClient.ts`)**:
+  - Dual WebSocket + SSE failover transport.
+  - Connection lifecycle management: Auto-reconnect with exponential backoff (`1s` to `30s`) and random jitter, heartbeat keep-alive (`30s`), and connection state broadcasting.
+  - Reconnect gap recovery: Transmits `SYNC_REQUEST` on connect; replays missed events or issues `REVALIDATE_ALL` if gap exceeds buffer.
+  - Message deduplication: 1,000-entry LRU cache to eliminate duplicate event handling.
+- **Surgical React State Invalidation Hook (`src/hooks/useRealtimeSSOT.ts`)**:
+  - Domain-specific invalidation listeners preserving mounted React component state and active user input in draft forms.
+- **Authoritative Service Integrations**:
+  - Connected `configService`, `userService`, `submissionService`, and `effectiveAccessEngine` to broadcast events upon successful committed mutations.
+- **Comprehensive Automated Test Suite (`src/tests/realtime-ssot-synchronization.test.ts`)**:
+  - 9 automated test scenarios covering Admin changes, assignment changes, report publishing, special access revocation, reconnect & gap replay, duplicate event discarding, stale cache revalidation, RBAC topic scoping, and atomic rollback safety.
+  - Integrated into `src/tests/run-all-tests.ts` with 19/19 test suites passing (100% success).
+
+---
+
+## [6.0.0-phase6-safe-bulk-operations-import-export-and-file-workflows] - 2026-09-30
+
+### Added
+- **Authoritative Bulk Operations Engine (`src/services/bulkOperationsEngine.ts`, `06_BULK_OPERATIONS_IMPORT_EXPORT.md`)**:
+  - Full transactional, auditable bulk management engine across Users, Departments, Reports, Submissions, and Special Access Grants.
+  - **Mandatory Workflow**: `Select/upload → parse → validate → detect conflicts → preview → explicit confirmation → transactional execution → audit → result report`.
+  - **Zero-Mutation Dry-Run Guarantee**: File uploads and parsing generate structured preview dry runs (`dryRunId`) with 15-minute TTL without mutating any underlying database or state.
+  - **Conflict Strategies**: Configurable resolution modes: `UPDATE` (merge/update existing), `SKIP` (preserve existing, create new only), and `FAIL_ON_CONFLICT` (strictly reject batches containing duplicate identifiers).
+  - **Deep Data Validation**: Required column checks, type validations, RFC 5322 email formatting, unique employee IDs and department short codes, valid organizational units, and batch-level duplicate detection.
+  - **Atomic Transaction & Snapshot Rollback**: Pre-execution snapshots captured prior to mutations. If any row encounters an error in `ATOMIC` mode, the entire batch automatically reverts to the pristine snapshot and seals a `BULK_OPERATION_ROLLBACK` event in the audit trail.
+  - **Partial Success Mode**: `PARTIAL` mode applies valid rows while recording exact row-level failures with actionable remediation notes.
+  - **Formula Injection (CSV Injection / CWE-1236) Protection**: Neutralizes dynamic formula/DDE execution payloads starting with `=`, `+`, `-`, `@`, `\t`, `\r` by automatically prefixing single quotes on exports and parsed inputs.
+  - **Oversized & Malicious File Protection**: Hard 5,000 row limits, payload sanitization, path traversal defense, and format enforcement (`CSV`, `JSON`, `XLSX`).
+  - **Zero-Bypass Authorization & Privilege Escalation Checks**: Non-admins (Makers, Checkers, Auditors) are strictly barred from performing user/department bulk administration (`HTTP 403`). Protection prevents unauthorized promotion to `ADMIN` and prevents demotion or deactivation of the primary compliance administrator (`usr_admin_1`).
+  - **Authorized Exports with Immutable Auditing**: Role- and department-filtered exports for Users, Departments, Reports, and Submissions in CSV, JSON, and XLSX formats with comprehensive audit logging.
+- **Enterprise Bulk Operations Modal (`src/components/BulkOperationsModal.tsx`)**:
+  - 4-step wizard interface: (1) Configure & Upload, (2) Validate & Preview with metric cards and paginated row-diff inspection, (3) Explicit Confirmation with legal/regulatory checkbox, and (4) Transactional Execution with full outcome breakdown.
+- **Admin Dashboard Integration (`src/components/AdminDashboard.tsx`)**:
+  - Multi-select row checkboxes with "Select All Visible" header checkbox.
+  - Floating Bulk Action Ribbon when users are selected: Activate, Deactivate (preserving historical reporting links), Reassign Department dialog, Assign Role dialog, Export Selected, and Clear Selection.
+  - Top action toolbar button: "Bulk Import & Ops" and direct export buttons.
+- **Department & Report Studio Integration (`src/components/DepartmentReportManagement.tsx`)**:
+  - Upgraded Bulk Import to the transactional `BulkOperationsModal`.
+- **Server REST API Endpoints (`server.ts`)**:
+  - `POST /api/bulk/dry-run`: Dry-run validation preview.
+  - `GET /api/bulk/dry-run/:dryRunId`: Retrieve cached dry-run with custom pagination.
+  - `POST /api/bulk/execute`: Explicit transactional execution with mode and confirmation.
+  - `POST /api/bulk/users/action`: Multi-select user actions (activate, deactivate, department, role, report assignment, special access).
+  - `POST /api/bulk/reports/action`: Bulk report actions (retirement, activation, department linkage).
+  - `POST /api/bulk/export`: Authorized and audited CSV/JSON/XLSX export.
+- **Comprehensive Automated Test Suite (`src/tests/phase6-bulk-operations.test.ts`)**:
+  - 12-section test coverage: formula injection, zero-mutation dry-run, explicit confirmation, conflict strategies (UPDATE, SKIP, FAIL), invalid data rejection, privilege escalation and root admin protection, atomic transaction rollback to pristine state, partial success mode, bulk multi-select user operations, report retirement preservation, authorized exports, and large dataset pagination (100% pass).
+
+---
+
+## [5.0.0-phase5-user-department-report-role-relationship-engine] - 2026-09-30
+
+### Added
+- **Authoritative Relationship & Effective-Access Engine (`src/services/effectiveAccessEngine.ts`, `.ai/05_USER_DEPARTMENT_REPORT_RELATIONSHIP_ENGINE.md`)**:
+  - Centralized, server-enforced relationship and access policy layer connecting `User ↔ Role ↔ Department ↔ Report ↔ Special Access ↔ Workflow State`.
+  - Authoritative effective-access derivation formula evaluating: Role, Account Status (`ACTIVE`, `PENDING_APPROVAL`, `DISABLED`, `SUSPENDED`), Department boundary, dynamic M:N linkages, Direct User-Report Assignments, Special Access Grants, Segregation of Duties (4-eyes dual control), and Temporal constraints.
+  - Role Separation Policy:
+    - **Maker**: Authorized report entry, draft editing, formula execution, submission to Checker, and final NBE transmission of approved returns. Blocked from review sign-off and administrative governance.
+    - **Checker**: Authorized 4-eyes review, correction requests, approvals, and rejections within department boundary. Prohibited from editing draft numbers, self-review, and final NBE delivery.
+    - **Auditor**: Authorized supervisory examination, finding creation, evidence attachment, and report package export across all 24 returns. Strictly prohibited from preparing drafts, editing figures, or approving returns.
+    - **Administrator**: Authorized user and department governance, special access delegation, SSOT configuration, and simulator control. Strictly restricted to read-only compliance oversight on report data; cannot mutate return figures or sign off.
+- **Direct User ↔ Report Assignments Without Code Modification**:
+  - Administrators can directly assign reports to individual officers via `effectiveAccessEngine.assignReportToUser(userId, reportKey, adminName)`.
+  - Immediate operational permission granted without code change or home department alteration.
+  - Revocation via `removeReportFromUser` immediately restores department boundary.
+- **Controlled Special Access Grants**:
+  - Full support for `REPORT`, `DEPARTMENT`, `MULTI_DEPARTMENT`, and `ALL_REPORTS` scopes.
+  - Mandatory compliance justification reason recorded on all grants.
+  - Future scheduling (`effectiveFrom`), time-bound expiration (`expiresAt`), administrative revocation (`revoked`, `revokedAt`, `revokedBy`), and non-repudiation audit trail.
+- **Sub-Millisecond Authorization Caching & Real-Time Invalidation**:
+  - Deterministic cache keyed by user identity, role, department, grants hash, report key, action, and submission state.
+  - Automated invalidation hooks tied to role changes, department changes/restructuring, assignment additions/removals, special access grants/revocations, and SSOT report retirement.
+- **Direct Server REST API Endpoints (`server.ts`)**:
+  - `POST /api/access/evaluate`: Central authoritative access evaluation for any operation.
+  - `GET /api/access/matrix/:userId`: Full 24-report effective permissions matrix for a user.
+  - `GET /api/access/user-assignments/:userId`, `POST /api/access/user-assignments`, `DELETE /api/access/user-assignments`: Direct user-report assignment management.
+  - `POST /api/access/cache/invalidate`: Explicit authorization cache purge.
+- **Comprehensive Automated Test Matrix (`src/tests/relationship-effective-access-engine.test.ts`)**:
+  - 10-part comprehensive verification covering: all 4 roles, same vs different departments, direct user-report assignments, special access scopes, expired grants, revoked grants, account statuses, retired reports, 4-eyes segregation of duties, and cache invalidation.
+  - Integrated into `src/tests/run-all-tests.ts` (17/17 test suites passing cleanly with 100% success).
+
+---
+
 ## [4.0.0-phase4-dynamic-report-definition-and-template-management] - 2026-09-30
 
 ### Added

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type {
   DepartmentSSOT,
   ReportDefinitionSSOT,
@@ -11,6 +11,8 @@ import type {
   WorkflowDefinitionSSOT,
   ConfigSummary,
 } from '../services/configService.ts';
+import { realtimeSsotClient } from '../services/realtimeSsotClient.ts';
+import type { SsotChangeEvent } from '../types/realtime.ts';
 
 export interface UseConfigurationSSOTReturn {
   departments: DepartmentSSOT[];
@@ -22,6 +24,9 @@ export interface UseConfigurationSSOTReturn {
   isLoading: boolean;
   error: string | null;
   refreshConfig: () => Promise<void>;
+  refreshDepartments: () => Promise<void>;
+  refreshReports: () => Promise<void>;
+  refreshRoles: () => Promise<void>;
   getAuthorizedReports: (user: { id?: string; role?: string; department?: string }) => Promise<string[]>;
   createDepartment: (deptData: any) => Promise<DepartmentSSOT>;
   updateDepartment: (id: string, updates: any) => Promise<DepartmentSSOT>;
@@ -38,20 +43,12 @@ export function useConfigurationSSOT(): UseConfigurationSSOTReturn {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchConfiguration = useCallback(async () => {
+  const fetchDepartments = useCallback(async () => {
     try {
-      setIsLoading(true);
-      setError(null);
-
-      const [deptTreeRes, deptFlatRes, reportsRes, rolesRes, wfRes, summaryRes] = await Promise.all([
+      const [deptTreeRes, deptFlatRes] = await Promise.all([
         fetch('/api/config/departments'),
         fetch('/api/config/departments?flat=true'),
-        fetch('/api/config/reports'),
-        fetch('/api/config/roles'),
-        fetch('/api/config/workflows'),
-        fetch('/api/config/summary'),
       ]);
-
       if (deptTreeRes.ok) {
         const treeData = await deptTreeRes.json();
         setDepartments(treeData);
@@ -60,72 +57,172 @@ export function useConfigurationSSOT(): UseConfigurationSSOTReturn {
         const flatData = await deptFlatRes.json();
         setFlatDepartments(flatData);
       }
-      if (reportsRes.ok) {
-        const reportsData = await reportsRes.json();
+    } catch (err: any) {
+      console.warn('[useConfigurationSSOT] Failed refreshing departments:', err);
+    }
+  }, []);
+
+  const fetchReports = useCallback(async () => {
+    try {
+      const res = await fetch('/api/config/reports');
+      if (res.ok) {
+        const reportsData = await res.json();
         setReports(reportsData);
       }
-      if (rolesRes.ok) {
-        const rolesData = await rolesRes.json();
+    } catch (err: any) {
+      console.warn('[useConfigurationSSOT] Failed refreshing reports:', err);
+    }
+  }, []);
+
+  const fetchRoles = useCallback(async () => {
+    try {
+      const res = await fetch('/api/config/roles');
+      if (res.ok) {
+        const rolesData = await res.json();
         setRoles(rolesData);
       }
-      if (wfRes.ok) {
-        const wfData = await wfRes.json();
+    } catch (err: any) {
+      console.warn('[useConfigurationSSOT] Failed refreshing roles:', err);
+    }
+  }, []);
+
+  const fetchWorkflows = useCallback(async () => {
+    try {
+      const res = await fetch('/api/config/workflows');
+      if (res.ok) {
+        const wfData = await res.json();
         setWorkflows(wfData);
       }
-      if (summaryRes.ok) {
-        const summaryData = await summaryRes.json();
+    } catch (err: any) {
+      console.warn('[useConfigurationSSOT] Failed refreshing workflows:', err);
+    }
+  }, []);
+
+  const fetchSummary = useCallback(async () => {
+    try {
+      const res = await fetch('/api/config/summary');
+      if (res.ok) {
+        const summaryData = await res.json();
         setSummary(summaryData);
       }
+    } catch (err: any) {
+      console.warn('[useConfigurationSSOT] Failed refreshing summary:', err);
+    }
+  }, []);
+
+  const fetchConfiguration = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      await Promise.all([
+        fetchDepartments(),
+        fetchReports(),
+        fetchRoles(),
+        fetchWorkflows(),
+        fetchSummary(),
+      ]);
     } catch (err: any) {
       console.warn('[useConfigurationSSOT] Failed fetching configuration SSOT from backend:', err);
       setError(err.message || 'Failed to load backend configuration.');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [fetchDepartments, fetchReports, fetchRoles, fetchWorkflows, fetchSummary]);
 
+  // Connect to Real-time WebSocket and SSE
   useEffect(() => {
     fetchConfiguration();
 
-    // Connect to Real-Time Server-Sent Events (SSE) stream for configuration updates
+    // 1. Subscribe to Real-Time SSOT WebSocket engine events
+    realtimeSsotClient.connect();
+    realtimeSsotClient.subscribe('DEPARTMENTS');
+    realtimeSsotClient.subscribe('REPORTS');
+    realtimeSsotClient.subscribe('WORKFLOWS');
+
+    const onDeptEvent = (evt: SsotChangeEvent) => {
+      console.log('[useConfigurationSSOT] Realtime department update:', evt.action, evt.entityId);
+      fetchDepartments();
+      fetchSummary();
+    };
+
+    const onReportEvent = (evt: SsotChangeEvent) => {
+      console.log('[useConfigurationSSOT] Realtime report catalog update:', evt.action, evt.entityId);
+      fetchReports();
+      fetchSummary();
+    };
+
+    const onRoleEvent = (evt: SsotChangeEvent) => {
+      console.log('[useConfigurationSSOT] Realtime role/RBAC update:', evt.action);
+      fetchRoles();
+      fetchSummary();
+    };
+
+    const onWorkflowEvent = (evt: SsotChangeEvent) => {
+      console.log('[useConfigurationSSOT] Realtime workflow update:', evt.action);
+      fetchWorkflows();
+      fetchSummary();
+    };
+
+    const onRevalidateAll = () => {
+      console.log('[useConfigurationSSOT] Revalidating all configuration domains after reconnect');
+      fetchConfiguration();
+    };
+
+    realtimeSsotClient.events.on('DOMAIN:DEPARTMENT', onDeptEvent);
+    realtimeSsotClient.events.on('DOMAIN:REPORT', onReportEvent);
+    realtimeSsotClient.events.on('DOMAIN:ASSIGNMENT', onReportEvent);
+    realtimeSsotClient.events.on('DOMAIN:RBAC', onRoleEvent);
+    realtimeSsotClient.events.on('DOMAIN:WORKFLOW', onWorkflowEvent);
+    realtimeSsotClient.events.on('REVALIDATE_ALL', onRevalidateAll);
+
+    // 2. Connect to Server-Sent Events (SSE) stream fallback
     let eventSource: EventSource | null = null;
     try {
-      eventSource = new EventSource('/api/config/events');
-      
-      eventSource.addEventListener('config_changed', (evt) => {
-        try {
-          const payload = JSON.parse(evt.data);
-          console.log('[useConfigurationSSOT] Real-time config change notification received:', payload);
-          fetchConfiguration();
-        } catch (e) {
-          fetchConfiguration();
-        }
-      });
+      if (typeof EventSource !== 'undefined') {
+        eventSource = new EventSource('/api/config/events');
+        
+        eventSource.addEventListener('config_changed', (evt) => {
+          try {
+            const payload = JSON.parse(evt.data);
+            if (payload?.domain === 'DEPARTMENT') {
+              fetchDepartments();
+            } else if (payload?.domain === 'REPORT' || payload?.domain === 'ASSIGNMENT') {
+              fetchReports();
+            } else if (payload?.domain === 'RBAC') {
+              fetchRoles();
+            } else {
+              fetchConfiguration();
+            }
+          } catch (_) {
+            fetchConfiguration();
+          }
+        });
 
-      eventSource.addEventListener('cache_invalidated', (evt) => {
-        try {
-          const payload = JSON.parse(evt.data);
-          console.log('[useConfigurationSSOT] Cache invalidation event received:', payload);
+        eventSource.addEventListener('cache_invalidated', (evt) => {
           fetchConfiguration();
-        } catch (e) {
-          fetchConfiguration();
-        }
-      });
+        });
 
-      eventSource.onerror = () => {
-        // SSE connection failure, fallback to polling if needed
-        eventSource?.close();
-      };
+        eventSource.onerror = () => {
+          eventSource?.close();
+        };
+      }
     } catch (e) {
       console.warn('[useConfigurationSSOT] SSE initialization notice:', e);
     }
 
     return () => {
+      realtimeSsotClient.events.off('DOMAIN:DEPARTMENT', onDeptEvent);
+      realtimeSsotClient.events.off('DOMAIN:REPORT', onReportEvent);
+      realtimeSsotClient.events.off('DOMAIN:ASSIGNMENT', onReportEvent);
+      realtimeSsotClient.events.off('DOMAIN:RBAC', onRoleEvent);
+      realtimeSsotClient.events.off('DOMAIN:WORKFLOW', onWorkflowEvent);
+      realtimeSsotClient.events.off('REVALIDATE_ALL', onRevalidateAll);
+
       if (eventSource) {
         eventSource.close();
       }
     };
-  }, [fetchConfiguration]);
+  }, [fetchConfiguration, fetchDepartments, fetchReports, fetchRoles, fetchWorkflows, fetchSummary]);
 
   const getAuthorizedReports = useCallback(
     async (user: { id?: string; role?: string; department?: string }): Promise<string[]> => {
@@ -160,10 +257,11 @@ export function useConfigurationSSOT(): UseConfigurationSSOTReturn {
         throw new Error(errData.error || 'Failed to create department.');
       }
       const created = await res.json();
-      await fetchConfiguration();
+      await fetchDepartments();
+      await fetchSummary();
       return created;
     },
-    [fetchConfiguration]
+    [fetchDepartments, fetchSummary]
   );
 
   const updateDepartment = useCallback(
@@ -178,10 +276,11 @@ export function useConfigurationSSOT(): UseConfigurationSSOTReturn {
         throw new Error(errData.error || 'Failed to update department.');
       }
       const updated = await res.json();
-      await fetchConfiguration();
+      await fetchDepartments();
+      await fetchSummary();
       return updated;
     },
-    [fetchConfiguration]
+    [fetchDepartments, fetchSummary]
   );
 
   const createReportVersion = useCallback(
@@ -196,10 +295,11 @@ export function useConfigurationSSOT(): UseConfigurationSSOTReturn {
         throw new Error(errData.error || 'Failed to create report version.');
       }
       const result = await res.json();
-      await fetchConfiguration();
+      await fetchReports();
+      await fetchSummary();
       return result;
     },
-    [fetchConfiguration]
+    [fetchReports, fetchSummary]
   );
 
   return {
@@ -212,6 +312,9 @@ export function useConfigurationSSOT(): UseConfigurationSSOTReturn {
     isLoading,
     error,
     refreshConfig: fetchConfiguration,
+    refreshDepartments: fetchDepartments,
+    refreshReports: fetchReports,
+    refreshRoles: fetchRoles,
     getAuthorizedReports,
     createDepartment,
     updateDepartment,

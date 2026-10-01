@@ -4,9 +4,10 @@
  */
 
 import { BrowserSafeEventEmitter } from '../utils/browserEventEmitter.ts';
-import { OROMIA_BANK_DEPARTMENTS, DepartmentDefinition } from '../data/organizationHierarchy.ts';
-import { getAllReports, getReportByKey, NBE_REPORTS, syncSSOTReportToRegistry, retireSSOTReportInRegistry } from '../data/report-registry.ts';
+import { OROMIA_BANK_DEPARTMENTS, type DepartmentDefinition, recordDepartmentRename, registerDynamicDepartmentLookup } from '../data/organizationHierarchy.ts';
+import { getAllReports, getReportByKey, NBE_REPORTS, syncSSOTReportToRegistry, retireSSOTReportInRegistry, renameDepartmentInReports } from '../data/report-registry.ts';
 import { auditService } from './auditService.ts';
+import { realtimeSsotEngine } from './realtimeSsotEngine.ts';
 import type { ReportMetadata } from '../types/regulatory.ts';
 
 // ============================================================================
@@ -279,21 +280,23 @@ export interface WorkflowDefinitionSSOT {
   updatedAt: string;
 }
 
+export type ConfigurationEntityType =
+  | 'DEPARTMENT'
+  | 'REPORT_DEFINITION'
+  | 'REPORT_VERSION'
+  | 'ROLE'
+  | 'PERMISSION'
+  | 'ASSIGNMENT'
+  | 'SPECIAL_ACCESS'
+  | 'WORKFLOW';
+
 export interface ConfigurationChangeSSOT {
   id: string;
   timestamp: string;
   actorId: string;
   actorName: string;
   actorRole: string;
-  entityType:
-    | 'DEPARTMENT'
-    | 'REPORT_DEFINITION'
-    | 'REPORT_VERSION'
-    | 'ROLE'
-    | 'PERMISSION'
-    | 'ASSIGNMENT'
-    | 'SPECIAL_ACCESS'
-    | 'WORKFLOW';
+  entityType: ConfigurationEntityType;
   entityId: string;
   entityName: string;
   action: 'CREATE' | 'UPDATE' | 'DELETE' | 'VERSION_BUMP' | 'ASSIGN' | 'REVOKE' | 'RESTORE';
@@ -355,10 +358,36 @@ class ConfigurationEngine {
   private lastChangeTime = new Date().toISOString();
 
   public readonly events = new BrowserSafeEventEmitter();
+  private deptRenameHandlers: Array<(oldName: string, newName: string) => void> = [];
 
   constructor() {
     this.events.setMaxListeners(100);
+    try {
+      realtimeSsotEngine.setHashProvider(() => this.generateGlobalHash());
+    } catch (_) {}
+    try {
+      registerDynamicDepartmentLookup((key) => {
+        const report = this.getReportDefinition(key);
+        if (report?.defaultDepartmentId) {
+          const dept = this.getDepartmentById(report.defaultDepartmentId);
+          if (dept) return dept.name;
+        }
+        const assignments = this.getDepartmentReportAssignments({ reportKey: key, activeOnly: true });
+        if (assignments.length > 0) {
+          const dept = this.getDepartmentById(assignments[0].departmentId);
+          if (dept) return dept.name;
+        }
+        return undefined;
+      });
+    } catch (_) {}
     this.bootstrapDefaults();
+  }
+
+  public onDepartmentRename(handler: (oldName: string, newName: string) => void): () => void {
+    this.deptRenameHandlers.push(handler);
+    return () => {
+      this.deptRenameHandlers = this.deptRenameHandlers.filter((h) => h !== handler);
+    };
   }
 
   // --------------------------------------------------------------------------
@@ -778,11 +807,11 @@ class ConfigurationEngine {
   // CACHE & METRIC MANAGEMENT
   // --------------------------------------------------------------------------
 
-  private generateGlobalHash(): string {
+  public generateGlobalHash(): string {
     return `ssot_${this.deptVersion}_${this.reportsVersion}_${this.workflowsVersion}_${this.rbacVersion}_${this.assignmentsVersion}`;
   }
 
-  private bumpVersion(domain: 'DEPARTMENT' | 'REPORT' | 'WORKFLOW' | 'RBAC' | 'ASSIGNMENT'): void {
+  public bumpVersion(domain: 'DEPARTMENT' | 'REPORT' | 'WORKFLOW' | 'RBAC' | 'ASSIGNMENT'): void {
     if (domain === 'DEPARTMENT') this.deptVersion++;
     else if (domain === 'REPORT') this.reportsVersion++;
     else if (domain === 'WORKFLOW') this.workflowsVersion++;
@@ -863,7 +892,65 @@ class ConfigurationEngine {
       oldState: record.oldState,
     });
 
+    // Real-Time SSOT Event propagation
+    try {
+      const eventType = this.resolveRealtimeEventType(record.entityType, record.action);
+      const domain = this.resolveRealtimeDomain(record.entityType);
+      realtimeSsotEngine.publishEvent({
+        eventType,
+        action: record.action,
+        domain,
+        entityId: record.entityId,
+        actor: { id: record.actorId, name: record.actorName, role: record.actorRole },
+        summary: record.summary,
+        globalConfigHash: this.generateGlobalHash(),
+        payload: {
+          diff: record.diff,
+          details: record.details,
+          entityName: record.entityName,
+          entityType: record.entityType,
+          action: record.action,
+          newState: record.newState,
+          oldState: record.oldState,
+        },
+      });
+    } catch (_) {}
+
     return record;
+  }
+
+  private resolveRealtimeEventType(entityType: ConfigurationEntityType, action: string): any {
+    switch (entityType) {
+      case 'DEPARTMENT':
+        return 'DEPARTMENT_CHANGED';
+      case 'REPORT_DEFINITION':
+      case 'REPORT_VERSION':
+        return 'REPORT_CHANGED';
+      case 'ASSIGNMENT':
+        return 'ASSIGNMENT_CHANGED';
+      case 'ROLE':
+      case 'PERMISSION':
+        return 'ROLE_CHANGED';
+      default:
+        return 'CONFIG_SYNC_TRIGGER';
+    }
+  }
+
+  private resolveRealtimeDomain(entityType: ConfigurationEntityType): any {
+    switch (entityType) {
+      case 'DEPARTMENT':
+        return 'DEPARTMENT';
+      case 'REPORT_DEFINITION':
+      case 'REPORT_VERSION':
+        return 'REPORT';
+      case 'ASSIGNMENT':
+        return 'ASSIGNMENT';
+      case 'ROLE':
+      case 'PERMISSION':
+        return 'RBAC';
+      default:
+        return 'REPORT';
+    }
   }
 
   public getChangeLogs(limit = 100): ConfigurationChangeSSOT[] {
@@ -1025,7 +1112,15 @@ class ConfigurationEngine {
 
     if (updates.name && updates.name !== dept.name) {
       diff.push({ field: 'name', oldValue: dept.name, newValue: updates.name });
+      const oldName = dept.name;
       dept.name = updates.name;
+      recordDepartmentRename(oldName, updates.name);
+      renameDepartmentInReports(oldName, updates.name);
+      for (const handler of this.deptRenameHandlers) {
+        try {
+          handler(oldName, updates.name);
+        } catch (_) {}
+      }
     }
     if (updates.shortCode && updates.shortCode !== dept.shortCode) {
       diff.push({ field: 'shortCode', oldValue: dept.shortCode, newValue: updates.shortCode.toUpperCase() });
@@ -2015,6 +2110,96 @@ class ConfigurationEngine {
 
     this.bumpVersion('REPORT');
     return report;
+  }
+
+  /**
+   * Governed Rollback: Reverts a report definition to an earlier version snapshot.
+   * Creates a NEW version snapshot (Version N+1) reproducing the target historical schema.
+   * NEVER rewrites or destroys historical versions or submitted returns.
+   */
+  public rollbackReportVersion(
+    returnKey: string,
+    targetVersionNumber: number,
+    actor: ActorInfo,
+    reason: string
+  ): ReportVersionSSOT {
+    const report = this.reports.get(returnKey);
+    if (!report) throw new Error(`Report with ReturnKey '${returnKey}' not found.`);
+
+    const targetVersion = this.getReportVersion(returnKey, targetVersionNumber);
+    if (!targetVersion) {
+      throw new Error(`Target Version ${targetVersionNumber} not found for report '${returnKey}'.`);
+    }
+
+    if (!reason || reason.trim().length < 5) {
+      throw new Error('A detailed rollback reason is required (at least 5 characters).');
+    }
+
+    const nextVersionNumber = report.currentVersion + 1;
+    const now = new Date().toISOString();
+
+    // Create new version with target schema
+    const rolledBackVersion: ReportVersionSSOT = {
+      versionId: `ver_${returnKey}_v${nextVersionNumber}_${Date.now()}`,
+      reportKey: returnKey,
+      versionNumber: nextVersionNumber,
+      status: 'ACTIVE',
+      effectiveFrom: now,
+      effectiveTo: null,
+      changelogSummary: `[GOVERNED ROLLBACK] Restored schema from Version ${targetVersionNumber}. Reason: ${reason}`,
+      changeDiff: [{ field: 'rollbackSourceVersion', oldValue: targetVersionNumber, newValue: nextVersionNumber }],
+      createdBy: actor.name,
+      createdAt: now,
+      publishedAt: now,
+      sections: JSON.parse(JSON.stringify(targetVersion.sections)),
+      fields: JSON.parse(JSON.stringify(targetVersion.fields)),
+      columns: JSON.parse(JSON.stringify(targetVersion.columns)),
+      rows: JSON.parse(JSON.stringify(targetVersion.rows)),
+      formulas: JSON.parse(JSON.stringify(targetVersion.formulas)),
+      validationRules: JSON.parse(JSON.stringify(targetVersion.validationRules)),
+      nbeMapping: targetVersion.nbeMapping ? JSON.parse(JSON.stringify(targetVersion.nbeMapping)) : undefined,
+      schemaSnapshot: JSON.parse(JSON.stringify(targetVersion.schemaSnapshot)),
+    };
+
+    // Transition current active to SUPERSEDED
+    const currentActive = this.getActiveVersion(returnKey);
+    if (currentActive) {
+      currentActive.status = 'SUPERSEDED';
+      currentActive.effectiveTo = now;
+    }
+
+    // Register in versions map
+    const list = this.versions.get(returnKey) || [];
+    list.push(rolledBackVersion);
+    this.versions.set(returnKey, list);
+
+    // Update report pointers
+    report.currentVersion = nextVersionNumber;
+    report.status = 'ACTIVE';
+    report.updatedAt = now;
+    report.activeVersionSnapshot = rolledBackVersion;
+    this.reports.set(returnKey, report);
+
+    // Sync to active registry
+    const primaryDeptName = this.departments.get(report.defaultDepartmentId)?.name || 'Credit Operations & Portfolio Management';
+    const metadata = versionToReportMetadata(report, rolledBackVersion, primaryDeptName);
+    syncSSOTReportToRegistry(metadata);
+
+    this.recordChange({
+      actorId: actor.id,
+      actorName: actor.name,
+      actorRole: actor.role,
+      entityType: 'REPORT_VERSION',
+      entityId: rolledBackVersion.versionId,
+      entityName: `${report.name} (v${nextVersionNumber})`,
+      action: 'RESTORE',
+      summary: `Rolled back '${returnKey}' to schema of Version ${targetVersionNumber}. Reason: ${reason}`,
+      newState: rolledBackVersion,
+      oldState: currentActive,
+    });
+
+    this.bumpVersion('REPORT');
+    return rolledBackVersion;
   }
 
   // --- Fine-Grained Structural Editing Helpers ---

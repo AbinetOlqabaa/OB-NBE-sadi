@@ -59,6 +59,9 @@ import {
 } from '../data/organizationHierarchy.ts';
 import { departmentService } from '../services/departmentService.ts';
 import { ReportTemplateStudioModal } from './ReportTemplateStudioModal.tsx';
+import { BulkOperationsModal } from './BulkOperationsModal.tsx';
+import { bulkOperationsEngine, type BulkTargetType } from '../services/bulkOperationsEngine.ts';
+import { ConfigurationGovernanceView } from './ConfigurationGovernanceView.tsx';
 
 interface AdminDashboardProps {
   currentUser: UserSession;
@@ -248,6 +251,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Action feedback notice
   const [actionNotice, setActionNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Bulk Operations State (Phase 6)
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [bulkModalTarget, setBulkModalTarget] = useState<BulkTargetType>('USERS');
+  const [isBulkReassignDeptOpen, setIsBulkReassignDeptOpen] = useState(false);
+  const [bulkTargetDept, setBulkTargetDept] = useState('');
+  const [isBulkAssignRoleOpen, setIsBulkAssignRoleOpen] = useState(false);
+  const [bulkTargetRole, setBulkTargetRole] = useState<UserRole>('MAKER');
+
   const showNotice = (type: 'success' | 'error', message: string) => {
     setActionNotice({ type, message });
     setTimeout(() => setActionNotice(null), 4000);
@@ -364,6 +376,98 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   );
 
   // Authorize User
+  const handleToggleSelectAllVisibleUsers = (visibleUsers: UserAccount[]) => {
+    const allSelected = visibleUsers.length > 0 && visibleUsers.every((u) => selectedUserIds.has(u.id));
+    const next = new Set(selectedUserIds);
+    if (allSelected) {
+      for (const u of visibleUsers) next.delete(u.id);
+    } else {
+      for (const u of visibleUsers) next.add(u.id);
+    }
+    setSelectedUserIds(next);
+  };
+
+  const handleToggleUserSelection = (userId: string) => {
+    const next = new Set(selectedUserIds);
+    if (next.has(userId)) next.delete(userId);
+    else next.add(userId);
+    setSelectedUserIds(next);
+  };
+
+  const handleExecuteBulkAction = async (
+    action: 'ACTIVATE' | 'DEACTIVATE' | 'ASSIGN_DEPARTMENT' | 'ASSIGN_ROLE',
+    payload?: any
+  ) => {
+    if (selectedUserIds.size === 0) return;
+    setLoading(true);
+    try {
+      const res = bulkOperationsEngine.executeBulkUserAction({
+        userIds: Array.from(selectedUserIds),
+        action,
+        payload,
+        actor: {
+          id: currentUser.id,
+          name: currentUser.name,
+          email: currentUser.email,
+          role: currentUser.role,
+          department: currentUser.department,
+        },
+        mode: 'ATOMIC',
+      });
+      if (res.success) {
+        showNotice('success', res.message);
+        setSelectedUserIds(new Set());
+        await refreshAllData();
+        if (onUserStatusChanged) onUserStatusChanged();
+      } else {
+        showNotice('error', res.message);
+      }
+    } catch (err: any) {
+      showNotice('error', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportUsers = (format: 'CSV' | 'XLSX') => {
+    try {
+      const targetIds = selectedUserIds.size > 0 ? Array.from(selectedUserIds) : undefined;
+      const exported = bulkOperationsEngine.exportData({
+        target: 'USERS',
+        format,
+        actor: {
+          id: currentUser.id,
+          name: currentUser.name,
+          email: currentUser.email,
+          role: currentUser.role,
+          department: currentUser.department,
+        },
+        selectedIds: targetIds,
+        filters: {
+          role: roleFilter,
+          status: statusFilter,
+          department: departmentFilter,
+        },
+      });
+
+      const blob = exported.content instanceof Uint8Array
+        ? new Blob([exported.content as any], { type: exported.mimeType })
+        : new Blob([exported.content], { type: exported.mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = exported.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showNotice('success', `Exported ${exported.rowsCount} users (${format}) with formula injection protection.`);
+    } catch (err: any) {
+      showNotice('error', err.message);
+    }
+  };
+
   const handleAuthorizeUser = async (userId: string) => {
     setLoading(true);
     try {
@@ -1175,7 +1279,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             }`}
           >
             <Shield className="w-3.5 h-3.5" />
-            <span>Directives & Matrix</span>
+            <span>Governance & Versioning</span>
           </button>
 
           <button
@@ -1601,6 +1705,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                onClick={() => {
+                  setBulkModalTarget('USERS');
+                  setIsBulkModalOpen(true);
+                }}
+                className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer border border-slate-200 dark:border-slate-700"
+                title="Open Transactional Bulk Import & Management Modal"
+              >
+                <Layers className="w-3.5 h-3.5 text-ob-indigo-600 dark:text-ob-indigo-400" />
+                <span>Bulk Import & Ops</span>
+              </button>
+
+              <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => handleExportUsers('CSV')}
+                  className="px-2 py-1 text-slate-700 dark:text-slate-300 hover:text-ob-indigo-600 text-[11px] font-bold cursor-pointer"
+                  title="Export to CSV (Formula-Injection Protected)"
+                >
+                  Export CSV
+                </button>
+                <span className="text-slate-300 dark:text-slate-600">|</span>
+                <button
+                  type="button"
+                  onClick={() => handleExportUsers('XLSX')}
+                  className="px-2 py-1 text-slate-700 dark:text-slate-300 hover:text-ob-indigo-600 text-[11px] font-bold cursor-pointer"
+                  title="Export to Excel (Formula-Injection Protected)"
+                >
+                  Export XLSX
+                </button>
+              </div>
+
+              <button
+                type="button"
                 onClick={() => setIsCreateUserOpen(true)}
                 className="px-3 py-1.5 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer"
               >
@@ -1610,11 +1747,77 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
+          {/* BULK ACTION RIBBON (When users are selected) */}
+          {selectedUserIds.size > 0 && (
+            <div className="px-3 py-2 bg-ob-indigo-50 dark:bg-ob-indigo-950/70 border-b border-ob-indigo-200 dark:border-ob-indigo-800 flex flex-wrap items-center justify-between gap-2 text-xs animate-in slide-in-from-top-1">
+              <div className="flex items-center gap-2 text-ob-indigo-900 dark:text-ob-indigo-200 font-bold">
+                <span className="w-5 h-5 rounded-full bg-ob-indigo-600 text-white flex items-center justify-center text-[10px]">
+                  {selectedUserIds.size}
+                </span>
+                <span>User(s) Selected</span>
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleExecuteBulkAction('ACTIVATE')}
+                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Activate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExecuteBulkAction('DEACTIVATE')}
+                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Deactivate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsBulkReassignDeptOpen(true)}
+                  className="px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold transition-colors cursor-pointer hover:bg-slate-50"
+                >
+                  Assign Dept...
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsBulkAssignRoleOpen(true)}
+                  className="px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold transition-colors cursor-pointer hover:bg-slate-50"
+                >
+                  Assign Role...
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportUsers('CSV')}
+                  className="px-2.5 py-1 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold transition-colors cursor-pointer hover:bg-slate-50"
+                >
+                  Export ({selectedUserIds.size})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedUserIds(new Set())}
+                  className="px-2 py-1 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 text-xs cursor-pointer"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="overflow-x-auto min-w-full touch-scroll-x">
               <table className="min-w-[750px] w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-semibold sticky top-0 z-10">
+                  <th className="py-2.5 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={paginatedAllUsers.length > 0 && paginatedAllUsers.every((u) => selectedUserIds.has(u.id))}
+                      onChange={() => handleToggleSelectAllVisibleUsers(paginatedAllUsers)}
+                      className="w-3.5 h-3.5 text-ob-indigo-600 rounded cursor-pointer"
+                      title="Select / deselect all visible users"
+                    />
+                  </th>
                   <th className="py-2.5 px-3">Officer & Email</th>
                   <th className="py-2.5 px-3">Role & Scope</th>
                   <th className="py-2.5 px-3">Account Status</th>
@@ -1631,8 +1834,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     .join('')
                     .substring(0, 2)
                     .toUpperCase();
+                  const isSelected = selectedUserIds.has(user.id);
                   return (
-                    <tr key={user.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <tr
+                      key={user.id}
+                      className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${
+                        isSelected ? 'bg-ob-indigo-50/50 dark:bg-ob-indigo-950/30' : ''
+                      }`}
+                    >
+                      <td className="py-2.5 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleUserSelection(user.id)}
+                          className="w-3.5 h-3.5 text-ob-indigo-600 rounded cursor-pointer"
+                        />
+                      </td>
                       <td className="py-2.5 px-3">
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-lg bg-ob-indigo-100 dark:bg-ob-indigo-950 text-ob-indigo-700 dark:text-ob-indigo-300 font-bold flex items-center justify-center text-[11px] shrink-0 border border-ob-indigo-200 dark:border-ob-indigo-800">
@@ -2091,7 +2308,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* 9. Tab Content 6: GOVERNANCE & MATRIX */}
       {activeSubTab === 'GOVERNANCE' && (
-        <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
+          {/* Phase 8 Configuration Governance, Versioning & Governed Rollback */}
+          <ConfigurationGovernanceView currentUser={currentUser} />
+
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-2xs">
             <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-2 flex items-center gap-2">
               <Shield className="w-4 h-4 text-ob-indigo-600 dark:text-ob-indigo-400" />
@@ -3682,6 +3902,126 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             refreshAllData();
           }}
         />
+      )}
+
+      {/* BULK OPERATIONS & FILE WORKFLOW MODAL */}
+      {isBulkModalOpen && (
+        <BulkOperationsModal
+          isOpen={isBulkModalOpen}
+          onClose={() => setIsBulkModalOpen(false)}
+          onSuccess={(msg) => {
+            showNotice('success', msg);
+            refreshAllData();
+            if (onUserStatusChanged) onUserStatusChanged();
+          }}
+          currentUser={{
+            id: currentUser.id,
+            name: currentUser.name,
+            email: currentUser.email,
+            role: currentUser.role,
+            department: currentUser.department,
+          }}
+          initialTarget={bulkModalTarget}
+        />
+      )}
+
+      {/* MODAL: BULK REASSIGN DEPARTMENT */}
+      {isBulkReassignDeptOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+              Bulk Department Reassignment ({selectedUserIds.size} Users)
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Select target department for selected officers. Effective permissions will be recalculated automatically.
+            </p>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Target Department
+              </label>
+              <select
+                value={bulkTargetDept}
+                onChange={(e) => setBulkTargetDept(e.target.value)}
+                className="w-full text-xs p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+              >
+                <option value="">-- Choose Department --</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.name}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsBulkReassignDeptOpen(false)}
+                className="px-3.5 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!bulkTargetDept}
+                onClick={() => {
+                  handleExecuteBulkAction('ASSIGN_DEPARTMENT', { department: bulkTargetDept });
+                  setIsBulkReassignDeptOpen(false);
+                }}
+                className="px-4 py-1.5 bg-ob-indigo-600 hover:bg-ob-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl"
+              >
+                Apply Reassignment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: BULK ASSIGN ROLE */}
+      {isBulkAssignRoleOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+              Bulk Role Assignment ({selectedUserIds.size} Users)
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Assign authoritative NBE compliance role. Note: Segregation of duties applies.
+            </p>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Target Role
+              </label>
+              <select
+                value={bulkTargetRole}
+                onChange={(e) => setBulkTargetRole(e.target.value as UserRole)}
+                className="w-full text-xs p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+              >
+                <option value="MAKER">Maker (Report Preparer)</option>
+                <option value="CHECKER">Checker (Report Approver)</option>
+                <option value="AUDITOR">Auditor (Independent Compliance)</option>
+                <option value="ADMIN">Administrator (Governance Oversight)</option>
+              </select>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsBulkAssignRoleOpen(false)}
+                className="px-3.5 py-1.5 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleExecuteBulkAction('ASSIGN_ROLE', { role: bulkTargetRole });
+                  setIsBulkAssignRoleOpen(false);
+                }}
+                className="px-4 py-1.5 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white font-bold text-xs rounded-xl"
+              >
+                Apply Role Change
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

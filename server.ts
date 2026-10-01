@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
@@ -22,8 +23,13 @@ import {
   getReportsForDepartment,
   getDepartmentForReport,
 } from './src/data/organizationHierarchy.ts';
-import { paginateList, PaginatedResult } from './src/utils/paginationUtils.ts';
+import { paginateList, type PaginatedResult } from './src/utils/paginationUtils.ts';
 import { configService } from './src/services/configService.ts';
+import { effectiveAccessEngine } from './src/services/effectiveAccessEngine.ts';
+import { bulkOperationsEngine } from './src/services/bulkOperationsEngine.ts';
+import { realtimeSsotEngine } from './src/services/realtimeSsotEngine.ts';
+import { configurationGovernanceService } from './src/services/configurationGovernanceService.ts';
+import { biometricService } from './src/services/biometricService.ts';
 
 dotenv.config();
 
@@ -109,12 +115,18 @@ app.get('/api/config/events', (req, res) => {
     res.write(`event: cache_invalidated\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
+  const onSsotEvent = (evt: any) => {
+    res.write(`event: ssot_event\ndata: ${JSON.stringify(evt)}\n\n`);
+  };
+
   configService.events.on('CONFIG_CHANGED', onConfigChanged);
   configService.events.on('CACHE_INVALIDATED', onCacheInvalidated);
+  realtimeSsotEngine.events.on('SSOT_EVENT', onSsotEvent);
 
   req.on('close', () => {
     configService.events.off('CONFIG_CHANGED', onConfigChanged);
     configService.events.off('CACHE_INVALIDATED', onCacheInvalidated);
+    realtimeSsotEngine.events.off('SSOT_EVENT', onSsotEvent);
   });
 });
 
@@ -417,6 +429,144 @@ app.get('/api/config/workflows', (req, res) => {
 app.get('/api/config/changes', (req, res) => {
   const limit = parseInt((req.query.limit as string) || '100', 10);
   res.json(configService.getChangeLogs(limit));
+});
+
+// -------------------------------------------------------------
+// PHASE 8: CONFIGURATION GOVERNANCE, VERSIONING & ROLLBACK API
+// -------------------------------------------------------------
+
+// List proposals
+app.get('/api/governance/proposals', (req, res) => {
+  const { status, riskLevel, entityType, entityId } = req.query;
+  const proposals = configurationGovernanceService.getProposals({
+    status: status as any,
+    riskLevel: riskLevel as any,
+    entityType: entityType as any,
+    entityId: entityId as string,
+  });
+  res.json(proposals);
+});
+
+// Get proposal by ID
+app.get('/api/governance/proposals/:id', (req, res) => {
+  const proposal = configurationGovernanceService.getProposalById(req.params.id);
+  if (!proposal) {
+    res.status(404).json({ error: `Proposal '${req.params.id}' not found` });
+    return;
+  }
+  res.json(proposal);
+});
+
+// Create proposal draft
+app.post('/api/governance/proposals', (req, res) => {
+  const actor = req.body.proposer || {
+    id: 'usr_admin',
+    name: 'Compliance Administrator',
+    role: 'ADMIN',
+    department: 'Compliance & Legal Governance',
+  };
+  try {
+    const proposal = configurationGovernanceService.createProposalDraft(req.body, actor);
+    res.status(201).json(proposal);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Validate proposal
+app.post('/api/governance/proposals/:id/validate', (req, res) => {
+  const validator = req.body.validator || { id: 'usr_admin', name: 'Compliance Administrator', role: 'ADMIN' };
+  try {
+    const validated = configurationGovernanceService.validateProposal(req.params.id, validator);
+    res.json(validated);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Approve proposal (with 4-Eyes Segregation of Duties checks)
+app.post('/api/governance/proposals/:id/approve', (req, res) => {
+  const approver = req.body.approver || { id: 'usr_checker', name: 'Regulatory Checker', role: 'CHECKER' };
+  const comments = req.body.comments || 'Approved under NBE regulatory governance guidelines';
+  try {
+    const approved = configurationGovernanceService.approveProposal(req.params.id, approver, comments);
+    res.json(approved);
+  } catch (err: any) {
+    const statusCode = err.message?.includes('SEGREGATION_OF_DUTIES_VIOLATION') ? 403 : 400;
+    res.status(statusCode).json({ error: err.message });
+  }
+});
+
+// Reject proposal
+app.post('/api/governance/proposals/:id/reject', (req, res) => {
+  const rejector = req.body.rejector || { id: 'usr_checker', name: 'Regulatory Checker', role: 'CHECKER' };
+  const reason = req.body.reason || 'Rejected by regulatory governance reviewer';
+  try {
+    const rejected = configurationGovernanceService.rejectProposal(req.params.id, rejector, reason);
+    res.json(rejected);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Publish proposal (enforces optimistic concurrency locking)
+app.post('/api/governance/proposals/:id/publish', (req, res) => {
+  const publisher = req.body.publisher || { id: 'usr_admin', name: 'Compliance Administrator', role: 'ADMIN' };
+  try {
+    const result = configurationGovernanceService.publishProposal(req.params.id, publisher);
+    res.json(result);
+  } catch (err: any) {
+    const statusCode = err.message?.includes('CONCURRENCY_CONFLICT') ? 409 : 400;
+    res.status(statusCode).json({ error: err.message });
+  }
+});
+
+// Rollback to earlier configuration version
+app.post('/api/governance/proposals/rollback', (req, res) => {
+  const { entityType, entityId, targetVersionNumber, reason } = req.body;
+  const actor = req.body.actor || { id: 'usr_admin', name: 'Compliance Administrator', role: 'ADMIN' };
+  if (!entityType || !entityId || targetVersionNumber === undefined || !reason) {
+    res.status(400).json({ error: 'entityType, entityId, targetVersionNumber, and reason are required' });
+    return;
+  }
+  try {
+    const proposal = configurationGovernanceService.rollbackToVersion(
+      entityType,
+      entityId,
+      Number(targetVersionNumber),
+      actor,
+      reason
+    );
+    res.status(201).json(proposal);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Explain change completion gate
+app.get('/api/governance/proposals/:id/explain', (req, res) => {
+  try {
+    const explanation = configurationGovernanceService.explainChange(req.params.id);
+    res.json(explanation);
+  } catch (err: any) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+// Get user notifications
+app.get('/api/governance/notifications', (req, res) => {
+  const userId = req.query.userId as string;
+  if (userId) {
+    res.json(configurationGovernanceService.getNotificationsForUser(userId));
+  } else {
+    res.json(configurationGovernanceService.getAllNotifications());
+  }
+});
+
+// Mark notification as read
+app.post('/api/governance/notifications/:id/read', (req, res) => {
+  configurationGovernanceService.markNotificationAsRead(req.params.id);
+  res.json({ success: true });
 });
 
 // -------------------------------------------------------------
@@ -738,7 +888,201 @@ app.post('/api/auth/reset-password', (req, res) => {
   }
 });
 
-// Register biometric credentials on server
+// PHASE 10: Biometric Architecture & Security Endpoints
+
+// 1. Issue fresh cryptographic challenge (nonce)
+app.post('/api/auth/biometrics/challenge', (req, res) => {
+  const { email, type, purpose, rpId, origin } = req.body;
+  if (!email || !type || !purpose) {
+    res.status(400).json({ success: false, message: 'email, type, and purpose required.' });
+    return;
+  }
+  try {
+    const challenge = biometricService.createChallenge(email, type, purpose, rpId, origin);
+    res.json({ success: true, challenge });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// 2. WebAuthn Registration Options
+app.post('/api/auth/biometrics/webauthn/register-options', (req, res) => {
+  const { email, rpId, origin } = req.body;
+  if (!email) {
+    res.status(400).json({ success: false, message: 'Email is required.' });
+    return;
+  }
+  try {
+    const data = biometricService.generateWebAuthnRegistrationOptions(email, rpId, origin);
+    res.json({ success: true, ...data });
+  } catch (err: any) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// 3. WebAuthn Registration Verify
+app.post('/api/auth/biometrics/webauthn/register-verify', (req, res) => {
+  const { email, challengeId, response } = req.body;
+  if (!email || !challengeId || !response) {
+    res.status(400).json({ success: false, message: 'Email, challengeId, and response payload required.' });
+    return;
+  }
+  const result = biometricService.verifyWebAuthnRegistration(email, challengeId, response);
+  if (result.success) {
+    res.json(result);
+  } else {
+    res.status(400).json(result);
+  }
+});
+
+// 4. WebAuthn Authentication Options
+app.post('/api/auth/biometrics/webauthn/auth-options', (req, res) => {
+  const { email, rpId } = req.body;
+  if (!email) {
+    res.status(400).json({ success: false, message: 'Email is required.' });
+    return;
+  }
+  try {
+    const data = biometricService.generateWebAuthnAuthenticationOptions(email, rpId);
+    res.json({ success: true, ...data });
+  } catch (err: any) {
+    const status = err.message?.includes('locked') ? 429 : 400;
+    res.status(status).json({ success: false, message: err.message, lockedOut: err.message?.includes('locked') });
+  }
+});
+
+// 5. WebAuthn Authentication Verify
+app.post('/api/auth/biometrics/webauthn/auth-verify', (req, res) => {
+  const { email, challengeId, response } = req.body;
+  if (!email || !challengeId || !response) {
+    res.status(400).json({ success: false, message: 'Email, challengeId, and response payload required.' });
+    return;
+  }
+  const result = biometricService.verifyWebAuthnAssertion(email, challengeId, response);
+  if (result.success) {
+    res.json(result);
+  } else {
+    res.status(result.lockedOut ? 429 : 401).json(result);
+  }
+});
+
+// 6. Server-Authoritative Face Enrollment
+app.post('/api/auth/biometrics/face/enroll', (req, res) => {
+  const { email, challengeId, featureVector, qualityMetrics, livenessEvidence, deviceLabel } = req.body;
+  if (!email || !challengeId || !featureVector) {
+    res.status(400).json({ success: false, message: 'Email, challengeId, and featureVector required.' });
+    return;
+  }
+  const result = biometricService.enrollFaceBiometric(
+    email,
+    challengeId,
+    featureVector,
+    qualityMetrics,
+    livenessEvidence,
+    deviceLabel
+  );
+  if (result.success) {
+    res.json(result);
+  } else {
+    res.status(400).json(result);
+  }
+});
+
+// 7. Server-Authoritative Face Verification
+app.post('/api/auth/biometrics/face/verify', (req, res) => {
+  const { email, challengeId, featureVector, qualityMetrics, livenessEvidence } = req.body;
+  if (!email || !challengeId || !featureVector) {
+    res.status(400).json({ success: false, message: 'Email, challengeId, and featureVector required.' });
+    return;
+  }
+  const result = biometricService.verifyFaceBiometric({
+    email,
+    challengeId,
+    featureVector,
+    qualityMetrics,
+    livenessEvidence,
+  });
+  if (result.success) {
+    res.json(result);
+  } else {
+    res.status(result.lockedOut ? 429 : 401).json(result);
+  }
+});
+
+// 8. Authoritative User Biometric Lifecycle State
+app.get('/api/auth/biometrics/lifecycle/:email', (req, res) => {
+  const state = biometricService.getBiometricUserState(req.params.email);
+  res.json(state);
+});
+
+// 9. Suspend Biometric Credential
+app.post('/api/auth/biometrics/suspend', (req, res) => {
+  const { email, credentialId, reason } = req.body;
+  if (!email || !credentialId) {
+    res.status(400).json({ success: false, message: 'Email and credentialId required.' });
+    return;
+  }
+  const result = biometricService.suspendCredential(email, credentialId, reason || 'Suspended by user/admin');
+  res.json(result);
+});
+
+// 10. Revoke Biometric Credential
+app.post('/api/auth/biometrics/revoke', (req, res) => {
+  const { email, credentialId, reason } = req.body;
+  if (!email || !credentialId) {
+    res.status(400).json({ success: false, message: 'Email and credentialId required.' });
+    return;
+  }
+  const result = biometricService.revokeCredential(email, credentialId, reason || 'Revoked by user/admin');
+  res.json(result);
+});
+
+// 11. Request Step-up Authenticated Reset
+app.post('/api/auth/biometrics/reset/request', (req, res) => {
+  const { email, type, password, reason } = req.body;
+  if (!email || !password) {
+    res.status(400).json({ success: false, message: 'Email and password required for reset authorization.' });
+    return;
+  }
+  const result = biometricService.requestReset(email, type || 'ALL', password, reason || 'User requested reset');
+  if (result.success) {
+    res.json(result);
+  } else {
+    res.status(401).json(result);
+  }
+});
+
+// 12. Execute Authorized Reset
+app.post('/api/auth/biometrics/reset/execute', (req, res) => {
+  const { email, resetToken } = req.body;
+  if (!email || !resetToken) {
+    res.status(400).json({ success: false, message: 'Email and resetToken required.' });
+    return;
+  }
+  const result = biometricService.executeReset(email, resetToken);
+  if (result.success) {
+    res.json(result);
+  } else {
+    res.status(400).json(result);
+  }
+});
+
+// 13. Unlock Rate Limited Lockout via Step-Up Password
+app.post('/api/auth/biometrics/unlock', (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    res.status(400).json({ success: false, message: 'Email and password required.' });
+    return;
+  }
+  const result = biometricService.unlockWithStepUp(email, password);
+  if (result.success) {
+    res.json(result);
+  } else {
+    res.status(401).json(result);
+  }
+});
+
+// Register biometric credentials on server (backward compatibility)
 app.post('/api/auth/biometrics/register', (req, res) => {
   const { email, credential } = req.body;
   if (!email || !credential || !credential.type) {
@@ -763,7 +1107,7 @@ app.post('/api/auth/biometrics/register', (req, res) => {
   }
 });
 
-// Verify biometric login on server
+// Verify biometric login on server (backward compatibility)
 app.post('/api/auth/biometrics/verify', (req, res) => {
   const { email, type, credentialId, faceHash } = req.body;
   if (!email || !type) {
@@ -841,6 +1185,103 @@ app.get('/api/users/:id/authorized-reports', (req, res) => {
   }
   const authMatrix = configService.getAuthorizedReportsForUser(user);
   res.json(authMatrix);
+});
+
+// -------------------------------------------------------------
+// AUTHORITATIVE RELATIONSHIP & EFFECTIVE ACCESS ENGINE API (PHASE 5)
+// -------------------------------------------------------------
+
+// Authoritative access evaluation endpoint
+app.post('/api/access/evaluate', (req, res) => {
+  const { user, userId, reportKey, action, submissionId } = req.body;
+  const resolvedUser = user || (userId ? userService.getById(userId) : null) || DEMO_USERS[0];
+  const submission = submissionId ? submissionService.getById(submissionId) : req.body.submission || null;
+
+  if (!action) {
+    res.status(400).json({ allowed: false, reason: 'Action parameter is required.', code: 'INVALID_PARAMETER' });
+    return;
+  }
+
+  const result = effectiveAccessEngine.evaluateAccess(resolvedUser, reportKey, action, submission);
+  const httpStatus = result.allowed ? 200 : getAuthOrClientStatusCode(result.reason);
+  res.status(httpStatus).json(result);
+});
+
+// Comprehensive Effective Permissions Matrix across all 24 returns
+app.get('/api/access/matrix/:userId', (req, res) => {
+  const user = userService.getById(req.params.userId) || DEMO_USERS.find((u) => u.id === req.params.userId);
+  if (!user) {
+    res.status(404).json({ error: `User not found: ${req.params.userId}` });
+    return;
+  }
+  const matrix = effectiveAccessEngine.getEffectiveReportPermissionsMatrix(user);
+  res.json({
+    userId: user.id,
+    userName: user.name,
+    role: user.role,
+    department: user.department,
+    status: (user as any).status || 'ACTIVE',
+    matrix,
+  });
+});
+
+// Direct User-Report Assignments Management
+app.get('/api/access/user-assignments/:userId', (req, res) => {
+  const assignments = effectiveAccessEngine.getUserDirectReportAssignments(req.params.userId);
+  res.json({ userId: req.params.userId, reportKeys: assignments });
+});
+
+app.post('/api/access/user-assignments', (req, res) => {
+  const caller = req.body.user || (req.headers['x-user-role'] ? { role: req.headers['x-user-role'], name: req.headers['x-user-name'] } : null);
+  if (caller && caller.role !== 'ADMIN') {
+    res.status(403).json({ error: 'Only ADMIN role can assign reports directly to users.' });
+    return;
+  }
+  const { userId, reportKey, adminName } = req.body;
+  if (!userId || !reportKey) {
+    res.status(400).json({ error: 'userId and reportKey are required.' });
+    return;
+  }
+  const resolvedAdmin = adminName || caller?.name || 'Compliance Administrator';
+  effectiveAccessEngine.assignReportToUser(userId, reportKey, resolvedAdmin);
+  res.status(201).json({
+    success: true,
+    message: `Report ${reportKey} directly assigned to user ${userId}.`,
+    reportKeys: effectiveAccessEngine.getUserDirectReportAssignments(userId),
+  });
+});
+
+app.delete('/api/access/user-assignments', (req, res) => {
+  const caller = req.body?.user || (req.headers['x-user-role'] ? { role: req.headers['x-user-role'], name: req.headers['x-user-name'] } : null);
+  if (caller && caller.role !== 'ADMIN') {
+    res.status(403).json({ error: 'Only ADMIN role can remove direct report assignments.' });
+    return;
+  }
+  const userId = req.body?.userId || (req.query as any)?.userId;
+  const reportKey = req.body?.reportKey || (req.query as any)?.reportKey;
+  const adminName = req.body?.adminName || caller?.name || 'Compliance Administrator';
+
+  if (!userId || !reportKey) {
+    res.status(400).json({ error: 'userId and reportKey are required.' });
+    return;
+  }
+  const removed = effectiveAccessEngine.removeReportFromUser(userId, reportKey, adminName);
+  res.json({
+    success: removed,
+    message: removed ? `Report ${reportKey} unassigned from user ${userId}.` : 'Assignment not found.',
+    reportKeys: effectiveAccessEngine.getUserDirectReportAssignments(userId),
+  });
+});
+
+// Cache Invalidation Hook
+app.post('/api/access/cache/invalidate', (req, res) => {
+  const { userId, reason } = req.body;
+  if (userId) {
+    effectiveAccessEngine.invalidateUser(userId);
+  } else {
+    effectiveAccessEngine.invalidateAll(reason || 'Administrative manual cache purge');
+  }
+  res.json({ success: true, message: 'Authorization evaluation cache purged.' });
 });
 
 // Admin creates user account directly
@@ -1626,6 +2067,142 @@ app.post('/api/phase2/generate', (req, res) => {
   }
 });
 
+// -------------------------------------------------------------
+// BULK OPERATIONS, IMPORT, EXPORT & FILE WORKFLOWS (PHASE 6)
+// -------------------------------------------------------------
+
+// 1. Dry-Run Parse & Validation Preview (No authoritative mutation)
+app.post('/api/bulk/dry-run', (req, res) => {
+  try {
+    const { targetType, format, payload, rawPayload, conflictStrategy, actor, page, pageSize } = req.body;
+    const actorInfo = actor || { id: 'usr_admin', name: 'Administrator', role: 'ADMIN' };
+    const content = payload || rawPayload;
+    if (!content) {
+      res.status(400).json({ error: 'Payload content is required for dry-run preview.' });
+      return;
+    }
+    const result = bulkOperationsEngine.generateDryRun({
+      targetType: targetType || 'USERS',
+      format: format || 'CSV',
+      rawPayload: content,
+      conflictStrategy: conflictStrategy || 'UPDATE',
+      actor: actorInfo,
+      page: page ? parseInt(String(page), 10) : 1,
+      pageSize: pageSize ? parseInt(String(pageSize), 10) : 20,
+    });
+    res.json(result);
+  } catch (err: any) {
+    const status = getAuthOrClientStatusCode(err.message);
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// 2. Fetch Cached Dry-Run with custom pagination
+app.get('/api/bulk/dry-run/:dryRunId', (req, res) => {
+  const { dryRunId } = req.params;
+  const { page, page_size } = req.query as any;
+  const result = bulkOperationsEngine.getDryRun(
+    dryRunId,
+    page ? parseInt(String(page), 10) : 1,
+    page_size ? parseInt(String(page_size), 10) : 20
+  );
+  if (!result) {
+    res.status(404).json({ error: `Dry-run preview '${dryRunId}' not found or has expired.` });
+    return;
+  }
+  res.json(result);
+});
+
+// 3. Explicit Transactional Execution
+app.post('/api/bulk/execute', (req, res) => {
+  try {
+    const { dryRunId, mode, actor, confirmed } = req.body;
+    const actorInfo = actor || { id: 'usr_admin', name: 'Administrator', role: 'ADMIN' };
+    if (!dryRunId) {
+      res.status(400).json({ error: 'dryRunId is required. Preview must be performed first.' });
+      return;
+    }
+    if (!confirmed) {
+      res.status(400).json({ error: 'Explicit confirmation flag (confirmed: true) is mandatory.' });
+      return;
+    }
+    const result = bulkOperationsEngine.executeDryRun({
+      dryRunId,
+      mode: mode || 'ATOMIC',
+      actor: actorInfo,
+      confirmed: true,
+    });
+    res.json(result);
+  } catch (err: any) {
+    const status = getAuthOrClientStatusCode(err.message);
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// 4. Bulk Actions on Selected Users
+app.post('/api/bulk/users/action', (req, res) => {
+  try {
+    const { userIds, action, payload, actor, mode } = req.body;
+    const actorInfo = actor || { id: 'usr_admin', name: 'Administrator', role: 'ADMIN' };
+    const result = bulkOperationsEngine.executeBulkUserAction({
+      userIds,
+      action,
+      payload,
+      actor: actorInfo,
+      mode: mode || 'ATOMIC',
+    });
+    res.json(result);
+  } catch (err: any) {
+    const status = getAuthOrClientStatusCode(err.message);
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// 5. Bulk Actions on Selected Reports
+app.post('/api/bulk/reports/action', (req, res) => {
+  try {
+    const { reportKeys, action, payload, actor, mode } = req.body;
+    const actorInfo = actor || { id: 'usr_admin', name: 'Administrator', role: 'ADMIN' };
+    const result = bulkOperationsEngine.executeBulkReportAction({
+      reportKeys,
+      action,
+      payload,
+      actor: actorInfo,
+      mode: mode || 'ATOMIC',
+    });
+    res.json(result);
+  } catch (err: any) {
+    const status = getAuthOrClientStatusCode(err.message);
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// 6. Authorized, Audited Bulk Export (CSV / JSON / XLSX)
+app.post('/api/bulk/export', (req, res) => {
+  try {
+    const { target, format, actor, filters, selectedIds } = req.body;
+    const actorInfo = actor || { id: 'usr_admin', name: 'Administrator', role: 'ADMIN' };
+    const exported = bulkOperationsEngine.exportData({
+      target: target || 'USERS',
+      format: format || 'CSV',
+      actor: actorInfo,
+      filters,
+      selectedIds,
+    });
+
+    res.setHeader('Content-Disposition', `attachment; filename="${exported.fileName}"`);
+    res.setHeader('Content-Type', exported.mimeType);
+    if (exported.format === 'XLSX') {
+      res.send(Buffer.from(exported.content as Uint8Array));
+    } else {
+      res.send(exported.content);
+    }
+  } catch (err: any) {
+    const status = getAuthOrClientStatusCode(err.message);
+    res.status(status).json({ error: err.message });
+  }
+});
+
 // System Health
 app.get('/api/health', (req, res) => {
   res.json({
@@ -1684,7 +2261,10 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = http.createServer(app);
+  realtimeSsotEngine.attachServer(server, '/ws/ssot');
+
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`[Oromia Bank NBE Platform] Server listening on port ${PORT}`);
   });
 }

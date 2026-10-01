@@ -43,6 +43,7 @@ import { getAllReports } from '../data/report-registry.ts';
 import { userService, UserAccount } from '../services/userService.ts';
 import { UserSession } from '../types/regulatory.ts';
 import { Pagination } from './Pagination.tsx';
+import { ConfigurationGovernanceView } from './ConfigurationGovernanceView.tsx';
 import { vibrate } from '../utils/haptics.ts';
 import {
   exportSignedAuditPDF,
@@ -87,6 +88,9 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
   // Pagination
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(8);
+
+  // Sub-view toggle
+  const [activeViewMode, setActiveViewMode] = useState<'AUDIT_LOGS' | 'GOVERNANCE_PROPOSALS'>('AUDIT_LOGS');
 
   // Real-time subscriptions
   useEffect(() => {
@@ -282,8 +286,40 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Header & Main Controls Card */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3.5">
+      {/* Top View Selector: Audit Trail vs Governed Proposals */}
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveViewMode('AUDIT_LOGS')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+            activeViewMode === 'AUDIT_LOGS'
+              ? 'bg-ob-indigo-600 text-white shadow-2xs'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <History className="w-3.5 h-3.5" />
+          <span>Audit Trail Logs & Timeline</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveViewMode('GOVERNANCE_PROPOSALS')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+            activeViewMode === 'GOVERNANCE_PROPOSALS'
+              ? 'bg-ob-indigo-600 text-white shadow-2xs'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span>Governed Proposals & Approvals (Phase 8)</span>
+        </button>
+      </div>
+
+      {activeViewMode === 'GOVERNANCE_PROPOSALS' ? (
+        <ConfigurationGovernanceView currentUser={currentUser} onNotice={onNotice} />
+      ) : (
+        <>
+          {/* Header & Main Controls Card */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs space-y-3.5">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-ob-indigo-500/10 dark:bg-ob-indigo-500/20 text-ob-indigo-600 dark:text-ob-indigo-400 border border-ob-indigo-500/30 flex items-center justify-center shrink-0">
@@ -917,6 +953,8 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

@@ -24,6 +24,11 @@
 | **GATE-12** | Phase 2 SSOT Ingestion & GL Recon | `npx tsx src/tests/run-all-tests.ts` | **PASSED** | 152k Core Banking records, 100% DQ, 3 GL balanced ledgers. |
 | **GATE-13** | Excel (XLSX) Import & Export | `npx tsx src/tests/run-all-tests.ts` | **PASSED** | Exported 24,678 byte valid XLSX binary buffer. |
 | **GATE-14** | Theme & DOM Mount Synchronization | `npx tsx src/tests/run-all-tests.ts` | **PASSED** | Zero flicker, DOM attribute sync, storage override priority. |
+| **GATE-15** | Dynamic Report Definition & Template Studio | `npx tsx src/tests/run-all-tests.ts` | **PASSED** | 10/10 parts passed, cycle detection, immutable versions. |
+| **GATE-16** | Phase 5 End-to-End System Verification | `npx tsx src/tests/run-all-tests.ts` | **PASSED** | 14/14 complete golden path flows verified cleanly. |
+| **GATE-17** | Relationship & Authoritative Access Engine | `npx tsx src/tests/run-all-tests.ts` | **PASSED** | 10/10 parts passed, 4-role matrix, assignments, cache. |
+| **GATE-18** | Configuration Governance, Versioning & Rollback | `npx tsx src/tests/run-all-tests.ts` | **PASSED** | 57 assertions, impact analysis, dual-review 4-eyes, official explain audit. |
+| **GATE-19** | Phase 10 Biometric Architecture & Security Foundation | `npx tsx src/tests/run-all-tests.ts` | **PASSED** | 10 test suites, 45 assertions, lifecycle states, challenge replay defense, WebAuthn counters, protected face engine, rate limiting lockout, step-up reset, migration. |
 
 ---
 

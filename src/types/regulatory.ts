@@ -57,15 +57,32 @@ export interface ValidationRule {
   check: (values: Record<string, string | number>, dynamicRows?: Record<number, Record<string, any>[]>) => boolean;
 }
 
+export type SpecialAccessScope = 'REPORT' | 'DEPARTMENT' | 'MULTI_DEPARTMENT' | 'ALL_REPORTS';
+
+export interface SpecialAccessAuditEntry {
+  timestamp: string;
+  action: 'GRANTED' | 'REVOKED' | 'EXPIRED' | 'RENEWED';
+  actorName: string;
+  actorRole: string;
+  notes?: string;
+}
+
 export interface SpecialAccessGrant {
   id: string;
+  userId?: string;
+  scope?: SpecialAccessScope;
   reportKey?: string;
   department?: string;
   departments?: string[];
   grantedBy: string;
   grantedAt: string;
+  effectiveFrom?: string;
   reason: string;
   expiresAt?: string;
+  revoked?: boolean;
+  revokedAt?: string;
+  revokedBy?: string;
+  auditTrail?: SpecialAccessAuditEntry[];
 }
 
 export interface ReportMetadata {

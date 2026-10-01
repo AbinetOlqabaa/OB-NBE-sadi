@@ -178,39 +178,70 @@ export const OROMIA_BANK_DEPARTMENTS: DepartmentDefinition[] = [
   },
 ];
 
+let dynamicReportDeptLookup: ((reportKey: string) => string | undefined) | null = null;
+const dynamicDepartmentRenames: Map<string, string> = new Map();
+
+/**
+ * Register a dynamic callback to query live SSOT department assignment for a report
+ */
+export function registerDynamicDepartmentLookup(fn: (reportKey: string) => string | undefined): void {
+  dynamicReportDeptLookup = fn;
+}
+
+/**
+ * Record a dynamic department rename in the organization hierarchy
+ */
+export function recordDepartmentRename(oldName: string, newName: string): void {
+  dynamicDepartmentRenames.set(oldName.trim().toLowerCase(), newName.trim());
+}
+
+/**
+ * Clear dynamic overrides (for test isolation)
+ */
+export function clearDynamicHierarchyOverrides(): void {
+  dynamicDepartmentRenames.clear();
+}
+
 /**
  * Maps a reportKey to its canonical department name.
  */
 export function getDepartmentForReport(reportKey: string): string {
+  if (dynamicReportDeptLookup) {
+    try {
+      const dynamicName = dynamicReportDeptLookup(reportKey);
+      if (dynamicName) return dynamicName;
+    } catch (_) {}
+  }
   const normKey = reportKey.trim().toUpperCase();
   for (const dept of OROMIA_BANK_DEPARTMENTS) {
     if (dept.reportKeys.some((k) => k.toUpperCase() === normKey)) {
-      return dept.name;
+      const renamed = dynamicDepartmentRenames.get(dept.name.trim().toLowerCase());
+      return renamed || dept.name;
     }
   }
   // Fallback defaults based on naming conventions
+  let baseDept = 'Credit Operations & Portfolio Management';
   if (normKey.includes('COL_') || normKey.includes('ARLAL') || normKey.includes('RLAFCRC') || normKey.includes('ANARN') || normKey.includes('NPL_EC')) {
-    return 'Specialized Asset Recovery & Workout';
+    baseDept = 'Specialized Asset Recovery & Workout';
+  } else if (normKey.includes('LCPLC') || normKey.includes('CLA_PROV') || normKey.includes('BOR_TEN') || normKey.includes('INS_LOAN') || normKey.includes('BSD_LOAN') || normKey.includes('TOP_20_BOR')) {
+    baseDept = 'Credit Risk & Prudential Reporting';
+  } else if (normKey.includes('POBEPE')) {
+    baseDept = 'Trade Services & International Banking';
+  } else if (normKey.includes('DIGITALLENDING')) {
+    baseDept = 'Digital Banking & Fintech Operations';
   }
-  if (normKey.includes('LCPLC') || normKey.includes('CLA_PROV') || normKey.includes('BOR_TEN') || normKey.includes('INS_LOAN') || normKey.includes('BSD_LOAN') || normKey.includes('TOP_20_BOR')) {
-    return 'Credit Risk & Prudential Reporting';
-  }
-  if (normKey.includes('POBEPE')) {
-    return 'Trade Services & International Banking';
-  }
-  if (normKey.includes('DIGITALLENDING')) {
-    return 'Digital Banking & Fintech Operations';
-  }
-  return 'Credit Operations & Portfolio Management';
+  return dynamicDepartmentRenames.get(baseDept.toLowerCase()) || baseDept;
 }
 
 /**
  * Returns all report keys mapped to a specific department.
  */
 export function getReportsForDepartment(departmentName: string): string[] {
-  const dept = OROMIA_BANK_DEPARTMENTS.find(
-    (d) => d.name.toLowerCase() === departmentName.trim().toLowerCase()
-  );
+  const normTarget = departmentName.trim().toLowerCase();
+  const dept = OROMIA_BANK_DEPARTMENTS.find((d) => {
+    const currentName = dynamicDepartmentRenames.get(d.name.toLowerCase()) || d.name;
+    return currentName.toLowerCase() === normTarget || d.name.toLowerCase() === normTarget;
+  });
   return dept ? [...dept.reportKeys] : [];
 }
 
@@ -218,7 +249,7 @@ export function getReportsForDepartment(departmentName: string): string[] {
  * Returns all active operational department names.
  */
 export function getAllDepartmentNames(): string[] {
-  return OROMIA_BANK_DEPARTMENTS.map((d) => d.name);
+  return OROMIA_BANK_DEPARTMENTS.map((d) => dynamicDepartmentRenames.get(d.name.toLowerCase()) || d.name);
 }
 
 // Export DEPARTMENTS alias for backward and cross-component compatibility

@@ -62,6 +62,39 @@ export interface ToastNotification {
   userRole?: string;
 }
 
+// Initial dashboard tab based on role
+export const getDefaultTabForRole = (role?: string): ViewTab => {
+  if (role === 'ADMIN') return 'ADMIN_DASHBOARD';
+  if (role === 'CHECKER') return 'CHECKER_INBOX';
+  if (role === 'AUDITOR') return 'AUDITOR_DASHBOARD';
+  return 'MAKER_WORKSPACE';
+};
+
+export const isTabAuthorizedForRole = (tab: ViewTab, role?: string): boolean => {
+  if (!role) return false;
+  switch (tab) {
+    case 'ADMIN_DASHBOARD':
+    case 'DEPT_REPORT_MANAGEMENT':
+      return role === 'ADMIN';
+    case 'MAKER_WORKSPACE':
+      return role === 'ADMIN' || role === 'MAKER';
+    case 'CHECKER_INBOX':
+      return role === 'ADMIN' || role === 'CHECKER';
+    case 'AUDITOR_DASHBOARD':
+      return role === 'ADMIN' || role === 'AUDITOR';
+    case 'NBE_SIMULATOR':
+      return role === 'ADMIN' || role === 'CHECKER';
+    case 'PHASE2_SSOT':
+    case 'AUDIT_TRAIL':
+    case 'SYSTEM_HEALTH':
+    case 'DOCUMENTATION':
+      return true;
+    default:
+      return true;
+  }
+};
+export const isTabAuthorized = isTabAuthorizedForRole;
+
 export default function App() {
   // First visitor starts on the Login Page
   const [currentUser, setCurrentUser] = useState<UserSession | null>(() => {
@@ -76,37 +109,7 @@ export default function App() {
 
   const [authView, setAuthView] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
 
-  // Initial dashboard tab based on role
-  const getInitialTabForRole = (role?: string): ViewTab => {
-    if (role === 'ADMIN') return 'ADMIN_DASHBOARD';
-    if (role === 'CHECKER') return 'CHECKER_INBOX';
-    if (role === 'AUDITOR') return 'AUDITOR_DASHBOARD';
-    return 'MAKER_WORKSPACE';
-  };
-
-  const isTabAuthorizedForRole = (tab: ViewTab, role?: string): boolean => {
-    if (!role) return false;
-    switch (tab) {
-      case 'ADMIN_DASHBOARD':
-      case 'DEPT_REPORT_MANAGEMENT':
-        return role === 'ADMIN';
-      case 'MAKER_WORKSPACE':
-        return role === 'ADMIN' || role === 'MAKER';
-      case 'CHECKER_INBOX':
-        return role === 'ADMIN' || role === 'CHECKER';
-      case 'AUDITOR_DASHBOARD':
-        return role === 'ADMIN' || role === 'AUDITOR';
-      case 'NBE_SIMULATOR':
-        return role === 'ADMIN' || role === 'CHECKER';
-      case 'PHASE2_SSOT':
-      case 'AUDIT_TRAIL':
-      case 'SYSTEM_HEALTH':
-      case 'DOCUMENTATION':
-        return true;
-      default:
-        return true;
-    }
-  };
+  const getInitialTabForRole = getDefaultTabForRole;
 
   const [activeTab, setActiveTab] = useState<ViewTab>(() =>
     currentUser ? getInitialTabForRole(currentUser.role) : 'MAKER_WORKSPACE'

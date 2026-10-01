@@ -1277,6 +1277,12 @@ export const NBE_REPORTS: ReportMetadata[] = [
   }
 ];
 
+const REPORTS_STORAGE_KEY = 'ob_report_templates_registry';
+const REPORTS_CHANGE_EVENT = 'ob:reports:changed';
+type ReportChangeListener = (reports: ReportMetadata[]) => void;
+const reportListeners: Set<ReportChangeListener> = new Set();
+let dynamicReportsList: ReportMetadata[] = [];
+
 // Ensure all 24 reports have their canonical department and departments array assigned
 NBE_REPORTS.forEach((r) => {
   if (!r.department) {
@@ -1286,13 +1292,6 @@ NBE_REPORTS.forEach((r) => {
     r.departments = [r.department];
   }
 });
-
-const REPORTS_STORAGE_KEY = 'ob_report_templates_registry';
-const REPORTS_CHANGE_EVENT = 'ob:reports:changed';
-type ReportChangeListener = (reports: ReportMetadata[]) => void;
-const reportListeners: Set<ReportChangeListener> = new Set();
-
-let dynamicReportsList: ReportMetadata[] = [];
 
 function initDynamicReports(): void {
   if (typeof window === 'undefined') {

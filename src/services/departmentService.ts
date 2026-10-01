@@ -181,6 +181,16 @@ class DepartmentServiceClass {
     this.loadFromStorage();
   }
 
+  public syncDepartmentRename(oldName: string, newName: string): void {
+    const dept = this.departments.find(
+      (d) => d.name.trim().toLowerCase() === oldName.trim().toLowerCase()
+    );
+    if (dept && dept.name !== newName) {
+      dept.name = newName;
+      this.saveToStorage();
+    }
+  }
+
   private loadFromStorage(): void {
     if (typeof window === 'undefined') {
       this.departments = JSON.parse(JSON.stringify(OROMIA_BANK_DEPARTMENTS));

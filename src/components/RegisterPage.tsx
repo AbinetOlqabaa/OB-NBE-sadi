@@ -152,6 +152,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [enrolledMethods, setEnrolledMethods] = useState<Array<'FINGERPRINT' | 'FACE'>>([]);
   const [createdUserSummary, setCreatedUserSummary] = useState<{
     id?: string;
     name: string;
@@ -406,7 +407,10 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
   /**
    * Biometric prompt callback during registration
    */
-  const handleBiometricModalSuccess = () => {
+  const handleBiometricModalSuccess = (method: 'FINGERPRINT' | 'FACE') => {
+    if (method) {
+      setEnrolledMethods((prev) => Array.from(new Set([...prev, method])));
+    }
     setIsBiometricModalOpen(false);
     setStep('SUCCESS');
   };
@@ -507,6 +511,28 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Biometric Passkey:</span>
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                    {enrolledMethods.includes('FINGERPRINT') && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
+                        <Fingerprint className="w-3 h-3" />
+                        <span>Fingerprint</span>
+                      </span>
+                    )}
+                    {enrolledMethods.includes('FACE') && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 border border-teal-300 dark:border-teal-800 flex items-center gap-1">
+                        <ScanFace className="w-3 h-3" />
+                        <span>Face ID</span>
+                      </span>
+                    )}
+                    {enrolledMethods.length === 0 && (
+                      <span className="text-slate-500 dark:text-slate-400 text-[11px]">
+                        Password Credentials Only
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex justify-between items-center">
                   <span className="text-slate-400">Compliance Status:</span>
                   <span className="text-amber-700 dark:text-amber-400 font-bold flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
@@ -514,6 +540,29 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                   </span>
                 </div>
               </div>
+
+              {/* Independent Second Method Enrollment Option */}
+              {hardwareCapabilities?.hasBiometricHardware &&
+                (hardwareCapabilities.canRegisterFingerprint || hardwareCapabilities.canRegisterFace) &&
+                (!enrolledMethods.includes('FINGERPRINT') || !enrolledMethods.includes('FACE')) && (
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+                    <span className="text-slate-600 dark:text-slate-400 text-[11px]">
+                      Enroll second biometric method independently:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsBiometricModalOpen(true)}
+                      className="px-2.5 py-1 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white rounded-lg font-bold text-[11px] cursor-pointer touch-press transition-all flex items-center gap-1"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>
+                        {!enrolledMethods.includes('FACE') && hardwareCapabilities.canRegisterFace
+                          ? 'Add Face ID'
+                          : 'Add Fingerprint'}
+                      </span>
+                    </button>
+                  </div>
+                )}
 
               {/* Quick Actions */}
               <div className="flex flex-col sm:flex-row gap-2 pt-2">

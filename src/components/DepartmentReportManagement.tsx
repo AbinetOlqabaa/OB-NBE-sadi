@@ -48,7 +48,7 @@ import { userService } from '../services/userService.ts';
 import { submissionService } from '../services/submissionService.ts';
 import { Pagination } from './Pagination.tsx';
 import { vibrate, haptics } from '../utils/haptics.ts';
-import { BulkImportModal } from './BulkImportModal.tsx';
+import { BulkOperationsModal } from './BulkOperationsModal.tsx';
 import { ReportVersionHistoryModal } from './ReportVersionHistoryModal.tsx';
 import { ChangeHistoryView } from './ChangeHistoryView.tsx';
 import { ReportTemplateStudioModal } from './ReportTemplateStudioModal.tsx';
@@ -2332,12 +2332,19 @@ export const DepartmentReportManagement: React.FC<DepartmentReportManagementProp
         <ChangeHistoryView currentUser={currentUser} onNotice={showNotice} />
       )}
 
-      {/* MODAL: BULK IMPORT (CSV / JSON) */}
-      <BulkImportModal
+      {/* MODAL: BULK OPERATIONS (CSV / JSON / XLSX) */}
+      <BulkOperationsModal
         isOpen={isBulkImportModalOpen}
         onClose={() => setIsBulkImportModalOpen(false)}
         onSuccess={(msg) => showNotice(msg, 'SUCCESS')}
-        adminName={currentUser.name}
+        currentUser={{
+          id: currentUser.id,
+          name: currentUser.name,
+          email: currentUser.email,
+          role: currentUser.role,
+          department: currentUser.department,
+        }}
+        initialTarget="DEPARTMENTS"
       />
     </div>
   );
