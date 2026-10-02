@@ -4,6 +4,39 @@ All notable changes and engineering enhancements for the Oromia Bank NBE Regulat
 
 ---
 
+## [24.0.0-phase24-adr-decisions-acceptance-testing] - 2026-10-02
+
+### Added & Verified
+- **Phase 24: ADR Decisions Acceptance Testing (`.ai/24_DECISIONS.md`, `src/tests/adr-decisions-acceptance.test.ts`, `src/tests/run-all-tests.ts`)**:
+  - **Dev Server Compilation & Port 3000 Startup**:
+    - Resolved missing module references and fixed TypeScript interfaces in the testing harness.
+    - Verified dev server cleanly mounts Vite middleware with Express backend listening on `0.0.0.0:3000`.
+    - Verified `/api/nbe-simulator/gateway-health` returns HTTP 200 with active BSD Gateway status.
+  - **ADR-001 (Metadata-Driven Dynamic Engine vs. 24 Hardcoded Components)**:
+    - Verified all 24 canonical NBE returns load via registry (`getAllReports().length >= 24`).
+    - Verified line items and schedules are configured purely through declarative metadata.
+    - Verified dynamic synthesis of new regulatory return definition (`TEST_ADR001_NBE_RETURN`) with dynamic formulas (`ITM_C = ITM_A - ITM_B`), calculating and validating with 100% precision without UI code changes.
+  - **ADR-002 (AST Token-Based Safe Formula Engine vs. JavaScript eval())**:
+    - Verified safe mathematical parser supporting arithmetic, percentages, and aggregation without `eval()` or `Function()`.
+    - Executed injection vulnerability penetration test with malicious payloads (`process.exit(1)`, `Function("return 42")()`, `global.process`, `require("fs")`, `__proto__`, `constructor.constructor("alert(1)")()`). All payloads safely rejected and neutralized with zero code execution.
+  - **ADR-003 (Full-Stack Express Server with Native Vite Middleware Mounting)**:
+    - Verified full-stack architecture with `/api/*` REST endpoints and Vite middleware running on unified port 3000.
+    - Executed server-authoritative submission creation and draft updates using departmental RBAC (`Credit Operations & Portfolio Management`).
+  - **ADR-004 (In-Memory Persistent Store with Atomic JSON File Backup & Audit Integrity)**:
+    - Verified in-memory repository with atomic state preservation for report submissions and audit trails.
+    - Verified non-repudiation audit logging (`CREATE_DRAFT`, `UPDATE_DRAFT`) with immutable timestamps, actor metadata, and correlation IDs.
+    - Verified monotonic version incrementing (`v1 → v2 → v3`) upon draft modification.
+  - **ADR-005 (Realistic Local NBE Simulator with Configurable Failure Modes)**:
+    - Tested all 6 simulator modes (`ALWAYS_SUCCESS`, `VALIDATION_FAILURE`, `AUTH_FAILURE`, `TIMEOUT`, `SERVER_ERROR`, `RANDOM_FLAKY`).
+    - Verified positive path in `ALWAYS_SUCCESS` producing official NBE receipt (`NBE-REC-...`).
+    - Verified negative path under `VALIDATION_FAILURE` returning HTTP 422 Unprocessable Entity with descriptive error messages.
+    - Verified idempotency deduplication and mode restoration.
+  - **Automated Test Suite Integration**:
+    - Integrated `runAdrDecisionsAcceptanceTests` into `src/tests/run-all-tests.ts`.
+    - 100% automated test suites passing cleanly (57 Phase 8 assertions, Phase 9 hardening, Phase 10-13 biometrics, ADR-001 through ADR-005).
+
+---
+
 ## [23.1.0-phase23-maker-draft-edit-save-resubmit-lifecycle] - 2026-10-02
 
 ### Added & Enhanced
