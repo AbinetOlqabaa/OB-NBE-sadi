@@ -46,6 +46,7 @@ import { departmentService } from '../services/departmentService.ts';
 import { SwipeableCard } from './SwipeableCard.tsx';
 import { haptics } from '../utils/haptics.ts';
 import { exportRegulatoryReportPDF } from '../utils/regulatoryReportPdfExport.ts';
+import { exportRegulatoryReportXLSX } from '../utils/regulatoryReportXlsxExport.ts';
 
 interface MakerWorkspaceProps {
   templates: ReportMetadata[];
@@ -56,6 +57,7 @@ interface MakerWorkspaceProps {
   onSubmitToChecker: (submissionId: string, comment?: string) => void;
   onDeliverToNBE?: (submissionId: string) => Promise<any>;
   onDeleteSubmission?: (submissionId: string) => void;
+  onReuseSubmission?: (submissionId: string) => void;
 }
 
 export const MakerWorkspace: React.FC<MakerWorkspaceProps> = ({
@@ -67,6 +69,7 @@ export const MakerWorkspace: React.FC<MakerWorkspaceProps> = ({
   onSubmitToChecker,
   onDeliverToNBE,
   onDeleteSubmission,
+  onReuseSubmission,
 }) => {
   const [activeTab, setActiveTab] = useState<'TEMPLATES' | 'SUBMISSIONS'>('TEMPLATES');
   const [viewMode, setViewMode] = useState<'GRID' | 'LIST'>('GRID');
@@ -739,8 +742,27 @@ export const MakerWorkspace: React.FC<MakerWorkspaceProps> = ({
                           </div>
 
                           <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-[11px] text-slate-500 dark:text-slate-400">
-                            <span className="font-mono">{sub.periodYear} (v{sub.version})</span>
+                            <div className="flex items-center gap-1 font-mono">
+                              <span>{sub.periodYear} (v{sub.version})</span>
+                              {sub.reusedFromSubmissionId && (
+                                <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-bold bg-ob-indigo-100 dark:bg-ob-indigo-950 text-ob-indigo-700 dark:text-ob-indigo-300 border border-ob-indigo-300 dark:border-ob-indigo-800">
+                                  <Sparkles className="w-2.5 h-2.5" />
+                                  Reused
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                              {onReuseSubmission && (sub.status === 'SENT' || sub.status === 'APPROVED') && (
+                                <button
+                                  type="button"
+                                  onClick={() => onReuseSubmission(sub.id)}
+                                  className="min-h-[40px] px-2.5 py-1 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white font-bold rounded-lg text-xs flex items-center gap-1 touch-press"
+                                  title="Create a new draft by reusing submitted report data"
+                                >
+                                  <Sparkles className="w-3 h-3 text-ob-indigo-200" />
+                                  <span>Reuse</span>
+                                </button>
+                              )}
                               {(sub.status === 'DRAFT' || sub.status === 'CORRECTION_REQUIRED') && (
                                 <button
                                   type="button"
@@ -748,7 +770,7 @@ export const MakerWorkspace: React.FC<MakerWorkspaceProps> = ({
                                   className="min-h-[40px] px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs flex items-center gap-1 touch-press"
                                 >
                                   <Clock className="w-3 h-3" />
-                                  <span>Submit</span>
+                                  <span>{sub.status === 'CORRECTION_REQUIRED' ? 'Resubmit' : 'Submit'}</span>
                                 </button>
                               )}
                               {sub.status === 'APPROVED' && (
@@ -789,7 +811,15 @@ export const MakerWorkspace: React.FC<MakerWorkspaceProps> = ({
                       return (
                         <tr key={sub.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                           <td className="py-2.5 px-3 font-mono font-bold text-ob-indigo-700 dark:text-ob-indigo-300">
-                            {sub.reportKey}
+                            <div className="flex items-center gap-1.5">
+                              <span>{sub.reportKey}</span>
+                              {sub.reusedFromSubmissionId && (
+                                <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-bold bg-ob-indigo-100 dark:bg-ob-indigo-950 text-ob-indigo-700 dark:text-ob-indigo-300 border border-ob-indigo-300 dark:border-ob-indigo-800" title={`Reused from ${sub.reusedFromSubmissionId} (v${sub.reusedFromVersion})`}>
+                                  <Sparkles className="w-2.5 h-2.5" />
+                                  Reused
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-slate-100 max-w-xs truncate">
                             {tpl?.Title || sub.reportKey}
@@ -811,8 +841,27 @@ export const MakerWorkspace: React.FC<MakerWorkspaceProps> = ({
                               className="px-2.5 py-1 bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 text-white font-bold rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
                             >
                               <Edit3 className="w-3 h-3" />
-                              <span>{sub.status === 'DRAFT' ? 'Edit Draft' : 'View Return'}</span>
+                              <span>
+                                {sub.status === 'DRAFT'
+                                  ? 'Continue Draft'
+                                  : sub.status === 'CORRECTION_REQUIRED'
+                                  ? 'Edit & Correct'
+                                  : 'View Return'}
+                              </span>
                             </button>
+
+                            {/* Reuse as New for Submitted / Approved returns */}
+                            {onReuseSubmission && (sub.status === 'SENT' || sub.status === 'APPROVED') && (
+                              <button
+                                type="button"
+                                onClick={() => onReuseSubmission(sub.id)}
+                                className="px-2.5 py-1 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white font-bold rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
+                                title="Create a new editable draft by reusing submitted report data (Original submission remains immutable)"
+                              >
+                                <Sparkles className="w-3 h-3 text-ob-indigo-200" />
+                                <span>Reuse as New</span>
+                              </button>
+                            )}
 
                             {/* Download Signed PDF */}
                             <button
@@ -823,6 +872,17 @@ export const MakerWorkspace: React.FC<MakerWorkspaceProps> = ({
                             >
                               <FileCheck className="w-3 h-3 text-ob-indigo-600 dark:text-ob-indigo-400" />
                               <span>PDF</span>
+                            </button>
+
+                            {/* Export NBE-compliant XLSX */}
+                            <button
+                              type="button"
+                              onClick={() => exportRegulatoryReportXLSX(sub, { officerName: currentUser.name, officerRole: currentUser.role })}
+                              className="px-2 py-1 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 font-bold rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
+                              title="Export active submission to NBE-compliant Excel .xlsx for offline review"
+                            >
+                              <Download className="w-3 h-3 text-slate-500 dark:text-slate-400" />
+                              <span>XLSX</span>
                             </button>
 
                             {/* Submit to Checker */}

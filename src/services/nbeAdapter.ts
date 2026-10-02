@@ -21,7 +21,7 @@ export class NBEAdapter {
       ? process.env.NBE_GATEWAY_URL
       : 'http://127.0.0.1:8001/api/v1/nbe-simulator/submit';
   private maxRetries: number = 3;
-  private timeoutMs: number = 10000;
+  private timeoutMs: number = 2000;
 
   /**
    * Prepares the canonical NBE JSON report payload from a submission record.

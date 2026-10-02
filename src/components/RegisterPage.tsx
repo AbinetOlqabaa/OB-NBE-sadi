@@ -996,29 +996,31 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
           )}
 
           {/* Interactive Biometric Prompt Modal for Post-Registration Enrollment */}
-          <BiometricPromptModal
-            isOpen={isBiometricModalOpen}
-            mode="REGISTER"
-            userName={name || 'Bank Officer'}
-            userEmail={email}
-            userRole={role}
-            initialMethod={
-              hardwareCapabilities?.canRegisterFace && !hardwareCapabilities?.canRegisterFingerprint
-                ? 'FACE'
-                : 'FINGERPRINT'
-            }
-            onSuccess={handleBiometricModalSuccess}
-            onCancel={() => {
-              setIsBiometricModalOpen(false);
-              setStep('SUCCESS');
-            }}
-            onTriggerRecovery={(failedMethod, reason) => {
-              setIsBiometricModalOpen(false);
-              setRecoveryFailedMethod(failedMethod);
-              setRecoveryFailureReason(reason || 'Biometric hardware test failed during registration');
-              setIsRecoveryModalOpen(true);
-            }}
-          />
+          {isBiometricModalOpen && (
+            <BiometricPromptModal
+              isOpen={isBiometricModalOpen}
+              mode="REGISTER"
+              userName={name || 'Bank Officer'}
+              userEmail={email}
+              userRole={role}
+              initialMethod={
+                hardwareCapabilities?.canRegisterFace && !hardwareCapabilities?.canRegisterFingerprint
+                  ? 'FACE'
+                  : 'FINGERPRINT'
+              }
+              onSuccess={handleBiometricModalSuccess}
+              onCancel={() => {
+                setIsBiometricModalOpen(false);
+                setStep('SUCCESS');
+              }}
+              onTriggerRecovery={(failedMethod, reason) => {
+                setIsBiometricModalOpen(false);
+                setRecoveryFailedMethod(failedMethod);
+                setRecoveryFailureReason(reason || 'Biometric hardware test failed during registration');
+                setIsRecoveryModalOpen(true);
+              }}
+            />
+          )}
 
           {/* Biometric Recovery Fallback Modal */}
           <BiometricRecoveryModal

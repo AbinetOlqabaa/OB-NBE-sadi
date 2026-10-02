@@ -5,7 +5,7 @@
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { GovernanceChangeLog } from '../services/departmentService.ts';
+import type { GovernanceChangeLog } from '../services/departmentService.ts';
 
 export interface AuditExportOptions {
   format: 'PDF_SIGNED' | 'CSV_ENCRYPTED' | 'CSV_STANDARD';

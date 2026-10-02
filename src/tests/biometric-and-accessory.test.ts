@@ -107,7 +107,10 @@ export async function runBiometricAndAccessoryTests() {
     colorSpace: 'srgb' as PredefinedColorSpace,
   };
   const faceHash = computeFaceHashFromImageData(mockImageData);
-  assert(typeof faceHash === 'string' && faceHash.startsWith('face_sig_'), 'computeFaceHashFromImageData generates valid facial feature checksum');
+  assert(
+    typeof faceHash === 'string' && (faceHash.startsWith('face_sig_') || faceHash.startsWith('face_optical_')),
+    'computeFaceHashFromImageData generates valid facial feature checksum'
+  );
 
   // Direct unit test of biometric registration and login flow logic
   const targetUser = userService.getByEmail('abebe.kebede@oromiabank.com');

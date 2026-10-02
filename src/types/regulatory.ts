@@ -191,6 +191,30 @@ export interface ReportSubmission {
   syncStatus?: OfflineSyncStatus;
   isOfflineDraft?: boolean;
   offlineSavedAt?: string;
+  reusedFromSubmissionId?: string;
+  reusedFromVersion?: number;
+  sourceReportId?: string;
+  sourceVersion?: number;
+}
+
+export function normalizeSubmissionStatus(status: string): SubmissionStatus {
+  const upper = (status || '').toUpperCase().trim();
+  if (upper === 'SAVED' || upper === 'IN_PROGRESS' || upper === 'SAVED/IN_PROGRESS') return 'DRAFT';
+  if (upper === 'RETURNED_FOR_CORRECTION' || upper === 'RETURNED') return 'CORRECTION_REQUIRED';
+  if (upper === 'READY_FOR_SUBMISSION') return 'DRAFT';
+  if (upper === 'SUBMITTED') return 'PENDING_CHECKER';
+  if (upper === 'ACCEPTED') return 'APPROVED';
+  return (status as SubmissionStatus) || 'DRAFT';
+}
+
+export function isMakerEditableStatus(status: SubmissionStatus | string): boolean {
+  const norm = normalizeSubmissionStatus(status);
+  return norm === 'DRAFT' || norm === 'CORRECTION_REQUIRED';
+}
+
+export function isFinalSubmittedStatus(status: SubmissionStatus | string): boolean {
+  const s = (status || '').toUpperCase();
+  return s === 'SENT' || s === 'APPROVED' || s === 'SENDING';
 }
 
 export type OfflineSyncStatus = "SYNCED" | "PENDING_SYNC" | "LOCAL_DRAFT";

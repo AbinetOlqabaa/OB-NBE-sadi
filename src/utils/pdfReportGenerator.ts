@@ -5,7 +5,7 @@
 
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { ReportMetadata, ReportSubmission } from '../types/regulatory';
+import type { ReportMetadata, ReportSubmission } from '../types/regulatory.ts';
 
 export class PdfReportGenerator {
   /**

@@ -766,16 +766,45 @@ class SubmissionServiceClass {
 
   /**
    * Updates an existing draft's field values and dynamic rows.
-   * Enforces: Checkers and Admins CANNOT modify report draft data!
+   * Enforces:
+   * 1. Only authorized Makers can modify report draft data. Checkers and Admins are restricted.
+   * 2. Cannot modify submitted/final reports (SENT, APPROVED, SENDING).
+   * 3. Cannot modify submissions under active Checker review (PENDING_CHECKER).
+   * 4. Enforces optimistic concurrency locking (expectedVersion) against concurrent edit conflicts.
    */
   public updateDraft(
     id: string,
     values: Record<string, string | number>,
     dynamicRows: Record<number, DynamicRowRecord[]>,
-    user: UserSession
+    user: UserSession,
+    expectedVersion?: number
   ): ReportSubmission {
     const sub = this.submissions.get(id);
     if (!sub) throw new Error(`Submission not found: ${id}`);
+
+    // Concurrency conflict check (Optimistic Locking)
+    if (expectedVersion !== undefined && expectedVersion !== sub.version) {
+      throw new Error(
+        `CONCURRENT_MODIFICATION_CONFLICT: Submission ${id} has been modified concurrently (expected v${expectedVersion}, current server state is v${sub.version}). Please reload the draft to prevent overwriting edits.`
+      );
+    }
+
+    // State immutability & validation check
+    if (sub.status === 'SENT' || sub.status === 'APPROVED' || sub.status === 'SENDING') {
+      throw new Error(
+        `Cannot modify submitted/final report ${id} in status ${sub.status}. Submitted records are permanently sealed. Use 'Reuse as New' to create a new draft.`
+      );
+    }
+
+    if (sub.status === 'PENDING_CHECKER') {
+      throw new Error(
+        `Cannot modify submission ${id} while under Checker review (PENDING_CHECKER). Wait for Checker review or request correction.`
+      );
+    }
+
+    if (sub.status !== 'DRAFT' && sub.status !== 'CORRECTION_REQUIRED') {
+      throw new Error(`Cannot modify submission in status ${sub.status}`);
+    }
 
     const evalResult = effectiveAccessEngine.evaluateAccess(user, sub.reportKey, 'EDIT_DRAFT', sub);
     if (!evalResult.allowed) {
@@ -785,10 +814,6 @@ class SubmissionServiceClass {
         );
       }
       throw new Error(evalResult.reason);
-    }
-
-    if (sub.status !== 'DRAFT' && sub.status !== 'CORRECTION_REQUIRED') {
-      throw new Error(`Cannot modify submission in status ${sub.status}`);
     }
 
     const report = this.getEffectiveTemplate(sub);
@@ -874,7 +899,178 @@ class SubmissionServiceClass {
       console.warn('[SubmissionService] IndexedDB updateDraft save warning:', err);
     });
 
+    auditService.log({
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      action: 'UPDATE_DRAFT',
+      entityType: 'REPORT_SUBMISSION',
+      entityId: id,
+      correlationId: 'corr_' + id,
+      details: `Maker ${user.name} saved draft updates for return ${sub.reportKey} (v${nextVersion})`,
+    });
+
     return updated;
+  }
+
+  /**
+   * Reuses an existing submitted or historical report to create a brand new draft.
+   * Enforces:
+   * 1. A previously submitted report must NEVER be edited in place.
+   * 2. "Reuse" creates a new report identity linked to the source report and version.
+   * 3. Only authorized Makers for the report can reuse it as a new draft.
+   * 4. The new reused report is editable, saveable, validatable, and submittable.
+   */
+  public reuseSubmission(id: string, user: UserSession): ReportSubmission {
+    const sourceSub = this.submissions.get(id);
+    if (!sourceSub) {
+      throw new Error(`Submission not found to reuse: ${id}`);
+    }
+
+    if (user.role !== 'MAKER') {
+      throw new Error(`Role violation: Only Makers can reuse submissions to create new drafts. Current role: ${user.role}`);
+    }
+
+    // Check Maker's effective access to create drafts on this report
+    const evalResult = effectiveAccessEngine.evaluateAccess(user, sourceSub.reportKey, 'CREATE_DRAFT');
+    if (!evalResult.allowed) {
+      throw new Error(`Cannot reuse submission: ${evalResult.reason}`);
+    }
+
+    // Record source state to verify source remains 100% immutable
+    const sourceHashBefore = sourceSub.integrityHash;
+    const sourceVersionBefore = sourceSub.version;
+    const sourceStatusBefore = sourceSub.status;
+
+    const report = getReportByKey(sourceSub.reportKey) || this.getEffectiveTemplate(sourceSub);
+    const reportDept = sourceSub.department || report.department || getDepartmentForReport(sourceSub.reportKey);
+    const newId = 'sub_' + sourceSub.reportKey.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_reused_' + Date.now();
+    const now = new Date().toISOString();
+
+    const clonedValues = JSON.parse(JSON.stringify(sourceSub.values || {}));
+    const clonedDynamic = JSON.parse(JSON.stringify(sourceSub.dynamicRows || {}));
+    const templateSnapshot = this.createTemplateSnapshot(report);
+    const structuralHash = this.generateStructuralHash(report);
+    const activeDef = configService.getReportDefinition(sourceSub.reportKey);
+    const activeTmplVersion = activeDef?.currentVersion || sourceSub.templateVersion || 1;
+
+    const integrityHash = this.computeIntegrityHash({
+      id: newId,
+      reportKey: sourceSub.reportKey,
+      version: 1,
+      templateVersion: activeTmplVersion,
+      values: clonedValues,
+      status: 'DRAFT',
+    });
+
+    const initialSnapshot: SubmissionSnapshot = {
+      snapshotId: `snap_${newId}_v1_${Date.now()}`,
+      version: 1,
+      templateVersion: activeTmplVersion,
+      dataVersion: 1,
+      timestamp: now,
+      status: 'DRAFT',
+      capturedBy: user.name,
+      capturedByRole: user.role,
+      reason: `Reused from submitted report ${sourceSub.id} (v${sourceSub.submittedVersion || sourceSub.version})`,
+      values: clonedValues,
+      dynamicRows: clonedDynamic,
+      templateSnapshot,
+      structuralHash,
+      integrityHash,
+    };
+
+    const newSubmission: ReportSubmission = {
+      id: newId,
+      reportKey: sourceSub.reportKey,
+      department: reportDept,
+      periodYear: sourceSub.periodYear || report.FinYear,
+      periodStart: sourceSub.periodStart || report.StartDate,
+      periodEnd: sourceSub.periodEnd || report.EndDate,
+      institutionCode: sourceSub.institutionCode || report.InstCode,
+      status: 'DRAFT',
+      version: 1,
+      templateVersion: activeTmplVersion,
+      dataVersion: 1,
+      templateSnapshot,
+      dataSnapshot: clonedValues,
+      dynamicRowsSnapshot: clonedDynamic,
+      structuralHash,
+      integrityHash,
+      historicalSnapshots: [initialSnapshot],
+      revisionHistory: [
+        {
+          version: 1,
+          modifiedAt: now,
+          modifiedBy: user.name,
+          modifiedByRole: user.role,
+          values: clonedValues,
+          dynamicRows: clonedDynamic,
+          reason: `Reused from submitted report ${sourceSub.id} (v${sourceSub.submittedVersion || sourceSub.version})`,
+          templateSnapshot,
+          integrityHash,
+        },
+      ],
+      values: clonedValues,
+      dynamicRows: clonedDynamic,
+      makerId: user.id,
+      makerName: user.name,
+      makerEmail: user.email,
+      makerDepartment: user.department,
+      reusedFromSubmissionId: sourceSub.id,
+      reusedFromVersion: sourceSub.submittedVersion || sourceSub.version,
+      sourceReportId: sourceSub.id,
+      sourceVersion: sourceSub.submittedVersion || sourceSub.version,
+      comments: [
+        {
+          id: 'comm_' + Math.random().toString(36).substring(2, 9),
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role as any,
+          comment: `Draft created by reusing submitted return ${sourceSub.id} (v${sourceSub.submittedVersion || sourceSub.version}). Source record preserved intact.`,
+          action: 'SAVE_DRAFT',
+          timestamp: now,
+        },
+      ],
+      deliveryAttempts: [],
+      createdAt: now,
+      updatedAt: now,
+      idempotencyKey: 'idemp_' + newId + '_v1',
+    };
+
+    const isOnline = typeof navigator !== 'undefined' ? Boolean(navigator.onLine) : true;
+    newSubmission.syncStatus = isOnline ? 'SYNCED' : 'PENDING_SYNC';
+    newSubmission.isOfflineDraft = !isOnline;
+    newSubmission.offlineSavedAt = now;
+
+    // Verify source submission was NOT modified
+    if (
+      sourceSub.integrityHash !== sourceHashBefore ||
+      sourceSub.version !== sourceVersionBefore ||
+      sourceSub.status !== sourceStatusBefore
+    ) {
+      throw new Error(`CRITICAL INVARIANT VIOLATION: Source submission ${sourceSub.id} was mutated during reuse!`);
+    }
+
+    this.submissions.set(newId, newSubmission);
+
+    indexedDbStorage.saveDraft(newSubmission, {
+      syncStatus: newSubmission.syncStatus,
+      isOffline: newSubmission.isOfflineDraft,
+    }).catch(() => {});
+
+    auditService.log({
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      action: 'REUSE_SUBMISSION_AS_NEW',
+      entityType: 'REPORT_SUBMISSION',
+      entityId: newId,
+      correlationId: 'corr_' + newId,
+      details: `Maker ${user.name} created new draft ${newId} by reusing submitted report ${sourceSub.id} (v${sourceSub.submittedVersion || sourceSub.version}). Source report preserved immutable.`,
+    });
+
+    return newSubmission;
   }
 
   /**
@@ -891,9 +1087,21 @@ class SubmissionServiceClass {
   /**
    * Maker submits report to Checker.
    */
-  public submitToChecker(id: string, user: UserSession, commentText?: string): ReportSubmission {
+  public submitToChecker(
+    id: string,
+    user: UserSession,
+    commentText?: string,
+    expectedVersion?: number
+  ): ReportSubmission {
     const sub = this.submissions.get(id);
     if (!sub) throw new Error(`Submission not found: ${id}`);
+
+    // Concurrency conflict check
+    if (expectedVersion !== undefined && expectedVersion !== sub.version) {
+      throw new Error(
+        `CONCURRENT_MODIFICATION_CONFLICT: Submission ${id} has been modified concurrently (expected v${expectedVersion}, current server state is v${sub.version}). Please reload before submitting.`
+      );
+    }
 
     const evalResult = effectiveAccessEngine.evaluateAccess(user, sub.reportKey, 'SUBMIT_CHECKER', sub);
     if (!evalResult.allowed) {
@@ -911,6 +1119,7 @@ class SubmissionServiceClass {
       );
     }
 
+    const isResubmission = sub.status === 'CORRECTION_REQUIRED' || sub.status === 'REJECTED';
     const { updatedSubmission } = WorkflowEngine.applyTransition(sub, 'PENDING_CHECKER', user, commentText);
 
     // Capture historical snapshot at the moment of submission to Checker
@@ -935,7 +1144,7 @@ class SubmissionServiceClass {
       status: 'PENDING_CHECKER',
       capturedBy: user.name,
       capturedByRole: user.role,
-      reason: commentText || 'Submitted to Checker for 4-eyes review',
+      reason: commentText || (isResubmission ? 'Resubmitted to Checker following corrections' : 'Submitted to Checker for 4-eyes review'),
       values: valuesSnapshot,
       dynamicRows: dynamicSnapshot,
       templateSnapshot: tmpl,
@@ -964,12 +1173,13 @@ class SubmissionServiceClass {
         entityId: id,
         topic: 'WORKFLOWS',
         actor: { id: user.id, name: user.name, role: user.role },
-        summary: `Report ${sub.reportKey} submitted to Checker by ${user.name}`,
+        summary: `Report ${sub.reportKey} ${isResubmission ? 'resubmitted' : 'submitted'} to Checker by ${user.name}`,
         payload: {
           submissionId: id,
           reportKey: sub.reportKey,
           status: 'PENDING_CHECKER',
           version: finalSubWithSnapshot.version,
+          isResubmission,
         },
       });
     } catch (_) {}
@@ -978,11 +1188,13 @@ class SubmissionServiceClass {
       actorId: user.id,
       actorName: user.name,
       actorRole: user.role,
-      action: 'SUBMIT_TO_CHECKER',
+      action: isResubmission ? 'RESUBMIT_TO_CHECKER' : 'SUBMIT_TO_CHECKER',
       entityType: 'REPORT_SUBMISSION',
       entityId: id,
       correlationId: 'corr_' + id,
-      details: `Submission submitted for 4-eyes review by Maker ${user.name} (${user.department})`,
+      details: isResubmission
+        ? `Submission resubmitted for 4-eyes review by Maker ${user.name} (${user.department}) after addressing correction requests.`
+        : `Submission submitted for 4-eyes review by Maker ${user.name} (${user.department})`,
     });
 
     return finalSubWithSnapshot;

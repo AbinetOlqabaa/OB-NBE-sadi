@@ -31,6 +31,8 @@ export interface ProtectedFaceTemplate {
   livenessPassed: boolean;
   createdAt: string;
   sampleDimension?: number;
+  rawVectorChecksum?: string;
+  enrolledAt?: string;
 }
 
 export interface BiometricCredentialRecord {
@@ -154,6 +156,8 @@ export interface BiometricRateLimitState {
   failedAttempts: number;
   lockoutUntil: number; // Unix timestamp in ms
   lastAttemptAt: number;
+  delayRequiredMs?: number;
+  nextAllowedAttemptAt?: number;
 }
 
 export type BiometricAuditAction =
@@ -164,7 +168,153 @@ export type BiometricAuditAction =
   | 'BIOMETRIC_AUTH_FAILURE'
   | 'BIOMETRIC_REVOKED'
   | 'BIOMETRIC_SUSPENDED'
+  | 'BIOMETRIC_RESUMED'
   | 'BIOMETRIC_RESET_REQUESTED'
   | 'BIOMETRIC_RESET_COMPLETED'
   | 'BIOMETRIC_LOCKOUT'
-  | 'BIOMETRIC_MIGRATION';
+  | 'BIOMETRIC_DEVICE_UPDATED'
+  | 'BIOMETRIC_MIGRATION'
+  | 'BIOMETRIC_SUSPICIOUS_ATTEMPT'
+  | 'BIOMETRIC_PRIVACY_EXPORT'
+  | 'BIOMETRIC_RETENTION_PURGE'
+  | 'BIOMETRIC_SANITIZED_ACCESS';
+
+export interface BiometricPrivacyDisclosure {
+  version: string;
+  lastUpdated: string;
+  statutoryStandard: string;
+  dataCollection: {
+    collectedArtifacts: Array<{
+      category: string;
+      description: string;
+      format: string;
+      storageLocation: string;
+    }>;
+    prohibitedArtifacts: Array<{
+      category: string;
+      guarantee: string;
+    }>;
+  };
+  processingScope: {
+    purpose: string;
+    processingLocation: string;
+    onDeviceEvaluation: string;
+    serverAuthoritativeMatching: string;
+  };
+  retentionAndErasure: {
+    activeRetentionPeriod: string;
+    revocationAction: string;
+    statutoryAuditRetention: string;
+    rightToErasure: string;
+  };
+  administrativeGovernance: {
+    segregationOfDuties: string;
+    supervisorVisibility: string;
+    prohibitedAdminActions: string;
+    emergencyRecoveryProtocol: string;
+  };
+  technicalLimitations: {
+    lightingThresholds: string;
+    livenessAssurance: string;
+    hardwareBoundKeys: string;
+    fallbackAssurance: string;
+  };
+}
+
+export interface BiometricServiceHealth {
+  status: 'HEALTHY' | 'DEGRADED' | 'MAINTENANCE';
+  version: string;
+  serviceName: string;
+  timestamp: string;
+  uptimeSeconds: number;
+  cryptographicEngine: {
+    status: 'ACTIVE' | 'DEGRADED';
+    hashingAlgorithm: 'SALTED-SHA256-HMAC';
+    webAuthnStandard: 'FIDO2 / WebAuthn Level 2';
+    transportSecurity: 'TLS_1_3_MANDATORY';
+  };
+  activeMetrics: {
+    totalEnrolledCredentials: number;
+    activeChallengesCount: number;
+    rateLimitedAccountsCount: number;
+    memoryRegistrySize: number;
+  };
+  serviceBoundary: {
+    authenticatedCallsOnly: boolean;
+    progressiveDelayEnforced: boolean;
+    antiReplayMonotonicCounters: boolean;
+    dataSanitizationActive: boolean;
+  };
+}
+
+export interface BiometricComplianceArchive {
+  exportId: string;
+  generatedAt: string;
+  requestedBy: string;
+  institutionCode: string;
+  targetAccount?: string;
+  sanitizedCredentials: SafeDeviceMetadata[];
+  auditTrail: Array<{
+    id: string;
+    action: string;
+    timestamp: string;
+    details: string;
+    actorName: string;
+    actorRole: string;
+  }>;
+  checksum: string;
+}
+
+export interface SafeDeviceMetadata {
+  id: string;
+  credentialId: string;
+  maskedId: string;
+  type: BiometricMethod;
+  status: BiometricLifecycleState;
+  deviceLabel: string;
+  enrolledAt: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+  revocationReason?: string;
+  counter: number;
+  transports?: string[];
+  aaguid?: string;
+}
+
+export interface SecurityCenterDetails {
+  email: string;
+  userName: string;
+  userRole: string;
+  department: string;
+  faceStatus: BiometricLifecycleState;
+  faceMetadata?: {
+    enrolledAt?: string;
+    lastUsedAt?: string;
+    qualityScore?: number;
+    livenessPassed?: boolean;
+    deviceLabel?: string;
+  };
+  passkeyStatus: BiometricLifecycleState;
+  devices: SafeDeviceMetadata[];
+  totalActiveDevices: number;
+  rateLimit: {
+    isLocked: boolean;
+    failedAttempts: number;
+    remainingLockoutSec: number;
+  };
+  recentBiometricEvents: Array<{
+    id: string;
+    action: string;
+    timestamp: string;
+    details: string;
+    actorName: string;
+    actorRole: string;
+  }>;
+  recoveryGuidance: {
+    nbeDirective: string;
+    lostDeviceInstructions: string[];
+    hardwareFailureGuidance: string[];
+    stepUpRequirement: string;
+    complianceContact: string;
+  };
+}

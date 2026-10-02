@@ -6,8 +6,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   indexedDbStorage,
-  OfflineDraftRecord,
-  OfflineAuditRecord,
+  type OfflineDraftRecord,
+  type OfflineAuditRecord,
 } from '../services/indexedDbStorage.ts';
 import { submissionService } from '../services/submissionService.ts';
 import { auditService } from '../services/auditService.ts';

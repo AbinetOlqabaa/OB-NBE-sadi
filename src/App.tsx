@@ -475,7 +475,8 @@ export default function App() {
   // Save changes to current submission
   const handleSaveDraft = (
     values: Record<string, string | number>,
-    dynamicRows: Record<number, DynamicRowRecord[]>
+    dynamicRows: Record<number, DynamicRowRecord[]>,
+    expectedVersion?: number
   ) => {
     if (!editingSubmission || !currentUser) return;
     try {
@@ -484,13 +485,28 @@ export default function App() {
         editingSubmission.id,
         values,
         dynamicRows,
-        currentUser
+        currentUser,
+        expectedVersion
       );
       setEditingSubmission(updated);
       setSubmissions(submissionService.getAll());
       showToast('Changes saved to draft.');
     } catch (err: any) {
       alert(`Save error: ${err.message}`);
+    }
+  };
+
+  // Reuse submitted / historical return as new draft
+  const handleReuseSubmission = (subId: string) => {
+    if (!currentUser) return;
+    try {
+      vibrate([30, 45]);
+      const reused = submissionService.reuseSubmission(subId, currentUser);
+      setSubmissions(submissionService.getAll());
+      setEditingSubmission(reused);
+      showToast(`Created new draft by reusing return ${reused.reportKey}. Source report remains immutable.`);
+    } catch (err: any) {
+      alert(`Error reusing report: ${err.message}`);
     }
   };
 
@@ -693,9 +709,10 @@ export default function App() {
               }
               onBack={() => setEditingSubmission(null)}
               onSave={handleSaveDraft}
-              onSubmitToChecker={(comment) => {
+              onSubmitToChecker={(comment, expectedVer) => {
                 handleSubmitToChecker(editingSubmission.id, comment);
               }}
+              onReuseSubmission={handleReuseSubmission}
             />
           ) : !isTabAuthorizedForRole(activeTab, currentUser.role) ? (
             <div className="flex-1 flex items-center justify-center p-4">
@@ -753,6 +770,7 @@ export default function App() {
                   onCreateDraft={handleCreateDraft}
                   onSubmitToChecker={handleSubmitToChecker}
                   onDeleteSubmission={handleDeleteSubmission}
+                  onReuseSubmission={handleReuseSubmission}
                 />
               )}
 

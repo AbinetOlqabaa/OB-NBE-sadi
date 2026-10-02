@@ -4,9 +4,9 @@
  */
 
 import { BrowserSafeEventEmitter } from '../utils/browserEventEmitter.ts';
-import { configService, ActorInfo, ReportVersionSSOT, DepartmentSSOT, ReportDefinitionSSOT } from './configService.ts';
+import { configService, type ActorInfo, type ReportVersionSSOT, type DepartmentSSOT, type ReportDefinitionSSOT } from './configService.ts';
 import { departmentService } from './departmentService.ts';
-import { userService, UserAccount } from './userService.ts';
+import { userService, type UserAccount } from './userService.ts';
 import { submissionService } from './submissionService.ts';
 import type { ReportSubmission } from '../types/regulatory.ts';
 import { auditService } from './auditService.ts';

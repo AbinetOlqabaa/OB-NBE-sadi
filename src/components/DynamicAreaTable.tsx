@@ -5,13 +5,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { DynamicAreaDefinition, DynamicRowRecord } from '../types/regulatory.ts';
-import { Plus, Trash2, Table as TableIcon, LayoutGrid, List } from 'lucide-react';
+import { Plus, Trash2, Table as TableIcon, LayoutGrid, List, AlertCircle } from 'lucide-react';
 import { Pagination } from './Pagination.tsx';
+import { ValidationEngine, ValidationSummary } from '../utils/validationEngine.ts';
+import type { FormValidationState } from '../services/zodValidationService.ts';
 
 interface DynamicAreaTableProps {
   area: DynamicAreaDefinition;
   rows: DynamicRowRecord[];
   readOnly?: boolean;
+  validation?: ValidationSummary | FormValidationState | null;
   onAddRow: () => void;
   onUpdateCell: (rowId: string, columnCode: string, value: any) => void;
   onDeleteRow: (rowId: string) => void;
@@ -21,6 +24,7 @@ export const DynamicAreaTable: React.FC<DynamicAreaTableProps> = ({
   area,
   rows,
   readOnly = false,
+  validation,
   onAddRow,
   onUpdateCell,
   onDeleteRow,
@@ -135,6 +139,9 @@ export const DynamicAreaTable: React.FC<DynamicAreaTableProps> = ({
                         row.values && row.values[col.Code] !== undefined
                           ? row.values[col.Code]
                           : (row as any)[col.Code] ?? '';
+                      const cellErr =
+                        (validation as any)?.getDynamicError?.(area.Area, row.id, col.Code) ||
+                        ValidationEngine.getDynamicCellError(validation || null, area.Area, row.id, col.Code);
                       return (
                         <div key={col.Code} className="space-y-1">
                           <div className="flex items-center justify-between text-[11px]">
@@ -150,28 +157,40 @@ export const DynamicAreaTable: React.FC<DynamicAreaTableProps> = ({
                               {val !== '' ? String(val) : '-'}
                             </div>
                           ) : (
-                            <input
-                              type={
-                                col._dataType === 'NUMERIC'
-                                  ? 'number'
-                                  : col._dataType === 'DATE'
-                                  ? 'date'
-                                  : 'text'
-                              }
-                              inputMode={col._dataType === 'NUMERIC' ? 'decimal' : undefined}
-                              value={val}
-                              placeholder={col._dataType === 'NUMERIC' ? '0.00' : 'Enter value...'}
-                              onChange={(e) => {
-                                const newVal =
+                            <div>
+                              <input
+                                type={
                                   col._dataType === 'NUMERIC'
-                                    ? e.target.value === ''
-                                      ? ''
-                                      : Number(e.target.value)
-                                    : e.target.value;
-                                onUpdateCell(row.id, col.Code, newVal);
-                              }}
-                              className="w-full min-h-[44px] px-3 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:border-ob-indigo-500 focus:outline-none touch-manipulation font-mono tabular-nums shadow-xs"
-                            />
+                                    ? 'number'
+                                    : col._dataType === 'DATE'
+                                    ? 'date'
+                                    : 'text'
+                                }
+                                inputMode={col._dataType === 'NUMERIC' ? 'decimal' : undefined}
+                                value={val}
+                                placeholder={col._dataType === 'NUMERIC' ? '0.00' : 'Enter value...'}
+                                onChange={(e) => {
+                                  const newVal =
+                                    col._dataType === 'NUMERIC'
+                                      ? e.target.value === ''
+                                        ? ''
+                                        : Number(e.target.value)
+                                      : e.target.value;
+                                  onUpdateCell(row.id, col.Code, newVal);
+                                }}
+                                className={`w-full min-h-[44px] px-3 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border rounded-xl text-xs focus:outline-none touch-manipulation font-mono tabular-nums shadow-xs ${
+                                  cellErr
+                                    ? 'border-rose-500 focus:border-rose-600 ring-1 ring-rose-500 bg-rose-50/40 dark:bg-rose-950/20'
+                                    : 'border-slate-200 dark:border-slate-700 focus:border-ob-indigo-500'
+                                }`}
+                              />
+                              {cellErr && (
+                                <div className="flex items-center gap-1 text-[11px] text-rose-600 dark:text-rose-400 mt-1">
+                                  <AlertCircle className="w-3 h-3 shrink-0" />
+                                  <span>{cellErr.message}</span>
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                       );
@@ -223,6 +242,9 @@ export const DynamicAreaTable: React.FC<DynamicAreaTableProps> = ({
 
                     {area.DynamicItems.map((col) => {
                       const val = (row.values && row.values[col.Code] !== undefined) ? row.values[col.Code] : ((row as any)[col.Code] ?? '');
+                      const cellErr =
+                        (validation as any)?.getDynamicError?.(area.Area, row.id, col.Code) ||
+                        ValidationEngine.getDynamicCellError(validation || null, area.Area, row.id, col.Code);
                       return (
                         <td key={col.Code} className="py-1.5 px-2">
                           {readOnly ? (
@@ -230,22 +252,33 @@ export const DynamicAreaTable: React.FC<DynamicAreaTableProps> = ({
                               {val !== '' ? String(val) : '-'}
                             </span>
                           ) : (
-                            <input
-                              type={col._dataType === 'NUMERIC' ? 'number' : col._dataType === 'DATE' ? 'date' : 'text'}
-                              inputMode={col._dataType === 'NUMERIC' ? 'decimal' : undefined}
-                              value={val}
-                              placeholder={col._dataType === 'NUMERIC' ? '0.00' : 'Enter...'}
-                              onChange={(e) => {
-                                const newVal =
-                                  col._dataType === 'NUMERIC'
-                                    ? e.target.value === ''
-                                      ? ''
-                                      : Number(e.target.value)
-                                    : e.target.value;
-                                onUpdateCell(row.id, col.Code, newVal);
-                              }}
-                              className="w-full min-h-[44px] sm:min-h-[32px] px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:border-ob-indigo-500 focus:outline-none touch-manipulation font-mono tabular-nums"
-                            />
+                            <div>
+                              <input
+                                type={col._dataType === 'NUMERIC' ? 'number' : col._dataType === 'DATE' ? 'date' : 'text'}
+                                inputMode={col._dataType === 'NUMERIC' ? 'decimal' : undefined}
+                                value={val}
+                                placeholder={col._dataType === 'NUMERIC' ? '0.00' : 'Enter...'}
+                                onChange={(e) => {
+                                  const newVal =
+                                    col._dataType === 'NUMERIC'
+                                      ? e.target.value === ''
+                                        ? ''
+                                        : Number(e.target.value)
+                                      : e.target.value;
+                                  onUpdateCell(row.id, col.Code, newVal);
+                                }}
+                                className={`w-full min-h-[44px] sm:min-h-[32px] px-2.5 py-1.5 bg-white dark:bg-slate-800 text-slate-900 dark:text-white border rounded-lg text-xs focus:outline-none touch-manipulation font-mono tabular-nums ${
+                                  cellErr
+                                    ? 'border-rose-500 focus:border-rose-600 ring-1 ring-rose-500 bg-rose-50/40 dark:bg-rose-950/20'
+                                    : 'border-slate-200 dark:border-slate-700 focus:border-ob-indigo-500'
+                                }`}
+                              />
+                              {cellErr && (
+                                <span className="text-[10px] text-rose-600 dark:text-rose-400 font-medium block mt-0.5 max-w-[180px] truncate" title={cellErr.message}>
+                                  {cellErr.message}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </td>
                       );

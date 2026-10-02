@@ -5,7 +5,7 @@
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { ReportSubmission, ReportMetadata, AuditLogEntry } from '../types/regulatory.ts';
+import type { ReportSubmission, ReportMetadata, AuditLogEntry } from '../types/regulatory.ts';
 import { getReportByKey } from '../data/report-registry.ts';
 
 export interface ReportPdfExportOptions {

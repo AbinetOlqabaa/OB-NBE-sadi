@@ -6,6 +6,53 @@
 import type { AuditLogEntry } from '../types/regulatory.ts';
 import { indexedDbStorage } from './indexedDbStorage.ts';
 
+const SENSITIVE_KEY_REGEX = /(password|private_?key|secret|credential_?private|admin_?password|seed_?phrase)/i;
+const BASE64_IMAGE_REGEX = /data:image\/[a-zA-Z]+;base64,[A-Za-z0-9+/=]{40,}/g;
+
+/**
+ * Strips or redacts sensitive credentials, raw camera image buffers,
+ * and secret keys from audit log payloads to prevent persistent data leakage.
+ */
+export function sanitizeAuditPayload<T>(value: T, depth: number = 0): T {
+  if (depth > 6 || value === null || value === undefined) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    let sanitized = value.replace(BASE64_IMAGE_REGEX, '[REDACTED_IMAGE_BUFFER]');
+    if (sanitized.includes('password') || sanitized.includes('Password')) {
+      sanitized = sanitized.replace(/(password["':\s=]+)([^"'\s,;]+)/gi, '$1[REDACTED]');
+    }
+    return sanitized as unknown as T;
+  }
+
+  if (Array.isArray(value)) {
+    // If it is a large numeric vector (e.g. 128-d facial embedding array), redact it
+    if (value.length > 32 && typeof value[0] === 'number') {
+      return `[PROTECTED_NUMERIC_VECTOR: dim=${value.length}]` as unknown as T;
+    }
+    return value.map((item) => sanitizeAuditPayload(item, depth + 1)) as unknown as T;
+  }
+
+  if (typeof value === 'object') {
+    const sanitizedObj: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value as Record<string, any>)) {
+      if (SENSITIVE_KEY_REGEX.test(k)) {
+        sanitizedObj[k] = '[REDACTED_SECRET]';
+      } else if (k === 'featureVector' && (Array.isArray(v) || typeof v === 'string')) {
+        sanitizedObj[k] = typeof v === 'string' && v.startsWith('face_sig_') ? v : '[PROTECTED_VECTOR]';
+      } else if (k === 'imageBase64' || k === 'imageData') {
+        sanitizedObj[k] = '[REDACTED_RAW_FRAME]';
+      } else {
+        sanitizedObj[k] = sanitizeAuditPayload(v, depth + 1);
+      }
+    }
+    return sanitizedObj as T;
+  }
+
+  return value;
+}
+
 class AuditServiceClass {
   private logs: AuditLogEntry[] = [];
 
@@ -49,8 +96,15 @@ class AuditServiceClass {
     const syncStatus = entry.syncStatus || (isOnline ? 'SYNCED' : 'PENDING_SYNC');
     const isOfflineRecord = entry.isOffline !== undefined ? entry.isOffline : !isOnline;
 
+    const sanitizedDetails = sanitizeAuditPayload(entry.details);
+    const sanitizedOld = entry.oldState ? sanitizeAuditPayload(entry.oldState) : undefined;
+    const sanitizedNew = entry.newState ? sanitizeAuditPayload(entry.newState) : undefined;
+
     const fullEntry: AuditLogEntry = {
       ...entry,
+      details: sanitizedDetails,
+      oldState: sanitizedOld,
+      newState: sanitizedNew,
       id: 'aud_' + Math.random().toString(36).substring(2, 10),
       timestamp: new Date().toISOString(),
       syncStatus,

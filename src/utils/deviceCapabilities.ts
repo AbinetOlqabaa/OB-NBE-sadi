@@ -603,13 +603,13 @@ export async function getDeviceCapabilities(userEmail?: string): Promise<DeviceC
     cameraStatus = {
       available: true,
       label: permLayer.isCameraDenied
-        ? 'Face ID Ready (Camera / Photo Verification)'
+        ? 'Face ID Available (Camera / Photo Verification)'
         : hwLayer.isTablet
-        ? 'Tablet Front Camera Ready (Face ID)'
-        : 'Webcam / Front Camera Ready',
+        ? 'Tablet Front Camera Supported (Face ID)'
+        : 'Webcam / Front Camera Supported',
       reason: permLayer.isCameraDenied
         ? 'Optical camera hardware available with mobile selfie camera / photo verification.'
-        : 'Optical video feed and facial recognition ready on this device.',
+        : 'Optical camera hardware detected. Stream will be initialized when requested.',
       apiSupported: true,
       hardwarePresent: true,
       permissionState: permLayer.camera,

@@ -121,7 +121,7 @@ export const BiometricStatusIndicator: React.FC<BiometricStatusIndicatorProps> =
 
   const displayCamLabel = isCamActive
     ? 'Camera Initializing...'
-    : cameraLabel || (isCameraSupported ? 'Webcam Camera Ready' : 'Camera Inactive');
+    : cameraLabel || (isCameraSupported ? 'Webcam Supported' : 'Camera Inactive');
 
   return (
     <div className={`space-y-2 ${className}`}>
@@ -204,7 +204,7 @@ export const BiometricStatusIndicator: React.FC<BiometricStatusIndicatorProps> =
           title={
             isCamActive
               ? 'Sensor Active: Initializing camera & facial recognition...'
-              : cameraReason || (isCameraSupported ? 'Webcam Camera Ready' : 'Webcam Camera Inactive')
+              : cameraReason || (isCameraSupported ? 'Webcam Supported (Ready on request)' : 'Webcam Camera Inactive')
           }
         >
           {/* Active Shimmer Line */}

@@ -20,6 +20,7 @@ import {
   Fingerprint,
   ScanFace,
   Trash2,
+  RotateCcw,
   Eye,
   EyeOff,
   HelpCircle,
@@ -31,6 +32,7 @@ import { ThemeToggle } from './ThemeToggle.tsx';
 import { useBiometricAuth } from '../hooks/useBiometricAuth.ts';
 import { BiometricPromptModal } from './BiometricPromptModal.tsx';
 import { ResetPasswordModal } from './ResetPasswordModal.tsx';
+import { SmartBiometricResetModal } from './SmartBiometricResetModal.tsx';
 import { triggerHaptic, vibrate } from '../utils/haptics.ts';
 import {
   isBiometricLoginEnabled,
@@ -46,10 +48,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   onLoginSuccess,
   onNavigateRegister,
 }) => {
-  const [email, setEmail] = useState('admin@oromiabank.com');
-  const [password, setPassword] = useState('password');
+  // Phase 18: Inputs default to empty with guiding placeholders for production
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
+  const [isSmartResetModalOpen, setIsSmartResetModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [biometricNotice, setBiometricNotice] = useState<string | null>(null);
@@ -126,8 +130,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     } catch {}
   }, [isFingerprintSupported, isCameraSupported, hasBothBiometrics, hasAnyBiometric]);
 
-  // Active target user
-  const currentTargetUser = userService.getByEmail(email) || userService.getAll()[0];
+  // Active target user (binds to typed email, or last enrolled biometric officer, or default)
+  const resolvedTargetEmail =
+    email.trim() ||
+    registeredEmail ||
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('ob_regulatory_last_user') : null) ||
+    '';
+  const currentTargetUser =
+    (resolvedTargetEmail ? userService.getByEmail(resolvedTargetEmail) : null) ||
+    userService.getByEmail(email) ||
+    userService.getAll()[0];
 
   // Auto-prompt on first attempt or after password reset if device supports biometrics and user has not disabled
   useEffect(() => {
@@ -519,7 +531,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               </div>
             </div>
 
-            {/* Enrollment & Reset Buttons */}
+            {/* Enrollment & Reset Buttons (Phase 19: Always Accessible & Context-Aware) */}
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -530,17 +542,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <span>Register Biometric Passkey</span>
               </button>
 
-              {hasBiometricRegistered && (
-                <button
-                  type="button"
-                  onClick={() => removeBiometric()}
-                  className="min-h-[38px] px-2.5 text-rose-600 dark:text-rose-400 hover:bg-rose-950/30 rounded-xl border border-rose-800/40 text-[11px] font-semibold transition-colors cursor-pointer flex items-center gap-1 shrink-0 touch-press"
-                  title="Clear passkey from device"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Reset</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setIsSmartResetModalOpen(true)}
+                className="min-h-[38px] px-3 py-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl border border-rose-300 dark:border-rose-800/60 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 touch-press shadow-2xs"
+                title="Reset or manage enrolled Face ID and fingerprint passkeys"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset</span>
+              </button>
             </div>
 
             <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center">
@@ -549,16 +559,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           </div>
 
           {/* Biometric Prompt Interactive Modal */}
-          <BiometricPromptModal
-            isOpen={isBiometricModalOpen}
-            mode={biometricModalMode}
-            userName={currentTargetUser?.name || 'Bank Officer'}
-            userEmail={currentTargetUser?.email || email}
-            userRole={currentTargetUser?.role || 'MAKER'}
-            initialMethod={selectedBiometricMethod}
-            onSuccess={handleBiometricModalSuccess}
-            onCancel={() => setIsBiometricModalOpen(false)}
-          />
+          {isBiometricModalOpen && (
+            <BiometricPromptModal
+              isOpen={isBiometricModalOpen}
+              mode={biometricModalMode}
+              userName={currentTargetUser?.name || 'Bank Officer'}
+              userEmail={resolvedTargetEmail || currentTargetUser?.email || email}
+              userRole={currentTargetUser?.role || 'MAKER'}
+              initialMethod={selectedBiometricMethod}
+              onSuccess={handleBiometricModalSuccess}
+              onCancel={() => setIsBiometricModalOpen(false)}
+            />
+          )}
 
           {/* Reset Password Interactive Modal */}
           <ResetPasswordModal
@@ -574,6 +586,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               }
             }}
             initialEmail={email}
+          />
+
+          {/* Smart Biometric Reset Interactive Modal (Phase 19) */}
+          <SmartBiometricResetModal
+            isOpen={isSmartResetModalOpen}
+            initialEmail={email}
+            initialPassword={password}
+            onClose={() => setIsSmartResetModalOpen(false)}
+            onResetComplete={(resetEmail, resetType) => {
+              setBiometricNotice(`Biometric credentials (${resetType}) were successfully reset for ${resetEmail}.`);
+            }}
+            onNavigateEnroll={(method) => {
+              setSelectedBiometricMethod(method);
+              setBiometricModalMode('REGISTER');
+              setIsBiometricModalOpen(true);
+            }}
           />
 
           {/* Biometric Success / Info Notice */}
@@ -612,7 +640,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <input
                   type="email"
                   required
-                  placeholder="username@oromiabank.com"
+                  placeholder="e.g. abebe.kebede@oromiabank.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full min-h-[44px] pl-9 pr-3 py-2.5 text-xs sm:text-sm bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-ob-indigo-500 dark:focus:border-ob-indigo-400 focus:ring-1 focus:ring-ob-indigo-500 dark:focus:ring-ob-indigo-400 transition-colors font-medium"
@@ -638,7 +666,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
-                  placeholder="Enter your password"
+                  placeholder="Enter your institutional password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full min-h-[44px] pl-9 pr-10 py-2.5 text-xs sm:text-sm bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-ob-indigo-500 dark:focus:border-ob-indigo-400 focus:ring-1 focus:ring-ob-indigo-500 dark:focus:ring-ob-indigo-400 transition-colors font-medium"
@@ -678,105 +706,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               <UserPlus className="w-4 h-4" />
               <span>Register for Maker / Checker / Auditor Account</span>
             </button>
-          </div>
-
-          {/* Development Seed Accounts Reference & Reset Mechanism */}
-          <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
-            <details className="group border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/80 dark:bg-slate-800/80 p-2.5 sm:p-3 text-xs transition-all">
-              <summary className="font-bold text-[11px] sm:text-xs text-slate-700 dark:text-slate-300 flex items-center justify-between cursor-pointer select-none">
-                <span className="flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-ob-green-600 dark:text-ob-green-400 shrink-0" />
-                  <span>Development Test Accounts Reference</span>
-                </span>
-                <span className="text-[10px] text-ob-indigo-600 dark:text-ob-green-400 font-semibold group-open:rotate-180 transition-transform">
-                  ▼
-                </span>
-              </summary>
-
-              <div className="mt-2.5 space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                    Default dev password: <code className="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono font-bold text-slate-800 dark:text-slate-200">password</code>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleResetSeedData}
-                    disabled={isResettingSeed}
-                    className="text-[10px] font-semibold text-ob-indigo-700 dark:text-ob-green-400 hover:underline flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${isResettingSeed ? 'animate-spin' : ''}`} />
-                    <span>{isResettingSeed ? 'Resetting...' : 'Reset Seed Data'}</span>
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  {[
-                    {
-                      role: 'ADMIN',
-                      email: 'admin@oromiabank.com',
-                      name: 'Dawit Bekele',
-                      dept: 'Compliance & Legal Governance',
-                    },
-                    {
-                      role: 'MAKER',
-                      email: 'abebe.kebede@oromiabank.com',
-                      name: 'Abebe Kebede',
-                      dept: 'Credit Operations & Portfolio Mgmt',
-                    },
-                    {
-                      role: 'CHECKER',
-                      email: 'chala.desta@oromiabank.com',
-                      name: 'Chala Desta',
-                      dept: 'Credit Operations & Portfolio Mgmt',
-                    },
-                    {
-                      role: 'AUDITOR',
-                      email: 'auditor@oromiabank.com',
-                      name: 'Worku Alemu',
-                      dept: 'Internal Audit & Regulatory Control',
-                    },
-                  ].map((acc) => (
-                    <div
-                      key={acc.email}
-                      className="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 text-[11px] flex flex-col justify-between gap-1 shadow-xs"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="font-bold text-slate-900 dark:text-white text-[10px] uppercase tracking-wide">
-                            {acc.role}
-                          </span>
-                          <span className="text-[9px] text-slate-400 dark:text-slate-500 truncate max-w-[120px]">
-                            {acc.dept}
-                          </span>
-                        </div>
-                        <div className="text-[10px] font-mono text-slate-600 dark:text-slate-300 truncate">
-                          {acc.email}
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800 text-[9px]">
-                        <span className="text-slate-400 truncate">{acc.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmail(acc.email);
-                            setPassword('');
-                            setErrorMessage(null);
-                            setBiometricNotice(`Selected ${acc.name} (${acc.role}). Enter password "password" to authenticate or enroll biometrics.`);
-                          }}
-                          className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-ob-indigo-50 dark:hover:bg-ob-indigo-950/40 text-ob-indigo-700 dark:text-ob-green-300 font-semibold cursor-pointer transition-colors"
-                        >
-                          Use Email
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-tight italic">
-                  Note: Biometrics start un-enrolled so authentic device/browser passkey or camera Face ID registration can be verified.
-                </p>
-              </div>
-            </details>
           </div>
         </div>
       </main>

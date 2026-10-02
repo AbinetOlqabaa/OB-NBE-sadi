@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
+import type {
   UserSession,
   SpecialAccessGrant,
   SpecialAccessAuditEntry,
   SpecialAccessScope,
 } from '../types/regulatory.ts';
-import { UserAccount } from './userService.ts';
+import type { UserAccount } from './userService.ts';
 import { configService } from './configService.ts';
 import { departmentService } from './departmentService.ts';
 import { getAllReports, getReportByKey } from '../data/report-registry.ts';

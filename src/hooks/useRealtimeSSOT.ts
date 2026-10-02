@@ -6,7 +6,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   realtimeSsotClient,
-  ConnectionStatus,
+  type ConnectionStatus,
 } from '../services/realtimeSsotClient.ts';
 import type { SsotChangeEvent, RealtimeDomain, RealtimeEventType } from '../types/realtime.ts';
 

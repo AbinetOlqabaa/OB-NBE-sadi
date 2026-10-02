@@ -16,6 +16,7 @@ import {
 import { FaceQualityMetrics, FaceLivenessResult } from '../types/biometrics.ts';
 import { recordBiometricAuditLog } from '../components/AuditTrailView.tsx';
 import { biometricService } from '../services/biometricService.ts';
+import { cameraService, type CameraState, type CameraDiagnosticLog } from '../services/cameraService.ts';
 
 export interface StoredBiometricCredential {
   credentialId: string;
@@ -60,22 +61,34 @@ function base64ToBuffer(base64: string): ArrayBuffer {
 }
 
 /**
- * Computes a lightweight facial visual feature checksum from canvas pixel data
+ * Computes a standardized optical feature vector from canvas pixel data
  */
 export function computeFaceHashFromImageData(imageData: ImageData): string {
+  if (cameraService && typeof cameraService.computeOpticalHash === 'function') {
+    return cameraService.computeOpticalHash(imageData);
+  }
   const data = imageData.data;
-  let hash1 = 0x811c9dc5;
-  let hash2 = 0x5a17e29b;
-  // Sample every 16th pixel for performance and stable hash
-  for (let i = 0; i < data.length; i += 16) {
+  let rSum = 0;
+  let gSum = 0;
+  let bSum = 0;
+  let lumSum = 0;
+  const len = data.length;
+  const step = 4 * 16;
+  for (let i = 0; i < len; i += step) {
     const r = data[i];
     const g = data[i + 1];
     const b = data[i + 2];
-    const lum = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-    hash1 = (hash1 ^ lum) * 0x01000193;
-    hash2 = (hash2 ^ (lum * 31)) * 0x01000193;
+    rSum += r;
+    gSum += g;
+    bSum += b;
+    lumSum += 0.299 * r + 0.587 * g + 0.114 * b;
   }
-  return `face_sig_${Math.abs(hash1).toString(16)}_${Math.abs(hash2).toString(16)}`;
+  const count = len / step;
+  const avgR = Math.round(rSum / count);
+  const avgG = Math.round(gSum / count);
+  const avgB = Math.round(bSum / count);
+  const avgLum = Math.round(lumSum / count);
+  return `face_optical_${avgR}_${avgG}_${avgB}_lum_${avgLum}_dim_${imageData.width}x${imageData.height}`;
 }
 
 /**
@@ -241,7 +254,8 @@ export function useBiometricAuth() {
     available: false,
     label: 'Detecting Webcam / Camera...',
   });
-  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(cameraService.getActiveStream());
+  const [cameraState, setCameraState] = useState<CameraState>(cameraService.getState());
 
   const [isRegistered, setIsRegistered] = useState<boolean>(false);
   const [registeredEmail, setRegisteredEmail] = useState<string | null>(null);
@@ -250,8 +264,36 @@ export function useBiometricAuth() {
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Active Camera Stream Reference
-  const activeStreamRef = useRef<MediaStream | null>(null);
+  // Synchronize with authoritative cameraService singleton
+  useEffect(() => {
+    const unsub = cameraService.subscribe((state) => {
+      setCameraState(state);
+      const stream = cameraService.getActiveStream();
+      setCameraStream(stream);
+
+      if (state === 'stream_ready') {
+        setIsCameraSupported(true);
+        setCameraStatus({
+          available: true,
+          label: 'Face ID Camera Ready',
+          reason: 'Optical video feed active and ready for facial authentication.',
+        });
+      } else if (state === 'camera_busy') {
+        setCameraStatus({
+          available: false,
+          label: 'Camera Busy / In Use',
+          reason: 'The camera is currently unavailable or being used by another application.',
+        });
+      } else if (state === 'permission_denied' || state === 'permission_blocked') {
+        setCameraStatus({
+          available: false,
+          label: 'Camera Permission Denied',
+          reason: 'Camera permission is blocked or denied in browser settings.',
+        });
+      }
+    });
+    return unsub;
+  }, []);
 
   // Read stored credentials from localStorage
   const getStoredCredentials = useCallback((): StoredBiometricCredential[] => {
@@ -283,14 +325,7 @@ export function useBiometricAuth() {
    * Stop active camera stream cleanly to release hardware
    */
   const stopCameraStream = useCallback(() => {
-    if (activeStreamRef.current) {
-      activeStreamRef.current.getTracks().forEach((track) => {
-        try {
-          track.stop();
-        } catch {}
-      });
-      activeStreamRef.current = null;
-    }
+    cameraService.stopStream();
     setCameraStream(null);
   }, []);
 
@@ -333,11 +368,10 @@ export function useBiometricAuth() {
 
     return () => {
       isMounted = false;
-      stopCameraStream();
       unsubscribe();
       unsubscribePref();
     };
-  }, [detectHardwareCapabilities, stopCameraStream]);
+  }, [detectHardwareCapabilities]);
 
   /**
    * Run a live fingerprint sensor test probe
@@ -459,128 +493,41 @@ export function useBiometricAuth() {
   const startCameraStream = useCallback(
     async (
       videoElement?: HTMLVideoElement | null
-    ): Promise<{ success: boolean; stream?: MediaStream; error?: string }> => {
-      if (
-        typeof navigator === 'undefined' ||
-        !navigator.mediaDevices ||
-        !navigator.mediaDevices.getUserMedia
-      ) {
-        return { success: false, error: 'Webcam video capture is not supported on this browser.' };
-      }
-
-      try {
-        // Stop any existing stream before starting a new one
-        if (activeStreamRef.current) {
-          activeStreamRef.current.getTracks().forEach((t) => {
-            try {
-              t.stop();
-            } catch {}
-          });
-          activeStreamRef.current = null;
-        }
-
-        let stream: MediaStream;
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: 'user',
-              width: { ideal: 640 },
-              height: { ideal: 480 },
-            },
-            audio: false,
-          });
-        } catch (initialErr: any) {
-          // Fallback to generic video constraint if facingMode is not accepted
-          if (initialErr.name !== 'NotAllowedError' && initialErr.name !== 'PermissionDeniedError') {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: true,
-              audio: false,
-            });
-          } else {
-            throw initialErr;
-          }
-        }
-
-        activeStreamRef.current = stream;
-        setCameraStream(stream);
-
-        if (videoElement) {
-          videoElement.srcObject = stream;
-          videoElement.setAttribute('playsinline', 'true');
-          videoElement.muted = true;
-          await videoElement.play().catch(() => {});
-        }
-
+    ): Promise<{ success: boolean; stream?: MediaStream; error?: string; state?: CameraState; diagnostic?: CameraDiagnosticLog }> => {
+      const res = await cameraService.startStream(videoElement);
+      if (res.success && res.stream) {
+        setCameraStream(res.stream);
         setIsCameraSupported(true);
         setCameraStatus({
           available: true,
-          label: 'Face ID Webcam Ready',
+          label: 'Face ID Camera Ready',
           reason: 'Optical video feed active and ready for facial authentication.',
         });
-
-        return { success: true, stream };
-      } catch (err: any) {
-        const errorMsg =
-          err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
-            ? 'Camera access was denied by user or system permission settings. Please allow browser camera access to use Face ID.'
-            : err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError'
-            ? 'No webcam or camera device was found on this hardware.'
-            : err.message || 'Unable to access device camera.';
-
+      } else {
         setCameraStatus({
           available: false,
-          label: 'Camera Permission Denied',
-          reason: errorMsg,
+          label:
+            res.state === 'camera_busy'
+              ? 'Camera Busy / In Use'
+              : res.state === 'permission_denied' || res.state === 'permission_blocked'
+              ? 'Camera Permission Denied'
+              : 'Camera Unavailable',
+          reason: res.error || 'Unable to access device camera.',
         });
-
-        return { success: false, error: errorMsg };
       }
+      return res;
     },
     []
   );
 
   /**
-   * Capture a frame from video element and calculate facial signature
+   * Capture a frame from video element and calculate facial signature using active camera stream
    */
   const captureFaceFrame = useCallback(
-    (
-      videoElement: HTMLVideoElement
-    ): { success: boolean; imageBase64?: string; faceHash?: string; error?: string } => {
-      if (!videoElement) {
-        return { success: false, error: 'Camera stream not initialized.' };
-      }
-
-      try {
-        const w = videoElement.videoWidth || 640;
-        const h = videoElement.videoHeight || 480;
-
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          return { success: false, error: 'Could not initialize 2D canvas context.' };
-        }
-
-        if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
-          ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-        } else {
-          // Draw standard scanning raster placeholder
-          ctx.fillStyle = '#064E3B';
-          ctx.fillRect(0, 0, w, h);
-          ctx.strokeStyle = '#10B981';
-          ctx.lineWidth = 4;
-          ctx.strokeRect(40, 40, w - 80, h - 80);
-        }
-
-        const imageBase64 = canvas.toDataURL('image/jpeg', 0.85);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const faceHash = computeFaceHashFromImageData(imageData);
-
-        return { success: true, imageBase64, faceHash };
-      } catch (err: any) {
-        return { success: false, error: err.message || 'Failed to capture camera frame.' };
-      }
+    async (
+      videoElement?: HTMLVideoElement | null
+    ): Promise<{ success: boolean; imageBase64?: string; faceHash?: string; error?: string }> => {
+      return await cameraService.captureFrame(videoElement);
     },
     []
   );
@@ -1404,6 +1351,10 @@ export function useBiometricAuth() {
     fingerprintStatus,
     isCameraSupported,
     cameraStatus,
+    cameraState,
+    cameraService,
+    getLastCameraDiagnostic: () => cameraService.getLastDiagnostic(),
+    getCameraDiagnosticLogs: () => cameraService.getDiagnosticLogs(),
     hasAnyBiometric: isFingerprintSupported || isCameraSupported,
     hasBothBiometrics: isFingerprintSupported && isCameraSupported,
     isRegistered,

@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Camera,
   ShieldCheck,
+  Shield,
   ArrowLeft,
   Sparkles,
   RefreshCw,
@@ -131,17 +132,18 @@ export const BiometricLiveScanPage: React.FC<BiometricLiveScanPageProps> = ({
       let frame = capturedData;
 
       if (!frame && videoRef.current && cameraActive) {
-        const captured = captureFaceFrame(videoRef.current);
+        const captured = await captureFaceFrame(videoRef.current);
         if (captured.success && captured.faceHash) {
           frame = captured;
         }
       }
 
-      // If no live stream active, generate sample frame hash
+      // Phase 19: Strict enforcement - No fake bypass when camera fails
       if (!frame) {
-        frame = {
-          faceHash: `face_sig_${normEmail.replace(/[^a-z0-9]/g, '')}_${Date.now()}`,
-        };
+        setErrorMessage('No optical face frame captured. Look at camera or upload selfie photo to verify.');
+        setStatusMessage('Facial capture failed. Optical frame missing.');
+        setPhase('FAILED');
+        return;
       }
 
       setScanProgress(85);
@@ -754,6 +756,15 @@ export const BiometricLiveScanPage: React.FC<BiometricLiveScanPageProps> = ({
               </div>
             </div>
           )}
+
+          {/* User-Facing Privacy & Compliance Notice */}
+          <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 text-[10px] text-slate-400 flex items-start gap-2">
+            <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-semibold text-slate-300">Biometric Privacy Guarantee: </span>
+              Camera frames and optical features are processed ephemerally on-device. No photos, video streams, or raw fingerprint scans are ever stored or transmitted to external servers.
+            </div>
+          </div>
 
           {/* Bottom Action Footer */}
           <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">

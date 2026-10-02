@@ -33,6 +33,7 @@ import {
 import { HardwareDiagnosticsModal } from './HardwareDiagnosticsModal.tsx';
 import { recordBiometricAuditLog } from './AuditTrailView.tsx';
 import { biometricService } from '../services/biometricService.ts';
+import { cameraService } from '../services/cameraService.ts';
 
 const INACTIVITY_TIMEOUT_SECONDS = 30;
 
@@ -78,6 +79,7 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
     fingerprintStatus,
     isCameraSupported,
     cameraStatus,
+    cameraState,
     startCameraStream,
     stopCameraStream,
     captureFaceFrame,
@@ -94,6 +96,13 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
   const [specificErrorReason, setSpecificErrorReason] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [liveQuality, setLiveQuality] = useState<{
+    score: number;
+    luminance: number;
+    sharpness: number;
+    tier: 'EXCELLENT' | 'GOOD' | 'POOR';
+    reason?: string;
+  } | null>(null);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number>(INACTIVITY_TIMEOUT_SECONDS);
   const [stepUpPassword, setStepUpPassword] = useState('');
@@ -126,35 +135,6 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
     }
   }, [isOpen, mode, initialMethod, stopCameraStream, resetTimer]);
 
-  // 30-Second Inactivity Auto-Cancellation Countdown Timer
-  useEffect(() => {
-    if (!isOpen || scanState === 'SUCCESS' || scanState === 'TIMEOUT') {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      return;
-    }
-
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          handleAutoCancelTimeout();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [isOpen, scanState, authType]);
-
   const handleAutoCancelTimeout = useCallback(() => {
     stopCameraStream();
     setCameraActive(false);
@@ -175,8 +155,51 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
     }).catch(() => {});
   }, [authType, stopCameraStream, userEmail, userName, userRole]);
 
-  // Request browser camera stream with user permission
+  // 30-Second Inactivity Auto-Cancellation Countdown Timer
+  useEffect(() => {
+    if (!isOpen || scanState === 'SUCCESS' || scanState === 'TIMEOUT') {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          setTimeout(() => handleAutoCancelTimeout(), 0);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [isOpen, scanState, authType, handleAutoCancelTimeout]);
+
+  // Request browser camera stream with user permission (re-entrant safe)
   const requestCameraStream = useCallback(async () => {
+    // If active stream is already live, reuse it directly without calling getUserMedia() again!
+    const active = cameraService.getActiveStream();
+    if (active && cameraService.isStreamAlive(active)) {
+      setCameraActive(true);
+      setFaceEnrollStage('FACE_SEARCH');
+      setStatusMessage('Center your face in the optical frame guide');
+      cameraService.resetToStreamReady();
+      if (videoRef.current && videoRef.current.srcObject !== active) {
+        videoRef.current.srcObject = active;
+        videoRef.current.play().catch(() => {});
+      }
+      return true;
+    }
+
     setFaceEnrollStage('PERMISSION');
     setStatusMessage('Requesting camera access permission from browser...');
     setSpecificErrorReason(null);
@@ -206,22 +229,79 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
     }
   }, [startCameraStream]);
 
-  // Manage camera stream when switching to/from FACE mode
+  // Manage camera stream strictly when modal is open and in FACE mode
+  // CRITICAL: scanState MUST NOT be in the dependency array to prevent stopping stream when user presses Verify Face
   useEffect(() => {
-    let active = true;
-
-    if (isOpen && authType === 'FACE' && scanState !== 'TIMEOUT' && scanState !== 'SUCCESS') {
+    if (isOpen && authType === 'FACE') {
       requestCameraStream().then(() => {});
-    } else {
-      stopCameraStream();
-      setCameraActive(false);
     }
 
     return () => {
-      active = false;
-      stopCameraStream();
+      // Release camera hardware only when modal closes or switches away from FACE mode
+      if (!isOpen || authType !== 'FACE') {
+        stopCameraStream();
+        setCameraActive(false);
+      }
     };
-  }, [isOpen, authType, scanState, requestCameraStream, stopCameraStream]);
+  }, [isOpen, authType, requestCameraStream, stopCameraStream]);
+
+  // Synchronize cameraActive with cameraService stream status
+  useEffect(() => {
+    const unsub = cameraService.subscribe(() => {
+      const active = cameraService.getActiveStream();
+      setCameraActive(Boolean(active && cameraService.isStreamAlive(active)));
+    });
+    return unsub;
+  }, []);
+
+  // Phase 17: Real-time Live Optical Image Quality Evaluator (Poor, Good, Excellent)
+  useEffect(() => {
+    if (!cameraActive || authType !== 'FACE' || !isOpen) {
+      setLiveQuality(null);
+      return;
+    }
+
+    let intervalId: any;
+    const sampleCanvas = document.createElement('canvas');
+    sampleCanvas.width = 160;
+    sampleCanvas.height = 120;
+    const sampleCtx = sampleCanvas.getContext('2d', { willReadFrequently: true });
+
+    const evaluateLiveFrame = () => {
+      if (!videoRef.current || videoRef.current.readyState < 2) return;
+      try {
+        if (!sampleCtx) return;
+        sampleCtx.drawImage(videoRef.current, 0, 0, 160, 120);
+        const imgData = sampleCtx.getImageData(0, 0, 160, 120);
+        const q = analyzeFaceQuality(imgData);
+
+        let tier: 'EXCELLENT' | 'GOOD' | 'POOR' = 'POOR';
+        if (q.isQualityAcceptable && q.qualityScore >= 0.80) {
+          tier = 'EXCELLENT';
+        } else if (q.isQualityAcceptable && q.qualityScore >= 0.50) {
+          tier = 'GOOD';
+        } else {
+          tier = 'POOR';
+        }
+
+        setLiveQuality({
+          score: q.qualityScore,
+          luminance: q.luminance,
+          sharpness: q.sharpness,
+          tier,
+          reason: q.reasons[0] || (tier === 'POOR' ? 'Suboptimal illumination or focus' : undefined),
+        });
+      } catch {}
+    };
+
+    // Initial evaluation and continuous polling at ~350ms
+    evaluateLiveFrame();
+    intervalId = setInterval(evaluateLiveFrame, 350);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [cameraActive, authType, isOpen]);
 
   if (!isOpen) return null;
 
@@ -236,7 +316,7 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
   };
 
   /**
-   * Handle Retry after Timeout or Error
+   * Handle Retry after Timeout or Error (re-uses existing live stream)
    */
   const handleRetry = () => {
     vibrate([20, 25]);
@@ -247,7 +327,15 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
     setStatusMessage(null);
 
     if (authType === 'FACE') {
-      requestCameraStream();
+      const active = cameraService.getActiveStream();
+      if (active && cameraService.isStreamAlive(active)) {
+        cameraService.resetToStreamReady();
+        setCameraActive(true);
+        setFaceEnrollStage('FACE_SEARCH');
+        setStatusMessage('Center your face in the optical frame guide');
+      } else {
+        requestCameraStream();
+      }
     }
   };
 
@@ -343,6 +431,9 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
       vibrate([50, 60, 50]);
       haptics.error();
 
+      // Keep live camera stream running and restore stream_ready state for easy retry
+      cameraService.resetToStreamReady();
+
       await recordBiometricAuditLog({
         actorId: userEmail,
         actorName: userName,
@@ -389,6 +480,7 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
 
   /**
    * Real Execution of Biometric Action
+   * Re-uses existing live camera stream; does NOT invoke getUserMedia() again!
    */
   const handleExecuteBiometric = async () => {
     if (scanState === 'SCANNING' || scanState === 'SUCCESS') return;
@@ -401,18 +493,24 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
 
     try {
       if (authType === 'FACE') {
-        if (!videoRef.current || !cameraActive) {
-          // If live stream is not active, trigger native phone selfie camera directly
-          if (fileInputRef.current) {
-            fileInputRef.current.click();
-            setScanState('IDLE');
-            setStatusMessage('Opening phone selfie camera...');
-            return;
+        const liveStream = cameraService.getActiveStream();
+        const hasLiveStream = Boolean(liveStream && cameraService.isStreamAlive(liveStream));
+
+        if (!hasLiveStream || !videoRef.current) {
+          // Only start camera if not already active!
+          const started = await requestCameraStream();
+          if (!started) {
+            if (fileInputRef.current) {
+              fileInputRef.current.click();
+              setScanState('IDLE');
+              setStatusMessage('Opening phone selfie camera...');
+              return;
+            }
+            throw new Error(specificErrorReason || 'Camera is not active. Please allow camera access.');
           }
-          throw new Error('Camera not initialized. Please click "Open Mobile Camera".');
         }
 
-        const captured = captureFaceFrame(videoRef.current);
+        const captured = await captureFaceFrame(videoRef.current);
         if (!captured.success || !captured.faceHash) {
           throw new Error(captured.error || 'Please look directly at camera to scan face.');
         }
@@ -676,8 +774,12 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
               <span>Face ID</span>
             </div>
             <span className="text-[9px] flex items-center gap-1 font-semibold text-teal-600 dark:text-teal-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse"></span>
-              {cameraActive ? 'Camera Live' : 'Camera Ready'}
+              <span className={`w-1.5 h-1.5 rounded-full ${cameraActive ? 'bg-teal-500 animate-pulse' : 'bg-slate-400'}`}></span>
+              {cameraActive
+                ? 'Camera Live'
+                : cameraState === 'requesting_permission' || cameraState === 'stream_starting'
+                ? 'Connecting...'
+                : 'Camera Off'}
             </span>
           </button>
         </div>
@@ -801,7 +903,7 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
           <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/80 text-left space-y-1 animate-in fade-in">
             <div className="flex items-center gap-1.5 text-rose-700 dark:text-rose-400 font-bold text-xs">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>Enrollment Notice</span>
+              <span>{currentMode === 'REGISTER' ? 'Enrollment Notice' : 'Verification Notice'}</span>
             </div>
             <p className="text-[11px] text-rose-600 dark:text-rose-300 leading-snug">
               {specificErrorReason}
@@ -963,10 +1065,22 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
                     <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-slate-300 text-xs text-center bg-slate-950/80">
                       <Camera className="w-8 h-8 mb-1.5 text-teal-400 animate-pulse" />
                       <span className="font-semibold text-[11px] text-slate-200">
-                        Camera Ready
+                        {cameraState === 'requesting_permission'
+                          ? 'Awaiting Permission'
+                          : cameraState === 'stream_starting'
+                          ? 'Starting Camera...'
+                          : cameraState === 'permission_denied' || cameraState === 'permission_blocked'
+                          ? 'Camera Permission Blocked'
+                          : cameraState === 'camera_busy'
+                          ? 'Camera In Use'
+                          : 'Camera Offline'}
                       </span>
-                      <span className="text-[10px] text-slate-400 mt-0.5">
-                        Live Stream or Phone Camera
+                      <span className="text-[10px] text-slate-400 mt-0.5 leading-tight max-w-[140px]">
+                        {cameraState === 'permission_denied' || cameraState === 'permission_blocked'
+                          ? 'Allow camera in browser settings'
+                          : cameraState === 'camera_busy'
+                          ? 'Close other camera apps and retry'
+                          : 'Tap below to start camera or use photo'}
                       </span>
                     </div>
                   )}
@@ -987,6 +1101,52 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
                     </div>
                   )}
                 </div>
+
+                {/* Phase 17: Live Image Quality Indicator (Poor / Good / Excellent) */}
+                {cameraActive && liveQuality && (
+                  <div className="w-full max-w-[270px] flex flex-col items-center gap-1 animate-in fade-in duration-200">
+                    <div
+                      className={`px-3 py-1 rounded-full text-[11px] font-bold border flex items-center gap-1.5 transition-all shadow-xs ${
+                        liveQuality.tier === 'EXCELLENT'
+                          ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-700 dark:text-emerald-300 shadow-emerald-500/10'
+                          : liveQuality.tier === 'GOOD'
+                          ? 'bg-teal-500/15 border-teal-500/50 text-teal-700 dark:text-teal-300 shadow-teal-500/10'
+                          : 'bg-amber-500/15 border-amber-500/50 text-amber-700 dark:text-amber-300 animate-pulse'
+                      }`}
+                    >
+                      {liveQuality.tier === 'EXCELLENT' ? (
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      ) : liveQuality.tier === 'GOOD' ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                      )}
+                      <span>
+                        Quality: {liveQuality.tier === 'EXCELLENT' ? 'Excellent' : liveQuality.tier === 'GOOD' ? 'Good' : 'Poor'}
+                      </span>
+                      <span className="text-[10px] font-mono opacity-80 font-normal">
+                        ({Math.round(liveQuality.score * 100)}%)
+                      </span>
+                    </div>
+
+                    {liveQuality.reason && liveQuality.tier === 'POOR' && (
+                      <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 text-center leading-tight">
+                        {liveQuality.reason}
+                      </span>
+                    )}
+
+                    {/* Mini Optical Metrics Pill Bar */}
+                    <div className="flex items-center justify-center gap-2.5 text-[10px] text-slate-500 dark:text-slate-400">
+                      <span title={`Luminance: ${liveQuality.luminance}/255`}>
+                        💡 Light: <span className="font-semibold text-slate-700 dark:text-slate-200">{liveQuality.luminance > 185 ? 'High' : liveQuality.luminance < 60 ? 'Low' : 'Optimal'}</span>
+                      </span>
+                      <span>•</span>
+                      <span title={`Laplacian Sharpness: ${Math.round(liveQuality.sharpness * 100)}%`}>
+                        🔍 Focus: <span className="font-semibold text-slate-700 dark:text-slate-200">{Math.round(liveQuality.sharpness * 100)}%</span>
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Direct Dual Optical Buttons: Live Stream & Mobile Selfie Camera */}
                 <div className="flex items-center gap-2">
@@ -1052,20 +1212,45 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
                     ? 'Passkey Enrolled Successfully!'
                     : 'Biometric Verified!'
                   : scanState === 'SCANNING'
-                  ? `Verifying ${authType === 'FINGERPRINT' ? 'Fingerprint Sensor' : 'Facial Profile'}...`
+                  ? authType === 'FACE'
+                    ? cameraState === 'capturing'
+                      ? 'Capturing face...'
+                      : cameraState === 'processing'
+                      ? 'Verifying your identity...'
+                      : 'Verifying Facial Profile...'
+                    : 'Verifying Fingerprint Sensor...'
                   : scanState === 'ERROR'
-                  ? 'Verification Not Completed'
+                  ? 'Face Verification Failed'
                   : authType === 'FACE'
-                  ? cameraActive
-                    ? 'Center Face in Reticle'
-                    : 'Tap Button to Scan Face'
+                  ? cameraState === 'stream_ready'
+                    ? 'Camera Ready'
+                    : cameraState === 'requesting_permission'
+                    ? 'Requesting Camera Permission...'
+                    : cameraState === 'stream_starting'
+                    ? 'Starting Camera Feed...'
+                    : cameraState === 'permission_denied' || cameraState === 'permission_blocked'
+                    ? 'Camera Permission Blocked'
+                    : cameraState === 'camera_busy'
+                    ? 'Camera Unavailable'
+                    : 'Camera Offline — Tap Below'
                   : 'Touch Sensor to Sign In'}
               </h4>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 max-w-xs mx-auto">
-                {statusMessage ||
-                  (authType === 'FACE'
-                    ? 'Look at webcam or snap a quick selfie with your phone camera'
-                    : 'Touch device fingerprint scanner or platform passkey')}
+                {scanState === 'ERROR'
+                  ? specificErrorReason || statusMessage || 'Face verification was not successful. Please try again.'
+                  : authType === 'FACE'
+                  ? cameraState === 'stream_ready'
+                    ? statusMessage || 'Camera is ready. Position your face inside the frame.'
+                    : cameraState === 'capturing'
+                    ? 'Capturing face...'
+                    : cameraState === 'processing'
+                    ? 'Verifying your identity...'
+                    : cameraState === 'permission_denied' || cameraState === 'permission_blocked'
+                    ? 'Camera permission is blocked. Allow camera access for this site, then retry.'
+                    : cameraState === 'camera_busy'
+                    ? 'The camera is currently unavailable. Close other applications using the camera and retry.'
+                    : statusMessage || 'Look at camera or snap a quick selfie with your phone camera'
+                  : statusMessage || 'Touch device fingerprint scanner or platform passkey'}
               </p>
             </div>
           </div>
@@ -1172,10 +1357,14 @@ export const BiometricPromptModal: React.FC<BiometricPromptModalProps> = ({
                     <span>
                       {currentMode === 'REGISTER'
                         ? authType === 'FACE'
-                          ? 'Capture & Enroll Face'
+                          ? cameraActive
+                            ? 'Capture & Enroll Face'
+                            : 'Start Camera & Enroll'
                           : 'Touch & Enroll Fingerprint'
                         : authType === 'FACE'
-                        ? 'Verify Face to Sign In'
+                        ? cameraActive
+                          ? 'Verify Face to Sign In'
+                          : 'Start Camera & Sign In'
                         : 'Touch Fingerprint to Sign In'}
                     </span>
                   </>

@@ -31,11 +31,13 @@ import {
   HelpCircle,
   FileCheck,
   Archive,
+  Download,
 } from 'lucide-react';
 import { ValidationEngine } from '../utils/validationEngine.ts';
 import { Pagination } from './Pagination.tsx';
 import { PdfReportGenerator } from '../utils/pdfReportGenerator.ts';
 import { exportRegulatoryReportPDF } from '../utils/regulatoryReportPdfExport.ts';
+import { exportRegulatoryReportXLSX } from '../utils/regulatoryReportXlsxExport.ts';
 import { userService } from '../services/userService.ts';
 import { getDepartmentForReport } from '../data/organizationHierarchy.ts';
 import { SwipeableCard } from './SwipeableCard.tsx';
@@ -488,6 +490,16 @@ export const CheckerInbox: React.FC<CheckerInboxProps> = ({
 
                           <button
                             type="button"
+                            onClick={() => exportRegulatoryReportXLSX(sub, { officerName: currentUser.name, officerRole: currentUser.role })}
+                            className="px-2 py-1 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 font-bold rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
+                            title="Export to NBE-compliant Excel .xlsx for offline review"
+                          >
+                            <Download className="w-3 h-3 text-slate-500 dark:text-slate-400" />
+                            <span>XLSX</span>
+                          </button>
+
+                          <button
+                            type="button"
                             onClick={() => handleOpenReview(sub)}
                             className={`px-3 py-1 font-bold rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer ${
                               sub.status === 'PENDING_CHECKER'
@@ -547,7 +559,16 @@ export const CheckerInbox: React.FC<CheckerInboxProps> = ({
                   title="Download official NBE Signed PDF"
                 >
                   <FileCheck className="w-3.5 h-3.5" />
-                  <span>Download Signed PDF</span>
+                  <span>PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => exportRegulatoryReportXLSX(selectedSubForReview, { officerName: currentUser.name, officerRole: currentUser.role })}
+                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs border border-slate-200 dark:border-slate-700"
+                  title="Download NBE-compliant Excel XLSX"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-500" />
+                  <span>XLSX</span>
                 </button>
                 <button
                   type="button"
