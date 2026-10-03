@@ -409,17 +409,17 @@ export async function runBiometricAndAccessoryTests() {
   assert(typeof getRoleTabs === 'function', 'getRoleTabs utility exported as a function');
 
   const adminTabs = getRoleTabs('ADMIN');
-  assert(adminTabs.length === 9, 'Admin role has access to all 9 tabs including Auditor Dashboard');
+  assert(adminTabs.length === 10, 'Admin role has access to all 10 tabs including System Health & SSOT');
   assert(adminTabs[0] === 'ADMIN_DASHBOARD', 'First admin tab is ADMIN_DASHBOARD');
 
   const auditorTabs = getRoleTabs('AUDITOR');
-  assert(auditorTabs.length === 4, 'Auditor role has 4 core tabs (Auditor Dashboard, Audit Trail, SSOT, Docs)');
+  assert(auditorTabs.length === 3, 'Auditor role has 3 core tabs (Auditor Dashboard, Audit Trail, Docs)');
   assert(auditorTabs[0] === 'AUDITOR_DASHBOARD', 'First auditor tab is AUDITOR_DASHBOARD');
 
   const makerTabs = getRoleTabs('MAKER');
-  assert(makerTabs.length === 4, 'Maker role has 4 core tabs (Maker, SSOT, Audit, Docs)');
+  assert(makerTabs.length === 3, 'Maker role has 3 core tabs (Maker, Audit, Docs)');
   assert(makerTabs[0] === 'MAKER_WORKSPACE', 'First maker tab is MAKER_WORKSPACE');
-  assert(makerTabs[1] === 'PHASE2_SSOT', 'Second maker tab is PHASE2_SSOT');
+  assert(makerTabs[1] === 'AUDIT_TRAIL', 'Second maker tab is AUDIT_TRAIL');
 
   const checkerTabs = getRoleTabs('CHECKER');
   assert(checkerTabs[0] === 'CHECKER_INBOX', 'First checker tab is CHECKER_INBOX');
@@ -434,7 +434,7 @@ export async function runBiometricAndAccessoryTests() {
   const targetNextTab = makerTabs[nextIndex];
   selectTabSpy(targetNextTab);
   vibrate(15);
-  assert(currentTestTab === 'PHASE2_SSOT', 'Swipe Left advances active tab to PHASE2_SSOT');
+  assert(currentTestTab === 'AUDIT_TRAIL', 'Swipe Left advances active tab to AUDIT_TRAIL');
   assert(lastVibratePattern === 15, 'Horizontal swipe navigation triggers tactile haptic feedback');
 
   // 9. Verify Biometric Audit Log Utility & NBE Security Standards Compliance

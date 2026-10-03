@@ -126,6 +126,7 @@ export interface ReportVersionSSOT {
     ReturnItemsList: any[];
     DynamicItemsList: any[];
   };
+  integrationConfig?: any;
 }
 
 export interface ReportDefinitionSSOT {
@@ -149,6 +150,7 @@ export interface ReportDefinitionSSOT {
   createdAt: string;
   updatedAt: string;
   activeVersionSnapshot?: ReportVersionSSOT;
+  integrationConfig?: any;
 }
 
 /**
@@ -205,6 +207,7 @@ export function versionToReportMetadata(
     SourceFilename: `${def.returnKey}_v${version.versionNumber}.json`,
     SourceHash: `sha256-v${version.versionNumber}-${Date.now()}`,
     isCustom: true,
+    integrationConfig: (version as any).integrationConfig || (def as any).integrationConfig || def.displayConfiguration?.integration,
   };
 }
 
@@ -1373,6 +1376,10 @@ class ConfigurationEngine {
     return list;
   }
 
+  public getReportDefinitions(filter?: { category?: string; frequency?: string; status?: string; departmentId?: string }): ReportDefinitionSSOT[] {
+    return this.getReports(filter);
+  }
+
   public getReportDefinition(returnKey: string): ReportDefinitionSSOT | null {
     const report = this.reports.get(returnKey);
     if (!report) return null;
@@ -1381,7 +1388,7 @@ class ConfigurationEngine {
     const activeVersion = this.getActiveVersion(returnKey);
     return {
       ...report,
-      activeVersionSnapshot: activeVersion || undefined,
+      activeVersionSnapshot: report.status === 'ACTIVE' && activeVersion ? activeVersion : undefined,
     };
   }
 
@@ -1398,7 +1405,7 @@ class ConfigurationEngine {
   public getActiveVersion(returnKey: string): ReportVersionSSOT | null {
     const list = this.versions.get(returnKey);
     if (!list || list.length === 0) return null;
-    return list.find((v) => v.status === 'ACTIVE') || list[list.length - 1];
+    return list.find((v) => v.status === 'ACTIVE') || null;
   }
 
   /**
@@ -2078,6 +2085,10 @@ class ConfigurationEngine {
   /**
    * Safely retires an obsolete report return template while preserving historical audit trails.
    */
+  public retireReportDefinition(returnKey: string, actor: ActorInfo, reason?: string): ReportDefinitionSSOT {
+    return this.retireReport(returnKey, actor, reason);
+  }
+
   public retireReport(returnKey: string, actor: ActorInfo, reason?: string): ReportDefinitionSSOT {
     const report = this.reports.get(returnKey);
     if (!report) throw new Error(`Report with ReturnKey '${returnKey}' not found.`);
@@ -2110,6 +2121,19 @@ class ConfigurationEngine {
 
     this.bumpVersion('REPORT');
     return report;
+  }
+
+  /**
+   * Removes a draft or test report definition from in-memory SSOT registry.
+   */
+  public deleteReport(returnKey: string): boolean {
+    const norm = returnKey.trim().toUpperCase();
+    this.versions.delete(norm);
+    const deleted = this.reports.delete(norm);
+    if (deleted) {
+      this.bumpVersion('REPORT');
+    }
+    return deleted;
   }
 
   /**

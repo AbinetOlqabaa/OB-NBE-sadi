@@ -1,11 +1,13 @@
 import random
 import uuid
+import secrets
+import hashlib
 from datetime import timedelta
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import UserAccount, BiometricCredential, OtpVerification
+from .models import UserAccount, BiometricCredential, OtpVerification, PersistentSession
 from .serializers import UserAccountSerializer, BiometricCredentialSerializer
 from apps.audit.audit_logger import AuditLogger
 
@@ -63,11 +65,140 @@ class LoginView(APIView):
             details=f"User logged in successfully as {user.role}"
         )
 
-        return Response({
+        remember_me = request.data.get('rememberMe', False) or request.data.get('remember_me', False)
+
+        resp_data = {
             'success': True,
             'message': 'Signed in successfully.',
-            'user': UserAccountSerializer(user).data
+            'user': UserAccountSerializer(user).data,
+            'rememberMe': bool(remember_me)
+        }
+
+        resp = Response(resp_data, status=status.HTTP_200_OK)
+
+        if remember_me:
+            raw_token = secrets.token_hex(32)
+            token_hash = hashlib.sha256(f"OB_SALT_NBE_REMEMBER_ME_SECURE_2026:{raw_token}:OB_SALT_NBE_REMEMBER_ME_SECURE_2026".encode()).hexdigest()
+            sess_id = f"psess_{uuid.uuid4().hex[:12]}"
+            expires_at = timezone.now() + timedelta(days=30)
+            device_info = request.META.get('HTTP_USER_AGENT', 'Institutional Workstation')[:255]
+            ip = request.META.get('REMOTE_ADDR')
+
+            PersistentSession.objects.create(
+                id=sess_id,
+                user=user,
+                token_hash=token_hash,
+                device_info=device_info,
+                ip_address=ip if ip and len(ip) <= 45 else None,
+                expires_at=expires_at
+            )
+
+            # Set HttpOnly, Secure, SameSite cookie
+            resp.set_cookie(
+                key='ob_remember_token',
+                value=raw_token,
+                max_age=30 * 24 * 3600,
+                httponly=True,
+                samesite='Lax',
+                path='/'
+            )
+            resp_data['persistentSession'] = {
+                'id': sess_id,
+                'expiresAt': expires_at.isoformat()
+            }
+        else:
+            resp.delete_cookie('ob_remember_token', path='/')
+
+        return resp
+
+class SessionVerificationView(APIView):
+    """
+    Phase 29: Verifies persistent Remember Me session token from cookie or Authorization header.
+    """
+    def get(self, request):
+        raw_token = request.COOKIES.get('ob_remember_token')
+        if not raw_token:
+            auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+            if auth_header.startswith('Bearer '):
+                raw_token = auth_header[7:].strip()
+            elif 'HTTP_X_REMEMBER_TOKEN' in request.META:
+                raw_token = request.META['HTTP_X_REMEMBER_TOKEN'].strip()
+
+        if not raw_token:
+            return Response({'success': False, 'code': 'NO_SESSION', 'message': 'No persistent session token.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        token_hash = hashlib.sha256(f"OB_SALT_NBE_REMEMBER_ME_SECURE_2026:{raw_token}:OB_SALT_NBE_REMEMBER_ME_SECURE_2026".encode()).hexdigest()
+
+        try:
+            sess = PersistentSession.objects.select_related('user').get(token_hash=token_hash)
+        except PersistentSession.DoesNotExist:
+            resp = Response({'success': False, 'code': 'TOKEN_INVALID', 'message': 'Invalid session token.'}, status=status.HTTP_401_UNAUTHORIZED)
+            resp.delete_cookie('ob_remember_token', path='/')
+            return resp
+
+        if sess.is_revoked:
+            resp = Response({'success': False, 'code': 'SESSION_REVOKED', 'message': f'Session revoked ({sess.revoked_reason or "REVOKED"}).'}, status=status.HTTP_401_UNAUTHORIZED)
+            resp.delete_cookie('ob_remember_token', path='/')
+            return resp
+
+        if timezone.now() > sess.expires_at:
+            sess.is_revoked = True
+            sess.revoked_at = timezone.now()
+            sess.revoked_reason = 'EXPIRED'
+            sess.save(update_fields=['is_revoked', 'revoked_at', 'revoked_reason'])
+            resp = Response({'success': False, 'code': 'SESSION_EXPIRED', 'message': 'Session expired.'}, status=status.HTTP_401_UNAUTHORIZED)
+            resp.delete_cookie('ob_remember_token', path='/')
+            return resp
+
+        if sess.user.status != 'ACTIVE':
+            sess.is_revoked = True
+            sess.revoked_at = timezone.now()
+            sess.revoked_reason = 'ACCOUNT_DISABLED'
+            sess.save(update_fields=['is_revoked', 'revoked_at', 'revoked_reason'])
+            resp = Response({'success': False, 'code': 'ACCOUNT_DISABLED', 'message': 'Account is disabled or pending approval.'}, status=status.HTTP_401_UNAUTHORIZED)
+            resp.delete_cookie('ob_remember_token', path='/')
+            return resp
+
+        sess.last_used_at = timezone.now()
+        sess.save(update_fields=['last_used_at'])
+
+        has_biometrics = sess.user.biometric_credentials.exists()
+
+        return Response({
+            'success': True,
+            'user': UserAccountSerializer(sess.user).data,
+            'session': {
+                'id': sess.id,
+                'expiresAt': sess.expires_at.isoformat(),
+                'lastUsedAt': sess.last_used_at.isoformat(),
+                'createdAt': sess.created_at.isoformat(),
+            },
+            'requiresBiometricVerification': has_biometrics
         }, status=status.HTTP_200_OK)
+
+class LogoutView(APIView):
+    """
+    Phase 29: Explicit Logout invalidates persistent Remember Me session.
+    """
+    def post(self, request):
+        raw_token = request.COOKIES.get('ob_remember_token')
+        if not raw_token:
+            auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+            if auth_header.startswith('Bearer '):
+                raw_token = auth_header[7:].strip()
+
+        if raw_token:
+            token_hash = hashlib.sha256(f"OB_SALT_NBE_REMEMBER_ME_SECURE_2026:{raw_token}:OB_SALT_NBE_REMEMBER_ME_SECURE_2026".encode()).hexdigest()
+            PersistentSession.objects.filter(token_hash=token_hash).update(
+                is_revoked=True,
+                revoked_at=timezone.now(),
+                revoked_reason='EXPLICIT_LOGOUT'
+            )
+
+        resp = Response({'success': True, 'message': 'Logged out successfully. Persistent session invalidated.'})
+        resp.delete_cookie('ob_remember_token', path='/')
+        return resp
+
 
 class RegisterView(APIView):
     def post(self, request):

@@ -48,6 +48,16 @@ export class RealtimeSsotEngine {
   }
 
   /**
+   * Subscribe to in-process SSOT change events
+   */
+  public subscribe(callback: (event: SsotChangeEvent<any>) => void): () => void {
+    this.events.on('SSOT_EVENT', callback);
+    return () => {
+      this.events.off('SSOT_EVENT', callback);
+    };
+  }
+
+  /**
    * Attach WebSocket server to an existing HTTP server
    */
   public attachServer(server: any, path: string = '/ws/ssot'): void {

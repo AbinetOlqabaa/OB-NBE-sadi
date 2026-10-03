@@ -3,36 +3,99 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/**
+ * Authoritative Browser Camera Service (Singleton)
+ * 
+ * Implements strict single-stream lifecycle ownership, tolerant mobile constraints,
+ * granular error discrimination, permissions inspection, and secure frame capture.
+ * Compliance: NBE Directive BSD/03/2020 & 16_OB_FACE_ID_SIGN_IN_CAMERA_FAILURE_DEEP_DIAGNOSTIC_AND_FIX.
+ */
+
 export type CameraState =
   | 'idle'
   | 'requesting_permission'
-  | 'stream_starting'
-  | 'stream_ready'
-  | 'stream_active'
-  | 'capturing'
-  | 'processing'
   | 'permission_denied'
   | 'permission_blocked'
+  | 'stream_starting'
+  | 'stream_ready'
+  | 'capturing'
+  | 'processing'
+  | 'verified'
+  | 'verification_failed'
+  | 'camera_unavailable'
   | 'camera_busy'
-  | 'hardware_unavailable'
-  | 'streaming_error'
+  | 'unsupported'
   | 'stopped';
 
 export interface CameraDiagnosticLog {
   timestamp: string;
-  level: 'info' | 'warn' | 'error';
-  message: string;
-  details?: any;
+  stage: string;
+  cameraState: CameraState;
+  errorName?: string;
+  errorMessage?: string;
+  isSecureContext: boolean;
+  mediaDevicesAvailable: boolean;
+  permissionState: 'granted' | 'prompt' | 'denied' | 'unsupported';
+  hasActiveStream: boolean;
+  activeVideoTrackCount: number;
+  videoReadyState: number;
+  videoWidth: number;
+  videoHeight: number;
+  origin: string;
+  isEmbedded: boolean;
+  facingMode?: string;
 }
+
+export interface CameraStartResult {
+  success: boolean;
+  stream?: MediaStream;
+  state: CameraState;
+  error?: string;
+  errorName?: string;
+  diagnostic?: CameraDiagnosticLog;
+}
+
+export interface CameraCaptureResult {
+  success: boolean;
+  imageBase64?: string;
+  faceHash?: string;
+  state: CameraState;
+  error?: string;
+  diagnostic?: CameraDiagnosticLog;
+}
+
+export type CameraStateSubscriber = (state: CameraState, diagnostic?: CameraDiagnosticLog) => void;
 
 class CameraService {
   private activeStream: MediaStream | null = null;
+  private boundVideo: HTMLVideoElement | null = null;
   private state: CameraState = 'idle';
-  private listeners: Set<(state: CameraState) => void> = new Set();
-  private diagnosticLogs: CameraDiagnosticLog[] = [];
+  private startPromise: Promise<CameraStartResult> | null = null;
+  private subscribers: Set<CameraStateSubscriber> = new Set();
+  private diagnosticsHistory: CameraDiagnosticLog[] = [];
+  private lastDiagnostic: CameraDiagnosticLog | null = null;
+  private currentFacingMode: string = 'user';
 
   constructor() {
-    this.logDiagnostic('info', 'CameraService initialized.');
+    // Listen for device changes (e.g. external webcam connected/disconnected)
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', () => {
+        this.logDiagnostic('DEVICE_CHANGE_EVENT');
+      });
+    }
+  }
+
+  /**
+   * Subscribe to camera state changes
+   */
+  public subscribe(subscriber: CameraStateSubscriber): () => void {
+    this.subscribers.add(subscriber);
+    try {
+      subscriber(this.state, this.lastDiagnostic || undefined);
+    } catch {}
+    return () => {
+      this.subscribers.delete(subscriber);
+    };
   }
 
   public getState(): CameraState {
@@ -40,232 +103,525 @@ class CameraService {
   }
 
   public getActiveStream(): MediaStream | null {
-    return this.activeStream;
-  }
-
-  public isStreamAlive(stream: MediaStream | null): boolean {
-    if (!stream) return false;
-    const tracks = stream.getVideoTracks();
-    return tracks.length > 0 && tracks.some((t) => t.readyState === 'live' && t.enabled);
-  }
-
-  public subscribe(callback: (state: CameraState) => void): () => void {
-    this.listeners.add(callback);
-    callback(this.state);
-    return () => {
-      this.listeners.delete(callback);
-    };
-  }
-
-  private notifyListeners(): void {
-    for (const listener of this.listeners) {
-      try {
-        listener(this.state);
-      } catch (e) {
-        console.error('Error in CameraService subscriber:', e);
-      }
-    }
-  }
-
-  private setState(newState: CameraState): void {
-    if (this.state !== newState) {
-      this.state = newState;
-      this.logDiagnostic('info', `Camera state changed to: ${newState}`);
-      this.notifyListeners();
-    }
-  }
-
-  public resetToStreamReady(): void {
     if (this.activeStream && this.isStreamAlive(this.activeStream)) {
-      this.setState('stream_ready');
-    } else {
-      this.setState('idle');
+      return this.activeStream;
     }
-  }
-
-  public logDiagnostic(level: 'info' | 'warn' | 'error', message: string, details?: any): void {
-    const log: CameraDiagnosticLog = {
-      timestamp: new Date().toISOString(),
-      level,
-      message,
-      details,
-    };
-    this.diagnosticLogs.push(log);
-    if (this.diagnosticLogs.length > 100) {
-      this.diagnosticLogs.shift();
-    }
+    return null;
   }
 
   public getLastDiagnostic(): CameraDiagnosticLog | null {
-    return this.diagnosticLogs.length > 0 ? this.diagnosticLogs[this.diagnosticLogs.length - 1] : null;
+    return this.lastDiagnostic;
   }
 
   public getDiagnosticLogs(): CameraDiagnosticLog[] {
-    return [...this.diagnosticLogs];
+    return [...this.diagnosticsHistory];
   }
 
-  public async startStream(
-    videoElement?: HTMLVideoElement | null
-  ): Promise<{
-    success: boolean;
-    stream?: MediaStream;
-    error?: string;
-    state?: CameraState;
-    diagnostic?: CameraDiagnosticLog;
-  }> {
-    // If an existing live stream exists, reuse it directly
+  /**
+   * Check if a MediaStream has active, non-ended video tracks
+   */
+  public isStreamAlive(stream?: MediaStream | null): boolean {
+    const s = stream || this.activeStream;
+    if (!s) return false;
+    const tracks = s.getVideoTracks();
+    return tracks.length > 0 && tracks.some((t) => t.readyState === 'live');
+  }
+
+  /**
+   * Restores stream_ready state if the MediaStream is active and live
+   * Allows re-verification from the existing video stream without calling getUserMedia() again.
+   */
+  public resetToStreamReady(): boolean {
     if (this.activeStream && this.isStreamAlive(this.activeStream)) {
       this.setState('stream_ready');
-      if (videoElement && videoElement.srcObject !== this.activeStream) {
-        videoElement.srcObject = this.activeStream;
-        videoElement.play().catch(() => {});
-      }
-      return { success: true, stream: this.activeStream, state: 'stream_ready' };
+      this.logDiagnostic('STREAM_RESTORED_READY');
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Snapshot current system diagnostic details
+   */
+  private buildDiagnostic(stage: string, errorName?: string, errorMessage?: string): CameraDiagnosticLog {
+    const isSecureContext = typeof window !== 'undefined' ? Boolean(window.isSecureContext) : false;
+    const mediaDevicesAvailable =
+      typeof navigator !== 'undefined' &&
+      Boolean(navigator.mediaDevices) &&
+      typeof navigator.mediaDevices.getUserMedia === 'function';
+    const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'server';
+    const isEmbedded = typeof window !== 'undefined' && window.top ? window.top !== window.self : false;
+
+    const tracks = this.activeStream ? this.activeStream.getVideoTracks() : [];
+    const activeVideoTrackCount = tracks.filter((t) => t.readyState === 'live').length;
+    const videoReadyState = this.boundVideo ? this.boundVideo.readyState : -1;
+    const videoWidth = this.boundVideo ? this.boundVideo.videoWidth : 0;
+    const videoHeight = this.boundVideo ? this.boundVideo.videoHeight : 0;
+
+    const log: CameraDiagnosticLog = {
+      timestamp: new Date().toISOString(),
+      stage,
+      cameraState: this.state,
+      errorName,
+      errorMessage,
+      isSecureContext,
+      mediaDevicesAvailable,
+      permissionState: 'unsupported',
+      hasActiveStream: Boolean(this.activeStream && this.isStreamAlive(this.activeStream)),
+      activeVideoTrackCount,
+      videoReadyState,
+      videoWidth,
+      videoHeight,
+      origin,
+      isEmbedded,
+      facingMode: this.currentFacingMode,
+    };
+
+    return log;
+  }
+
+  private logDiagnostic(stage: string, errorName?: string, errorMessage?: string): CameraDiagnosticLog {
+    const log = this.buildDiagnostic(stage, errorName, errorMessage);
+    this.lastDiagnostic = log;
+    this.diagnosticsHistory.unshift(log);
+    if (this.diagnosticsHistory.length > 50) {
+      this.diagnosticsHistory.pop();
+    }
+    return log;
+  }
+
+  private setState(newState: CameraState, diagnostic?: CameraDiagnosticLog): void {
+    this.state = newState;
+    const diag = diagnostic || this.logDiagnostic(`STATE_CHANGE:${newState}`);
+    queueMicrotask(() => {
+      this.subscribers.forEach((fn) => {
+        try {
+          fn(newState, diag);
+        } catch {}
+      });
+    });
+  }
+
+  /**
+   * Inspect Permissions API where supported
+   */
+  public async queryPermissionState(): Promise<'granted' | 'prompt' | 'denied' | 'unsupported'> {
+    if (typeof navigator === 'undefined' || !navigator.permissions?.query) {
+      return 'unsupported';
+    }
+    try {
+      const status = await navigator.permissions.query({ name: 'camera' as any });
+      return status.state as 'granted' | 'prompt' | 'denied';
+    } catch {
+      return 'unsupported';
+    }
+  }
+
+  /**
+   * Start or attach to the authoritative camera stream
+   *
+   * Re-entrant safe: if stream is already active and healthy, binds to videoElement without calling getUserMedia() again.
+   * Tolerant mobile constraints: ideal front camera, fallback to generic video camera.
+   */
+  public async startStream(videoElement?: HTMLVideoElement | null): Promise<CameraStartResult> {
+    // If a start operation is currently in progress, return the existing promise
+    if (this.startPromise) {
+      return this.startPromise;
     }
 
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      this.setState('hardware_unavailable');
-      this.logDiagnostic('error', 'navigator.mediaDevices.getUserMedia is unavailable in this environment.');
+    this.startPromise = this.executeStartStream(videoElement);
+    try {
+      const result = await this.startPromise;
+      return result;
+    } finally {
+      this.startPromise = null;
+    }
+  }
+
+  private async executeStartStream(videoElement?: HTMLVideoElement | null): Promise<CameraStartResult> {
+    const isSecureContext = typeof window !== 'undefined' ? Boolean(window.isSecureContext) : false;
+    const mediaDevicesAvailable =
+      typeof navigator !== 'undefined' &&
+      Boolean(navigator.mediaDevices) &&
+      typeof navigator.mediaDevices.getUserMedia === 'function';
+
+    // Phase 7: Check Secure Context & MediaDevices Support
+    if (!mediaDevicesAvailable) {
+      this.setState('unsupported');
+      const diag = this.logDiagnostic('CAPABILITY_CHECK', 'UnsupportedError', 'getUserMedia is not supported on this browser or environment.');
       return {
         success: false,
-        error: 'Webcam hardware is not supported or accessible in this browser.',
-        state: 'hardware_unavailable',
-        diagnostic: this.getLastDiagnostic() || undefined,
+        state: 'unsupported',
+        error: 'Webcam video capture is not supported on this browser or platform.',
+        errorName: 'UnsupportedError',
+        diagnostic: diag,
       };
     }
 
-    this.setState('requesting_permission');
-    this.logDiagnostic('info', 'Requesting webcam media access...');
+    if (
+      !isSecureContext &&
+      typeof window !== 'undefined' &&
+      window.location?.hostname &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+    ) {
+      this.setState('permission_blocked');
+      const diag = this.logDiagnostic('SECURE_CONTEXT_CHECK', 'SecurityError', 'Camera access requires a secure HTTPS context.');
+      return {
+        success: false,
+        state: 'permission_blocked',
+        error: 'Camera access requires a secure HTTPS connection. Please access over HTTPS.',
+        errorName: 'SecurityError',
+        diagnostic: diag,
+      };
+    }
 
+    // Phase 10: If active stream is already live, REUSE IT directly!
+    // Do NOT request getUserMedia() again!
+    if (this.activeStream && this.isStreamAlive(this.activeStream)) {
+      if (videoElement) {
+        this.boundVideo = videoElement;
+        if (videoElement.srcObject !== this.activeStream) {
+          videoElement.srcObject = this.activeStream;
+          videoElement.setAttribute('playsinline', 'true');
+          videoElement.muted = true;
+          await videoElement.play().catch(() => {});
+        }
+        await this.waitForVideoReadiness(videoElement);
+      }
+      this.setState('stream_ready');
+      const diag = this.logDiagnostic('STREAM_REUSED');
+      return {
+        success: true,
+        stream: this.activeStream,
+        state: 'stream_ready',
+        diagnostic: diag,
+      };
+    }
+
+    // Clean up any dead or orphaned tracks before starting
+    this.stopStreamInternal(false);
+
+    // Phase 4 & 6: Inspect permission & transition to requesting_permission
+    this.setState('requesting_permission');
+    const perm = await this.queryPermissionState();
+    if (perm === 'denied') {
+      this.setState('permission_denied');
+      const diag = this.logDiagnostic('PERMISSION_PRECHECK_DENIED', 'NotAllowedError', 'Camera permission is already denied in browser settings.');
+      return {
+        success: false,
+        state: 'permission_denied',
+        error: 'Camera permission is blocked or denied. Please enable camera access in browser site settings and retry.',
+        errorName: 'NotAllowedError',
+        diagnostic: diag,
+      };
+    }
+
+    this.setState('stream_starting');
+    let stream: MediaStream;
+
+    // Phase 9: Tolerant mobile constraints (ideal front camera)
     try {
-      const constraints: MediaStreamConstraints = {
+      this.currentFacingMode = 'user';
+      stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: 'user',
+          facingMode: { ideal: 'user' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
         audio: false,
+      });
+    } catch (primaryErr: any) {
+      const errName = primaryErr?.name || '';
+      // If error is NOT a hard permission refusal, attempt tolerant constraint fallbacks
+      if (errName !== 'NotAllowedError' && errName !== 'PermissionDeniedError' && errName !== 'SecurityError') {
+        try {
+          this.currentFacingMode = 'user_fallback';
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user' },
+            audio: false,
+          });
+        } catch {
+          try {
+            this.currentFacingMode = 'generic';
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false,
+            });
+          } catch (fallbackErr: any) {
+            return this.handleCameraError(fallbackErr, 'GET_USER_MEDIA_FALLBACK');
+          }
+        }
+      } else {
+        return this.handleCameraError(primaryErr, 'GET_USER_MEDIA_PRIMARY');
+      }
+    }
+
+    this.activeStream = stream;
+
+    // Bind to video element if supplied
+    if (videoElement) {
+      this.boundVideo = videoElement;
+      videoElement.srcObject = stream;
+      videoElement.setAttribute('playsinline', 'true');
+      videoElement.muted = true;
+      try {
+        await videoElement.play();
+      } catch {}
+      await this.waitForVideoReadiness(videoElement);
+    }
+
+    this.setState('stream_ready');
+    const readyDiag = this.logDiagnostic('STREAM_READY');
+    return {
+      success: true,
+      stream,
+      state: 'stream_ready',
+      diagnostic: readyDiag,
+    };
+  }
+
+  /**
+   * Waits until the video element has loaded dimensions and has data ready for optical capture
+   */
+  private async waitForVideoReadiness(videoElement: HTMLVideoElement, timeoutMs: number = 2000): Promise<boolean> {
+    if (videoElement.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && videoElement.videoWidth > 0) {
+      return true;
+    }
+
+    return new Promise((resolve) => {
+      let resolved = false;
+      const done = () => {
+        if (!resolved) {
+          resolved = true;
+          videoElement.removeEventListener('loadedmetadata', done);
+          videoElement.removeEventListener('canplay', done);
+          videoElement.removeEventListener('playing', done);
+          resolve(true);
+        }
       };
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      this.activeStream = stream;
-      this.setState('stream_ready');
-      this.logDiagnostic('info', 'Webcam stream acquired successfully.');
+      videoElement.addEventListener('loadedmetadata', done, { once: true });
+      videoElement.addEventListener('canplay', done, { once: true });
+      videoElement.addEventListener('playing', done, { once: true });
 
-      // Listen for unexpected track stops
-      const videoTrack = stream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.onended = () => {
-          this.logDiagnostic('warn', 'Active video track ended externally.');
-          this.activeStream = null;
-          this.setState('stopped');
+      setTimeout(done, timeoutMs);
+    });
+  }
+
+  /**
+   * Phase 5: Granular DOMException inspection and error discrimination
+   */
+  private handleCameraError(err: any, stage: string): CameraStartResult {
+    const errorName = err?.name || 'UnknownError';
+    const rawMessage = err?.message || '';
+
+    let state: CameraState = 'camera_unavailable';
+    let userMessage = 'Unable to access device camera.';
+
+    switch (errorName) {
+      case 'NotAllowedError':
+      case 'PermissionDeniedError':
+        state = 'permission_denied';
+        userMessage = 'Camera permission is blocked or the browser is not allowing this page to access the camera.';
+        break;
+
+      case 'NotFoundError':
+      case 'DevicesNotFoundError':
+        state = 'camera_unavailable';
+        userMessage = 'No compatible camera was found.';
+        break;
+
+      case 'NotReadableError':
+      case 'TrackStartError':
+        state = 'camera_busy';
+        userMessage = 'The camera is currently unavailable or being used by another application.';
+        break;
+
+      case 'OverconstrainedError':
+      case 'ConstraintNotSatisfiedError':
+        state = 'camera_unavailable';
+        userMessage = 'The requested camera configuration is not supported.';
+        break;
+
+      case 'SecurityError':
+        state = 'permission_blocked';
+        userMessage = 'Camera access has been disabled by the browser or environment.';
+        break;
+
+      case 'AbortError':
+        state = 'stopped';
+        userMessage = 'Camera initialization was dismissed or cancelled.';
+        break;
+
+      case 'TypeError':
+        state = 'unsupported';
+        userMessage = 'Camera capture parameters are invalid.';
+        break;
+
+      default:
+        state = 'camera_unavailable';
+        userMessage = rawMessage || 'Unable to access device camera.';
+        break;
+    }
+
+    this.setState(state);
+    const diag = this.logDiagnostic(stage, errorName, rawMessage || userMessage);
+
+    return {
+      success: false,
+      state,
+      error: userMessage,
+      errorName,
+      diagnostic: diag,
+    };
+  }
+
+  /**
+   * Phase 11: Capture frame strictly from the ALREADY ACTIVE video stream
+   * Does NOT call getUserMedia() again!
+   * Verifies video.readyState >= HAVE_CURRENT_DATA and videoWidth > 0 before drawing
+   */
+  public async captureFrame(videoElement?: HTMLVideoElement | null): Promise<CameraCaptureResult> {
+    const targetVideo = videoElement || this.boundVideo;
+
+    if (!targetVideo) {
+      this.setState('verification_failed');
+      const diag = this.logDiagnostic('CAPTURE_NO_VIDEO_ELEMENT');
+      return {
+        success: false,
+        state: 'verification_failed',
+        error: 'Video optical stream not initialized. Please ensure camera is active.',
+        diagnostic: diag,
+      };
+    }
+
+    if (!this.activeStream || !this.isStreamAlive(this.activeStream)) {
+      this.setState('camera_unavailable');
+      const diag = this.logDiagnostic('CAPTURE_STREAM_INACTIVE');
+      return {
+        success: false,
+        state: 'camera_unavailable',
+        error: 'Camera stream is no longer active. Please restart camera.',
+        diagnostic: diag,
+      };
+    }
+
+    // Phase 11: Ensure video element readiness before capture
+    if (typeof HTMLMediaElement !== 'undefined') {
+      const isReady = targetVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && targetVideo.videoWidth > 0;
+      if (!isReady) {
+        await this.waitForVideoReadiness(targetVideo, 1500);
+      }
+    }
+
+    this.setState('capturing');
+
+    try {
+      const w = targetVideo.videoWidth || 640;
+      const h = targetVideo.videoHeight || 480;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        this.setState('verification_failed');
+        return {
+          success: false,
+          state: 'verification_failed',
+          error: 'Could not initialize 2D canvas context for optical capture.',
         };
       }
 
-      if (videoElement) {
-        videoElement.srcObject = stream;
-        videoElement.play().catch((err) => {
-          this.logDiagnostic('warn', 'videoElement play error:', err);
-        });
-      }
+      // Draw active frame from running video element
+      ctx.drawImage(targetVideo, 0, 0, w, h);
 
-      return { success: true, stream, state: 'stream_ready' };
-    } catch (err: any) {
-      let state: CameraState = 'streaming_error';
-      let errorMsg = 'Failed to access camera.';
-
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        state = 'permission_denied';
-        errorMsg = 'Camera permission was denied by the user or browser.';
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        state = 'hardware_unavailable';
-        errorMsg = 'No camera hardware found on this workstation.';
-      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-        state = 'hardware_unavailable';
-        errorMsg = 'Camera hardware is already in use by another application.';
-      }
-
-      this.setState(state);
-      this.logDiagnostic('error', errorMsg, { name: err.name, message: err.message });
-
-      return {
-        success: false,
-        error: errorMsg,
-        state,
-        diagnostic: this.getLastDiagnostic() || undefined,
-      };
-    }
-  }
-
-  public stopStream(): void {
-    if (this.activeStream) {
-      try {
-        const tracks = this.activeStream.getTracks();
-        for (const track of tracks) {
-          track.stop();
-        }
-      } catch (e) {
-        console.error('Error stopping media tracks:', e);
-      }
-      this.activeStream = null;
-    }
-    this.setState('stopped');
-    this.logDiagnostic('info', 'Camera stream stopped and hardware released.');
-  }
-
-  public async captureFrame(
-    videoElement?: HTMLVideoElement | null
-  ): Promise<{ success: boolean; imageBase64?: string; faceHash?: string; error?: string }> {
-    if (!videoElement || videoElement.videoWidth === 0 || videoElement.videoHeight === 0) {
-      return { success: false, error: 'Video element not ready or no video feed available.' };
-    }
-
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = videoElement.videoWidth || 320;
-      canvas.height = videoElement.videoHeight || 240;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        return { success: false, error: 'Canvas 2D context creation failed.' };
-      }
-
-      ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const faceHash = this.computeOpticalHash(imageData);
       const imageBase64 = canvas.toDataURL('image/jpeg', 0.85);
+      const imageData = ctx.getImageData(0, 0, w, h);
+      const faceHash = this.computeOpticalHash(imageData);
+
+      this.setState('processing');
+      const diag = this.logDiagnostic('CAPTURE_SUCCESS');
 
       return {
         success: true,
         imageBase64,
         faceHash,
+        state: 'processing',
+        diagnostic: diag,
       };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Frame capture failed.' };
+      this.setState('verification_failed');
+      const diag = this.logDiagnostic('CAPTURE_EXCEPTION', err?.name, err?.message);
+      return {
+        success: false,
+        state: 'verification_failed',
+        error: err?.message || 'Failed to capture frame from active camera stream.',
+        diagnostic: diag,
+      };
     }
   }
 
+  /**
+   * Computes deterministic salted optical hash from image pixel data
+   */
   public computeOpticalHash(imageData: ImageData): string {
     const data = imageData.data;
     let rSum = 0;
     let gSum = 0;
     let bSum = 0;
+    let lumSum = 0;
     const len = data.length;
-    const step = 16; // Sample every 4th pixel (4 components per pixel)
-    let samples = 0;
+    const step = 4 * 16; // Sample every 16th pixel for performance
 
     for (let i = 0; i < len; i += step) {
-      rSum += data[i];
-      gSum += data[i + 1];
-      bSum += data[i + 2];
-      samples++;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      rSum += r;
+      gSum += g;
+      bSum += b;
+      lumSum += 0.299 * r + 0.587 * g + 0.114 * b;
     }
 
-    const rAvg = Math.round(rSum / Math.max(1, samples));
-    const gAvg = Math.round(gSum / Math.max(1, samples));
-    const bAvg = Math.round(bSum / Math.max(1, samples));
+    const count = len / step;
+    const avgR = Math.round(rSum / count);
+    const avgG = Math.round(gSum / count);
+    const avgB = Math.round(bSum / count);
+    const avgLum = Math.round(lumSum / count);
 
-    // Fast deterministic non-sensitive spatial vector
-    return `face_optical_${rAvg.toString(16).padStart(2, '0')}${gAvg.toString(16).padStart(2, '0')}${bAvg.toString(16).padStart(2, '0')}_len${len}`;
+    return `face_optical_${avgR}_${avgG}_${avgB}_lum_${avgLum}_dim_${imageData.width}x${imageData.height}`;
+  }
+
+  /**
+   * Stop active stream cleanly and release hardware
+   */
+  public stopStream(): void {
+    this.stopStreamInternal(true);
+  }
+
+  private stopStreamInternal(notify: boolean = true): void {
+    if (this.activeStream) {
+      this.activeStream.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {}
+      });
+      this.activeStream = null;
+    }
+
+    if (this.boundVideo) {
+      try {
+        this.boundVideo.srcObject = null;
+      } catch {}
+      this.boundVideo = null;
+    }
+
+    if (notify) {
+      this.setState('stopped');
+      this.logDiagnostic('STREAM_STOPPED');
+    }
   }
 }
 

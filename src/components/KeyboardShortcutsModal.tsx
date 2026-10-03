@@ -21,6 +21,7 @@ import {
   Shield,
   Zap,
   SunMoon,
+  BookOpen,
 } from 'lucide-react';
 
 interface KeyboardShortcutsModalProps {
@@ -89,6 +90,12 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
       description: 'Jump to Maker Workspace (Report Catalog & Drafts)',
       context: 'Navigation',
       icon: FileText,
+    },
+    {
+      keys: [modKey, 'L'],
+      description: 'Jump to Maker Library (Authoritative Dossiers & Archives)',
+      context: 'Navigation',
+      icon: BookOpen,
     },
     {
       keys: [modKey, 'Shift', 'C'],

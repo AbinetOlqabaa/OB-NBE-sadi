@@ -13,11 +13,15 @@ from .views import (
     UserDetailView,
     SeedDataSummaryView,
     SeedDataResetView,
+    SessionVerificationView,
+    LogoutView,
 )
 
 urlpatterns = [
     # Auth Endpoints
     path('auth/login', LoginView.as_view(), name='auth-login'),
+    path('auth/session', SessionVerificationView.as_view(), name='auth-session'),
+    path('auth/logout', LogoutView.as_view(), name='auth-logout'),
     path('auth/register', RegisterView.as_view(), name='auth-register'),
     path('auth/otp/send', SendOtpView.as_view(), name='auth-otp-send'),
     path('auth/otp/verify', VerifyOtpView.as_view(), name='auth-otp-verify'),

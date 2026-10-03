@@ -53,21 +53,18 @@ export function getRoleTabs(userRole?: string): ViewTab[] {
         'NBE_SIMULATOR',
         'PHASE2_SSOT',
         'AUDIT_TRAIL',
+        'SYSTEM_HEALTH',
         'DOCUMENTATION',
       ];
     case 'CHECKER':
-      return ['CHECKER_INBOX', 'NBE_SIMULATOR', 'PHASE2_SSOT', 'AUDIT_TRAIL', 'DOCUMENTATION'];
+      return ['CHECKER_INBOX', 'NBE_SIMULATOR', 'AUDIT_TRAIL', 'DOCUMENTATION'];
     case 'AUDITOR':
-      return ['AUDITOR_DASHBOARD', 'AUDIT_TRAIL', 'PHASE2_SSOT', 'DOCUMENTATION'];
+      return ['AUDITOR_DASHBOARD', 'AUDIT_TRAIL', 'DOCUMENTATION'];
     case 'MAKER':
-      return ['MAKER_WORKSPACE', 'PHASE2_SSOT', 'AUDIT_TRAIL', 'DOCUMENTATION'];
+      return ['MAKER_WORKSPACE', 'AUDIT_TRAIL', 'DOCUMENTATION'];
     default:
       return [
-        'ADMIN_DASHBOARD',
         'MAKER_WORKSPACE',
-        'CHECKER_INBOX',
-        'NBE_SIMULATOR',
-        'PHASE2_SSOT',
         'AUDIT_TRAIL',
         'DOCUMENTATION',
       ];

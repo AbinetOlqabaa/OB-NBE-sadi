@@ -8,7 +8,7 @@ import type { ReportMetadata, ReportSubmission, DynamicRowRecord } from '../type
 import {
   exportRegulatoryReportXLSX,
   generateRegulatoryReportWorkbook,
-  ReportXlsxExportOptions,
+  type ReportXlsxExportOptions,
 } from './regulatoryReportXlsxExport.ts';
 
 export {

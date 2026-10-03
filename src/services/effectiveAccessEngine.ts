@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type {
-  UserSession,
-  ReportSubmission,
-  SpecialAccessGrant,
-  SpecialAccessScope,
-  SpecialAccessAuditEntry,
+import {
+  type UserSession,
+  type ReportSubmission,
+  type SpecialAccessGrant,
+  type SpecialAccessScope,
+  type SpecialAccessAuditEntry,
+  isFinalSubmittedStatus,
 } from '../types/regulatory.ts';
 import type { UserAccount } from './userService.ts';
 import { getReportByKey, getAllReports } from '../data/report-registry.ts';
@@ -25,6 +26,7 @@ export type AccessAction =
   | 'VIEW'
   | 'CREATE_DRAFT'
   | 'EDIT_DRAFT'
+  | 'DELETE_DRAFT'
   | 'VALIDATE'
   | 'SUBMIT_CHECKER'
   | 'REVIEW'
@@ -44,7 +46,12 @@ export type AccessAction =
   | 'CONFIGURE_SIMULATOR'
   | 'TRIGGER_SSOT_PIPELINE'
   | 'GRANT_SPECIAL_ACCESS'
-  | 'REVOKE_SPECIAL_ACCESS';
+  | 'REVOKE_SPECIAL_ACCESS'
+  | 'FLAG'
+  | 'COMMENT'
+  | 'ADMIN_ARCHIVE'
+  | 'ADMIN_VOID'
+  | 'INSPECT_HISTORY';
 
 export type AccessReasonCode =
   | 'ALLOWED'
@@ -740,6 +747,65 @@ class EffectiveAccessEngineClass {
       return res;
     }
 
+    // 9b. MAKER Action: DELETE_DRAFT
+    if (action === 'DELETE_DRAFT') {
+      if (role !== 'MAKER') {
+        const res: AccessEvaluationResult = {
+          allowed: false,
+          reason: `Draft deletion requires MAKER role (current role: ${role}).`,
+          code: 'ROLE_FORBIDDEN',
+          context: { role, userDept, reportKey, reportDept: reportPrimaryDept },
+        };
+        this.accessCache.set(cacheKey, res);
+        return res;
+      }
+
+      if (submission) {
+        const subStatus = (submission.status || 'DRAFT').toUpperCase();
+        if (
+          subStatus === 'PENDING_CHECKER' ||
+          subStatus === 'APPROVED' ||
+          subStatus === 'SENT' ||
+          subStatus === 'SENDING'
+        ) {
+          const res: AccessEvaluationResult = {
+            allowed: false,
+            reason: `Submitted regulatory reports cannot be deleted (status: ${subStatus}). Under NBE Directive BSD/03/2020, submitted reports are permanent immutable records.`,
+            code: 'INVALID_WORKFLOW_STATE',
+            context: { role, userDept, reportKey, workflowStatus: subStatus },
+          };
+          this.accessCache.set(cacheKey, res);
+          return res;
+        }
+
+        if (role === 'MAKER') {
+          if (
+            submission.makerId &&
+            submission.makerId !== user.id &&
+            (!submission.department || submission.department.toLowerCase() !== (userDept || '').toLowerCase())
+          ) {
+            const res: AccessEvaluationResult = {
+              allowed: false,
+              reason: 'Ownership violation: Makers can only delete unsubmitted reports they created or that belong to their assigned department.',
+              code: 'DEPT_MISMATCH',
+              context: { role, userDept, reportKey, workflowStatus: subStatus },
+            };
+            this.accessCache.set(cacheKey, res);
+            return res;
+          }
+        }
+      }
+
+      const res: AccessEvaluationResult = {
+        allowed: true,
+        reason: 'Authorized to delete unsubmitted report draft.',
+        code: 'ALLOWED',
+        context: { role, userDept, reportKey },
+      };
+      this.accessCache.set(cacheKey, res);
+      return res;
+    }
+
     // 10. CHECKER Workflow Actions: REVIEW, APPROVE, REJECT, REQUEST_CORRECTION
     if (['REVIEW', 'APPROVE', 'REJECT', 'REQUEST_CORRECTION'].includes(action)) {
       // Segregation of Duties (Dual Control / 4-Eyes Principle)
@@ -883,6 +949,315 @@ class EffectiveAccessEngineClass {
     };
   }
 
+  /**
+   * Phase 26: Authoritative Submission-Level Access Evaluation
+   * Evaluates permissions on a specific submission instance across all 4 roles:
+   * MAKER, CHECKER, AUDITOR, ADMIN.
+   * Enforces cross-department isolation, 4-eyes segregation of duties,
+   * unsubmitted draft deletion rules, and governed submitted-record deletion/archiving.
+   */
+  public evaluateSubmissionAccess(
+    user: UserSession | UserAccount | null | undefined,
+    submission: ReportSubmission,
+    action: AccessAction
+  ): AccessEvaluationResult {
+    if (!user || !user.id || !user.role) {
+      return {
+        allowed: false,
+        reason: 'Authentication credentials required.',
+        code: 'AUTH_REQUIRED',
+      };
+    }
+
+    const role = user.role as UserRole;
+    const userDept = (user.department || '').trim();
+
+    // 1. Account status checks
+    const accountStatus: AccountStatus = (user as any).status || 'ACTIVE';
+    if (accountStatus !== 'ACTIVE') {
+      return {
+        allowed: false,
+        reason: `Account is ${accountStatus.toLowerCase()}. Operational access is restricted.`,
+        code:
+          accountStatus === 'PENDING_APPROVAL'
+            ? 'ACCOUNT_PENDING'
+            : accountStatus === 'DISABLED'
+            ? 'ACCOUNT_INACTIVE'
+            : 'ACCOUNT_SUSPENDED',
+      };
+    }
+
+    // 2. Department authority calculation for this submission
+    const reportKey = submission.reportKey;
+    const report = getReportByKey(reportKey);
+    const ssotReport = configService.getReportDefinition(reportKey);
+    const defaultDept = ssotReport?.defaultDepartmentId
+      ? configService.getDepartmentById(ssotReport.defaultDepartmentId)
+      : null;
+    const reportPrimaryDept =
+      report?.department || defaultDept?.name || getDepartmentForReport(reportKey);
+    const linkedDepts = departmentService.getDepartmentsForReport(reportKey);
+    const configLinkedDepts = (ssotReport?.departmentIds || []).map((id) => {
+      const d = configService.getDepartmentById(id);
+      return d ? d.name : id;
+    });
+    const allLinked = Array.from(new Set([...linkedDepts, ...configLinkedDepts]));
+
+    const subDept = submission.department || reportPrimaryDept;
+    const isHomeDept = Boolean(
+      userDept &&
+        ((subDept && userDept.toLowerCase() === subDept.toLowerCase()) ||
+          (reportPrimaryDept && userDept.toLowerCase() === reportPrimaryDept.toLowerCase()))
+    );
+    const isLinkedDept = Boolean(
+      userDept && allLinked.some((d) => d.toLowerCase() === userDept.toLowerCase())
+    );
+    const directAssignments = this.userReportAssignments.get(user.id);
+    const isDirectAssignment = Boolean(directAssignments && directAssignments.has(reportKey));
+
+    let grants: SpecialAccessGrant[] = (user as any).specialAccessGrants || [];
+    if (grants.length === 0 && user.id && this.userProvider) {
+      const u = this.userProvider.getById(user.id);
+      if (u && Array.isArray(u.specialAccessGrants)) grants = u.specialAccessGrants;
+    }
+    const coveringGrant = this.findActiveGrantCoveringReport(grants, reportKey, subDept);
+    const isSpecialAccess = Boolean(coveringGrant);
+    const hasDeptAuthority = isHomeDept || isLinkedDept || isDirectAssignment || isSpecialAccess;
+
+    // 3. Evaluate by Role and Action
+    if (role === 'ADMIN') {
+      if (
+        action === 'VIEW' ||
+        action === 'EXPORT_XLSX' ||
+        action === 'AUDIT_INSPECT' ||
+        action === 'INSPECT_HISTORY' ||
+        action === 'COMMENT'
+      ) {
+        return {
+          allowed: true,
+          reason: 'Administrator oversight visibility authorized.',
+          code: 'ALLOWED',
+        };
+      }
+      if (action === 'DELETE_DRAFT') {
+        const isSubmitted =
+          isFinalSubmittedStatus(submission.status) || submission.status === 'PENDING_CHECKER';
+        if (isSubmitted) {
+          return {
+            allowed: false,
+            reason:
+              'Submitted regulatory records cannot be hard-deleted. Under NBE Directive BSD/03/2020, use governed archive or void.',
+            code: 'INVALID_WORKFLOW_STATE',
+          };
+        }
+        return {
+          allowed: true,
+          reason: 'Administrator authorized to remove unsubmitted draft.',
+          code: 'ALLOWED',
+        };
+      }
+      if (action === 'ADMIN_ARCHIVE' || action === 'ADMIN_VOID') {
+        return {
+          allowed: true,
+          reason: 'Administrator authorized for governed regulatory archiving/voiding.',
+          code: 'ALLOWED',
+        };
+      }
+      if (action === 'EDIT_DRAFT' || action === 'CREATE_DRAFT') {
+        return {
+          allowed: false,
+          reason:
+            'Administrator role is restricted from entering or editing regulatory return figures.',
+          code: 'ROLE_FORBIDDEN',
+        };
+      }
+      if (action === 'REVIEW' || action === 'APPROVE' || action === 'REJECT') {
+        return {
+          allowed: false,
+          reason: '4-Eyes operational review is reserved for designated Checkers.',
+          code: 'ROLE_FORBIDDEN',
+        };
+      }
+    }
+
+    if (role === 'AUDITOR') {
+      if (
+        action === 'VIEW' ||
+        action === 'EXPORT_XLSX' ||
+        action === 'AUDIT_INSPECT' ||
+        action === 'INSPECT_HISTORY' ||
+        action === 'COMMENT'
+      ) {
+        return {
+          allowed: true,
+          reason: 'Authorized independent auditor supervisory inspection.',
+          code: 'ALLOWED',
+        };
+      }
+      return {
+        allowed: false,
+        reason:
+          'Independent Auditor has read-only supervisory authority. Operational mutations are forbidden.',
+        code: 'ROLE_FORBIDDEN',
+      };
+    }
+
+    if (role === 'MAKER') {
+      // Maker must have department authority over the return
+      if (!hasDeptAuthority) {
+        return {
+          allowed: false,
+          reason: `Cross-department isolation: Your department (${userDept || 'Unassigned'}) is not authorized for return '${reportKey}' (${subDept}).`,
+          code: 'DEPT_MISMATCH',
+        };
+      }
+
+      if (action === 'VIEW' || action === 'EXPORT_XLSX' || action === 'COMMENT') {
+        return {
+          allowed: true,
+          reason: 'Maker authorized to view return within assigned scope.',
+          code: 'ALLOWED',
+        };
+      }
+      if (action === 'EDIT_DRAFT') {
+        const canEdit =
+          submission.status === 'DRAFT' || submission.status === 'CORRECTION_REQUIRED';
+        if (!canEdit) {
+          return {
+            allowed: false,
+            reason: `Cannot edit submission in state '${submission.status}'.`,
+            code: 'INVALID_WORKFLOW_STATE',
+          };
+        }
+        return {
+          allowed: true,
+          reason: 'Maker authorized to edit draft.',
+          code: 'ALLOWED',
+        };
+      }
+      if (action === 'DELETE_DRAFT') {
+        const isSubmitted =
+          isFinalSubmittedStatus(submission.status) || submission.status === 'PENDING_CHECKER';
+        if (isSubmitted) {
+          return {
+            allowed: false,
+            reason: `Cannot delete submission in ${submission.status} state. Under NBE Directive BSD/03/2020, submitted reports are permanent immutable records.`,
+            code: 'INVALID_WORKFLOW_STATE',
+          };
+        }
+        // Ownership check: maker must have created it or belong to same department
+        const isCreator = submission.makerId === user.id;
+        const isDeptMember =
+          submission.department &&
+          submission.department.toLowerCase() === (userDept || '').toLowerCase();
+        if (!isCreator && !isDeptMember && !isSpecialAccess) {
+          return {
+            allowed: false,
+            reason:
+              'Makers can only delete unsubmitted drafts they created or within their assigned department.',
+            code: 'DEPT_MISMATCH',
+          };
+        }
+        return {
+          allowed: true,
+          reason: 'Maker authorized to delete unsubmitted draft.',
+          code: 'ALLOWED',
+        };
+      }
+      if (
+        action === 'REVIEW' ||
+        action === 'APPROVE' ||
+        action === 'REJECT' ||
+        action === 'REQUEST_CORRECTION'
+      ) {
+        return {
+          allowed: false,
+          reason: 'Segregation of duties: Makers cannot review or approve returns.',
+          code: 'ROLE_FORBIDDEN',
+        };
+      }
+      if (action === 'ADMIN_ARCHIVE' || action === 'ADMIN_VOID') {
+        return {
+          allowed: false,
+          reason: 'Makers have no administrative archival authority.',
+          code: 'ROLE_FORBIDDEN',
+        };
+      }
+    }
+
+    if (role === 'CHECKER') {
+      // Checker must have department authority over the return
+      if (!hasDeptAuthority) {
+        return {
+          allowed: false,
+          reason: `Cross-department isolation: Checker department (${userDept || 'Unassigned'}) is not authorized for return '${reportKey}' (${subDept}).`,
+          code: 'DEPT_MISMATCH',
+        };
+      }
+
+      if (
+        action === 'VIEW' ||
+        action === 'EXPORT_XLSX' ||
+        action === 'COMMENT' ||
+        action === 'FLAG'
+      ) {
+        return {
+          allowed: true,
+          reason: 'Checker authorized within review scope.',
+          code: 'ALLOWED',
+        };
+      }
+      if (
+        action === 'REVIEW' ||
+        action === 'APPROVE' ||
+        action === 'REJECT' ||
+        action === 'REQUEST_CORRECTION'
+      ) {
+        // Segregation of duties: Maker cannot review own submission
+        if (submission.makerId && submission.makerId === user.id) {
+          return {
+            allowed: false,
+            reason:
+              'Segregation of duties violation: Maker cannot review or approve own return.',
+            code: 'DUTIES_SEGREGATION_VIOLATION',
+          };
+        }
+        if (submission.status !== 'PENDING_CHECKER') {
+          return {
+            allowed: false,
+            reason: `Only submissions in PENDING_CHECKER status can be reviewed (current: ${submission.status}).`,
+            code: 'INVALID_WORKFLOW_STATE',
+          };
+        }
+        return {
+          allowed: true,
+          reason: 'Authorized Checker 4-eyes review.',
+          code: 'ALLOWED',
+        };
+      }
+      if (action === 'EDIT_DRAFT' || action === 'CREATE_DRAFT') {
+        return {
+          allowed: false,
+          reason: 'Library access does not grant Maker editing to Checkers.',
+          code: 'ROLE_FORBIDDEN',
+        };
+      }
+      if (action === 'DELETE_DRAFT' || action === 'ADMIN_ARCHIVE' || action === 'ADMIN_VOID') {
+        return {
+          allowed: false,
+          reason: 'Checkers have zero deletion or administrative archival authority.',
+          code: 'ROLE_FORBIDDEN',
+        };
+      }
+    }
+
+    return {
+      allowed: false,
+      reason: `Action '${action}' is not permitted for role '${role}'.`,
+      code: 'ROLE_FORBIDDEN',
+    };
+  }
+
   // -------------------------------------------------------------
   // EFFECTIVE REPORT PERMISSIONS MATRIX GENERATION
   // -------------------------------------------------------------
@@ -899,7 +1274,7 @@ class EffectiveAccessEngineClass {
     getAllReports().forEach((r) => reportsMap.set(r.ReturnKey, r));
     try {
       configService.getReports().forEach((r) => {
-        if (!reportsMap.has(r.returnKey)) {
+        if (r.status === 'ACTIVE' && !reportsMap.has(r.returnKey)) {
           reportsMap.set(r.returnKey, {
             ReturnKey: r.returnKey,
             Code: r.code || r.returnKey,

@@ -80,9 +80,6 @@ export class BiometricServiceClass {
   // In-memory credential registry (SSOT for Phase 10 normalized credentials)
   private credentials: Map<string, BiometricCredentialRecord> = new Map();
 
-  // Revoked credentials archive (persisted to authoritatively detect revoked assertions)
-  private revokedCredentials: Map<string, BiometricCredentialRecord> = new Map();
-
   // Active challenges registry
   private challenges: Map<string, BiometricChallenge> = new Map();
 
@@ -91,9 +88,6 @@ export class BiometricServiceClass {
     string,
     { token: string; email: string; type: BiometricMethod | 'ALL'; expiresAt: number; consumed: boolean }
   > = new Map();
-
-  // Consumed reset tokens (anti-replay defense)
-  private consumedResetTokens: Set<string> = new Set();
 
   // Rate-limiting / lockout state per email
   private rateLimits: Map<string, BiometricRateLimitState> = new Map();
@@ -127,10 +121,8 @@ export class BiometricServiceClass {
    */
   public resetDevelopmentSeedData(): void {
     this.credentials.clear();
-    this.revokedCredentials.clear();
     this.challenges.clear();
     this.resetTokens.clear();
-    this.consumedResetTokens.clear();
     this.rateLimits.clear();
   }
 
@@ -746,19 +738,6 @@ export class BiometricServiceClass {
     );
 
     if (!enrolled) {
-      const revoked = Array.from(this.revokedCredentials.values()).find(
-        (c) => c.userId === user.id && c.type === 'FINGERPRINT' && c.credentialId === response.credentialId
-      );
-      if (revoked) {
-        const failInfo = this.recordFailure(norm, 'FINGERPRINT', 'Attempted authentication with revoked credential');
-        return {
-          success: false,
-          lockedOut: failInfo.isLocked,
-          remainingLockoutSec: failInfo.remainingLockoutSec,
-          message: 'Security alert: Biometric credential has been permanently revoked. Please complete a fresh enrollment.',
-        };
-      }
-
       const failInfo = this.recordFailure(norm, 'FINGERPRINT', 'Credential ID not registered to this account');
       return {
         success: false,
@@ -1339,13 +1318,13 @@ export class BiometricServiceClass {
   }
 
   /**
-  * Suspends a biometric credential (temporary hold without permanent revocation).
-  */
+   * Suspends a biometric credential (temporary hold without permanent revocation).
+   */
   public suspendCredential(
     email: string,
     credentialId: string,
     reason: string,
-    actorInput?: string | { email?: string; role?: string; id?: string; name?: string }
+    actorEmail?: string
   ): { success: boolean; message?: string } {
     const norm = email.toLowerCase().trim();
     const user = userService.getByEmail(norm);
@@ -1353,15 +1332,11 @@ export class BiometricServiceClass {
       return { success: false, message: 'User not found.' };
     }
 
-    const actorEmailStr = typeof actorInput === 'string' ? actorInput : actorInput?.email;
-    const isSelf = !actorEmailStr || actorEmailStr.toLowerCase().trim() === norm;
-    let actor = user;
-    if (!isSelf) {
-      const actorUser = userService.getByEmail(actorEmailStr!.toLowerCase().trim());
-      if (!actorUser || actorUser.role !== 'ADMIN') {
+    if (actorEmail && actorEmail.toLowerCase().trim() !== norm) {
+      const actor = userService.getByEmail(actorEmail.toLowerCase().trim());
+      if (!actor || actor.role !== 'ADMIN') {
         return { success: false, message: 'Security violation: Unauthorized credential suspension.' };
       }
-      actor = actorUser;
     }
 
     const cred = Array.from(this.credentials.values()).find(
@@ -1378,9 +1353,9 @@ export class BiometricServiceClass {
 
     cred.status = 'SUSPENDED';
     this.logAudit({
-      actorId: actor.id,
-      actorName: actor.name,
-      actorRole: actor.role,
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
       action: 'BIOMETRIC_SUSPENDED',
       entityId: user.id,
       details: `Suspended ${cred.type} biometric credential (${credentialId}) for ${user.email}. Reason: ${reason}`,
@@ -1390,13 +1365,14 @@ export class BiometricServiceClass {
   }
 
   /**
-   * Reactivates a suspended biometric credential with step-up password authentication.
+   * Resumes/reactivates a suspended biometric credential.
    */
-  public reactivateCredential(
+  public resumeCredential(
     email: string,
     credentialId: string,
-    password?: string,
-    actorInput?: string | { email?: string; role?: string; id?: string; name?: string }
+    reason: string = 'User resumed credential',
+    actorEmail?: string,
+    password?: string
   ): { success: boolean; message?: string } {
     const norm = email.toLowerCase().trim();
     const user = userService.getByEmail(norm);
@@ -1404,22 +1380,10 @@ export class BiometricServiceClass {
       return { success: false, message: 'User not found.' };
     }
 
-    // Check if permanently revoked in active or archived credentials
-    const isRevokedInArchive = Array.from(this.revokedCredentials.values()).some(
-      (c) => c.userId === user.id && c.credentialId === credentialId
-    );
-    const existingCred = Array.from(this.credentials.values()).find(
-      (c) => c.userId === user.id && c.credentialId === credentialId
-    );
-    if (isRevokedInArchive || (existingCred && existingCred.status === 'REVOKED')) {
-      return { success: false, message: 'Permanently revoked credential cannot be reactivated.' };
-    }
-
-    const actorEmailStr = typeof actorInput === 'string' ? actorInput : actorInput?.email;
-    const isSelf = !actorEmailStr || actorEmailStr.toLowerCase().trim() === norm;
+    const isSelf = !actorEmail || actorEmail.toLowerCase().trim() === norm;
     let actor = user;
     if (!isSelf) {
-      const actorUser = userService.getByEmail(actorEmailStr!.toLowerCase().trim());
+      const actorUser = userService.getByEmail(actorEmail!.toLowerCase().trim());
       if (!actorUser || actorUser.role !== 'ADMIN') {
         return { success: false, message: 'Security violation: Unauthorized credential reactivation.' };
       }
@@ -1431,42 +1395,31 @@ export class BiometricServiceClass {
       if (requiredPw !== password) {
         return { success: false, message: 'Invalid password. Step-up authentication required to reactivate credential.' };
       }
-    } else {
-      return { success: false, message: 'Password required for step-up reactivation.' };
     }
 
-    if (!existingCred) {
+    const cred = Array.from(this.credentials.values()).find(
+      (c) => c.userId === user.id && c.credentialId === credentialId
+    );
+
+    if (!cred) {
       return { success: false, message: 'Credential not found.' };
     }
 
-    if (existingCred.status !== 'SUSPENDED') {
-      return { success: false, message: `Cannot reactivate credential that is currently in ${existingCred.status} state.` };
+    if (cred.status !== 'SUSPENDED') {
+      return { success: false, message: `Cannot resume credential that is currently in ${cred.status} state.` };
     }
 
-    existingCred.status = 'ENROLLED';
+    cred.status = 'ENROLLED';
     this.logAudit({
       actorId: actor.id,
       actorName: actor.name,
       actorRole: actor.role,
-      action: 'BIOMETRIC_REACTIVATED',
+      action: 'BIOMETRIC_RESUMED',
       entityId: user.id,
-      details: `Reactivated suspended ${existingCred.type} biometric credential (${credentialId}) for ${user.email}.`,
+      details: `Resumed suspended ${cred.type} biometric credential (${credentialId}) for ${user.email}. Reason: ${reason}`,
     });
 
     return { success: true, message: `Biometric credential reactivated successfully.` };
-  }
-
-  /**
-   * Resumes a suspended credential (alias for reactivateCredential).
-   */
-  public resumeCredential(
-    email: string,
-    credentialId: string,
-    reason: string = 'User resumed credential',
-    actorInput?: string | { email?: string; role?: string; id?: string; name?: string },
-    password?: string
-  ): { success: boolean; message?: string } {
-    return this.reactivateCredential(email, credentialId, password, actorInput);
   }
 
   /**
@@ -1476,7 +1429,7 @@ export class BiometricServiceClass {
     email: string,
     credentialId: string,
     reason: string,
-    actorInput?: string | { email?: string; role?: string; id?: string; name?: string },
+    actorEmail?: string,
     password?: string
   ): { success: boolean; message?: string; credential?: BiometricCredentialRecord } {
     const norm = email.toLowerCase().trim();
@@ -1485,11 +1438,10 @@ export class BiometricServiceClass {
       return { success: false, message: 'User not found.' };
     }
 
-    const actorEmailStr = typeof actorInput === 'string' ? actorInput : actorInput?.email;
-    const isSelf = !actorEmailStr || actorEmailStr.toLowerCase().trim() === norm;
+    const isSelf = !actorEmail || actorEmail.toLowerCase().trim() === norm;
     let actor = user;
     if (!isSelf) {
-      const actorUser = userService.getByEmail(actorEmailStr!.toLowerCase().trim());
+      const actorUser = userService.getByEmail(actorEmail!.toLowerCase().trim());
       if (!actorUser || actorUser.role !== 'ADMIN') {
         return { success: false, message: 'Security violation: Cross-user credential revocation unauthorized.' };
       }
@@ -1504,17 +1456,11 @@ export class BiometricServiceClass {
       }
     }
 
-    let foundKey: string | undefined;
-    let cred: BiometricCredentialRecord | undefined;
-    for (const [key, c] of this.credentials.entries()) {
-      if (c.userId === user.id && c.credentialId === credentialId) {
-        foundKey = key;
-        cred = c;
-        break;
-      }
-    }
+    const cred = Array.from(this.credentials.values()).find(
+      (c) => c.userId === user.id && c.credentialId === credentialId
+    );
 
-    if (!cred || !foundKey) {
+    if (!cred) {
       return { success: false, message: 'Credential not found.' };
     }
 
@@ -1525,10 +1471,6 @@ export class BiometricServiceClass {
     cred.status = 'REVOKED';
     cred.revokedAt = new Date().toISOString();
     cred.revocationReason = reason;
-
-    // Move to archived revoked map and remove from active credentials
-    this.credentials.delete(foundKey);
-    this.revokedCredentials.set(foundKey, cred);
 
     // Synchronize removal with userService
     if (user.biometricCredentials) {
@@ -1550,11 +1492,11 @@ export class BiometricServiceClass {
   /**
    * Updates/renames friendly device label for an authenticator.
    */
-  public updateDeviceLabel(
+  public renameDeviceLabel(
     email: string,
     credentialId: string,
     newLabel: string,
-    actorInput?: string | { email?: string; role?: string; id?: string; name?: string }
+    actorEmail?: string
   ): { success: boolean; message?: string; credential?: BiometricCredentialRecord } {
     const norm = email.toLowerCase().trim();
     const user = userService.getByEmail(norm);
@@ -1562,15 +1504,11 @@ export class BiometricServiceClass {
       return { success: false, message: 'User not found.' };
     }
 
-    const actorEmailStr = typeof actorInput === 'string' ? actorInput : actorInput?.email;
-    const isSelf = !actorEmailStr || actorEmailStr.toLowerCase().trim() === norm;
-    let actor = user;
-    if (!isSelf) {
-      const actorUser = userService.getByEmail(actorEmailStr!.toLowerCase().trim());
-      if (!actorUser || actorUser.role !== 'ADMIN') {
+    if (actorEmail && actorEmail.toLowerCase().trim() !== norm) {
+      const actor = userService.getByEmail(actorEmail.toLowerCase().trim());
+      if (!actor || actor.role !== 'ADMIN') {
         return { success: false, message: 'Security violation: Unauthorized device renaming.' };
       }
-      actor = actorUser;
     }
 
     const cred = Array.from(this.credentials.values()).find(
@@ -1597,10 +1535,10 @@ export class BiometricServiceClass {
     }
 
     this.logAudit({
-      actorId: actor.id,
-      actorName: actor.name,
-      actorRole: actor.role,
-      action: 'BIOMETRIC_DEVICE_RENAMED',
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      action: 'BIOMETRIC_DEVICE_UPDATED',
       entityId: user.id,
       details: `Renamed biometric device (${credentialId}) from "${oldLabel}" to "${trimmed}" for ${user.email}`,
     });
@@ -1608,134 +1546,57 @@ export class BiometricServiceClass {
     return { success: true, message: `Device renamed to "${trimmed}".`, credential: cred };
   }
 
-  /**
-   * Alias for updateDeviceLabel
-   */
-  public renameDeviceLabel(
-    email: string,
-    credentialId: string,
-    newLabel: string,
-    actorInput?: string | { email?: string; role?: string; id?: string; name?: string }
-  ): { success: boolean; message?: string; credential?: BiometricCredentialRecord } {
-    return this.updateDeviceLabel(email, credentialId, newLabel, actorInput);
-  }
-
-  /**
-   * Retrieves safe, sanitized credential metadata with zero raw biometrics or private keys.
-   */
-  public getSafeCredentialMetadata(email: string): Array<{
-    credentialId: string;
-    credentialIdMasked: string;
-    type: BiometricMethod;
-    status: BiometricLifecycleState;
-    deviceLabel: string;
-    algorithm: string;
-    enrolledAt: string;
-    lastUsedAt?: string;
-    counter?: number;
-    transports?: string[];
-  }> {
-    const norm = email.toLowerCase().trim();
-    const user = userService.getByEmail(norm);
-    if (!user) return [];
-
-    const creds = Array.from(this.credentials.values()).filter((c) => c.userId === user.id);
-
-    return creds.map((c) => ({
-      credentialId: c.credentialId,
-      credentialIdMasked:
-        c.credentialId.length > 8
-          ? `${c.credentialId.slice(0, 4)}...${c.credentialId.slice(-4)}`
-          : `${c.credentialId}...`,
-      type: c.type,
-      status: c.status,
-      deviceLabel: c.deviceLabel || (c.type === 'FACE' ? 'Front Optical Camera' : 'Platform Passkey'),
-      algorithm: c.type === 'FINGERPRINT' ? 'ES256 WebAuthn Platform' : 'HMAC-SHA256 Spatial Template',
-      enrolledAt: c.enrolledAt,
-      lastUsedAt: c.lastUsedAt,
-      counter: c.counter,
-      transports: c.transports,
-    }));
-  }
-
-  /**
-   * Retrieves security overview with contextual recovery guidance for Security Center.
-   */
-  public getSecurityOverview(
-    email: string,
-    actorInput?: string | { email?: string; role?: string; id?: string; name?: string }
-  ): {
-    email: string;
-    userId: string;
-    faceState: 'ENROLLED' | 'SUSPENDED' | 'NOT_ENROLLED';
-    fingerprintState: 'ENROLLED' | 'SUSPENDED' | 'NOT_ENROLLED';
-    credentials: ReturnType<BiometricServiceClass['getSafeCredentialMetadata']>;
-    recoveryGuidance: Array<{
-      category: 'CAMERA_FAIL' | 'LOST_DEVICE' | 'PASSKEY_SYNC' | 'GENERAL';
-      title: string;
-      description: string;
-    }>;
-  } {
-    const norm = email.toLowerCase().trim();
-    const user = userService.getByEmail(norm);
-    if (!user) {
-      throw new Error('User not found.');
-    }
-
-    const actorEmailStr = typeof actorInput === 'string' ? actorInput : actorInput?.email;
-    const actorRole = typeof actorInput === 'object' ? actorInput?.role : undefined;
-    const isSelf = !actorEmailStr || actorEmailStr.toLowerCase().trim() === norm;
-
-    if (!isSelf) {
-      const actorUser = actorEmailStr ? userService.getByEmail(actorEmailStr.toLowerCase().trim()) : null;
-      const effectiveRole = actorUser?.role || actorRole;
-      if (effectiveRole !== 'ADMIN') {
-        throw new Error('Unauthorized access to security overview');
-      }
-    }
-
-    const safeCreds = this.getSafeCredentialMetadata(norm);
-    const faceCred = safeCreds.find((c) => c.type === 'FACE');
-    const fpCred = safeCreds.find((c) => c.type === 'FINGERPRINT');
-
-    const faceState = faceCred ? (faceCred.status === 'ENROLLED' ? 'ENROLLED' : 'SUSPENDED') : 'NOT_ENROLLED';
-    const fingerprintState = fpCred ? (fpCred.status === 'ENROLLED' ? 'ENROLLED' : 'SUSPENDED') : 'NOT_ENROLLED';
-
-    const recoveryGuidance: Array<{
-      category: 'CAMERA_FAIL' | 'LOST_DEVICE' | 'PASSKEY_SYNC' | 'GENERAL';
-      title: string;
-      description: string;
-    }> = [
-      {
-        category: 'CAMERA_FAIL',
-        title: 'Optical Camera Troubleshooting',
-        description: 'Ensure camera permissions are enabled in browser settings and lighting is sufficient.',
-      },
-      {
-        category: 'LOST_DEVICE',
-        title: 'Lost or Stolen Authenticator Key',
-        description: 'Immediately initiate a biometric credential reset with step-up password authorization.',
-      },
-      {
-        category: 'PASSKEY_SYNC',
-        title: 'Passkey Device Synchronization',
-        description: 'Hardware platform passkeys are bound to this workstation. Re-enroll if migrating hardware.',
-      },
-    ];
-
-    return {
-      email: user.email,
-      userId: user.id,
-      faceState,
-      fingerprintState,
-      credentials: safeCreds,
-      recoveryGuidance,
-    };
-  }
-
   public resetRateLimit(email: string): void {
     const norm = email.toLowerCase().trim();
     this.rateLimits.delete(norm);
+  }
+
+  /**
+   * Checks for existing fingerprint and face enrollment records in the user profile.
+   * Prevents unnecessary reset attempts if no prior biometric data exists.
+   */
+  public checkBiometricEnrollment(emailOrUserId: string): {
+    hasEnrolledBiometrics: boolean;
+    hasFaceId: boolean;
+    hasFingerprint: boolean;
+    enrolledCount: number;
+    methods: ('FACE' | 'FINGERPRINT')[];
+    user?: UserAccount;
+  } {
+    const norm = (emailOrUserId || '').toLowerCase().trim();
+    const user = userService.getByEmail(norm) || userService.getById(norm);
+    if (!user) {
+      return {
+        hasEnrolledBiometrics: false,
+        hasFaceId: false,
+        hasFingerprint: false,
+        enrolledCount: 0,
+        methods: [],
+      };
+    }
+
+    const userCreds = Array.from(this.credentials.values()).filter(
+      (c) => c.userId === user.id && (c.status === 'ENROLLED' || c.status === 'SUSPENDED')
+    );
+    const hasFaceId =
+      userCreds.some((c) => c.type === 'FACE') ||
+      Boolean(user.biometricCredentials?.some((c) => c.type === 'FACE'));
+    const hasFingerprint =
+      userCreds.some((c) => c.type === 'FINGERPRINT') ||
+      Boolean(user.biometricCredentials?.some((c) => c.type === 'FINGERPRINT'));
+
+    const methods: ('FACE' | 'FINGERPRINT')[] = [];
+    if (hasFaceId) methods.push('FACE');
+    if (hasFingerprint) methods.push('FINGERPRINT');
+
+    return {
+      hasEnrolledBiometrics: methods.length > 0,
+      hasFaceId,
+      hasFingerprint,
+      enrolledCount: methods.length,
+      methods,
+      user,
+    };
   }
 
   /**
@@ -1869,18 +1730,9 @@ export class BiometricServiceClass {
     // Password is valid - reset failure counter
     this.recordSuccess(norm);
 
-    // 5. Check if fingerprint or/and face enrollment has been done previously
-    const userCreds = Array.from(this.credentials.values()).filter(
-      (c) => c.userId === user.id && (c.status === 'ENROLLED' || c.status === 'SUSPENDED')
-    );
-    const hasFaceId =
-      userCreds.some((c) => c.type === 'FACE') ||
-      Boolean(user.biometricCredentials?.some((c) => c.type === 'FACE'));
-    const hasFingerprint =
-      userCreds.some((c) => c.type === 'FINGERPRINT') ||
-      Boolean(user.biometricCredentials?.some((c) => c.type === 'FINGERPRINT'));
-
-    const hasEnrolledBiometrics = hasFaceId || hasFingerprint;
+    // 5. Check if fingerprint or/and face enrollment has been done previously via checkBiometricEnrollment
+    const enrollment = this.checkBiometricEnrollment(user.id);
+    const { hasFaceId, hasFingerprint, hasEnrolledBiometrics } = enrollment;
 
     if (!hasEnrolledBiometrics) {
       return {
@@ -1914,7 +1766,7 @@ export class BiometricServiceClass {
     type: BiometricMethod | 'ALL',
     password: string,
     reason: string,
-    actorInput?: string | { email?: string; role?: string; id?: string; name?: string }
+    actorEmail?: string
   ): {
     success: boolean;
     resetToken?: string;
@@ -1924,11 +1776,6 @@ export class BiometricServiceClass {
     lockedOut?: boolean;
     remainingLockoutSec?: number;
     remainingAttempts?: number;
-    existingEnrollment?: {
-      hasFace: boolean;
-      hasFingerprint: boolean;
-      credentialsCount: number;
-    };
   } {
     const norm = (email || '').toLowerCase().trim();
 
@@ -1980,19 +1827,18 @@ export class BiometricServiceClass {
     }
 
     // 3. Cross-user deletion / IDOR defense: Actor must be target user or ADMIN
-    const actorEmailStr = typeof actorInput === 'string' ? actorInput : actorInput?.email;
-    const isSelf = !actorEmailStr || actorEmailStr.toLowerCase().trim() === norm;
+    const isSelf = !actorEmail || actorEmail.toLowerCase().trim() === norm;
     let actor = user;
     if (!isSelf) {
-      const actorUser = userService.getByEmail(actorEmailStr!.toLowerCase().trim());
+      const actorUser = userService.getByEmail(actorEmail!.toLowerCase().trim());
       if (!actorUser || actorUser.role !== 'ADMIN') {
         this.logAudit({
-          actorId: actorUser?.id || (typeof actorInput === 'object' ? actorInput.id : undefined) || 'unknown',
-          actorName: actorUser?.name || (typeof actorInput === 'object' ? actorInput.name : undefined) || 'Unauthorized Actor',
-          actorRole: (actorUser?.role || (typeof actorInput === 'object' ? actorInput.role : undefined) || 'UNKNOWN') as any,
-          action: 'BIOMETRIC_RESET_REJECTED',
+          actorId: actorUser?.id || 'unknown',
+          actorName: actorUser?.name || 'Unauthorized Actor',
+          actorRole: actorUser?.role || 'UNKNOWN',
+          action: 'BIOMETRIC_AUTH_FAILURE',
           entityId: user.id,
-          details: `Rejected unauthorized cross-user reset attempt for ${user.email} by ${actorEmailStr}. Cross-user deletion prohibited.`,
+          details: `Rejected unauthorized cross-user reset attempt for ${user.email} by ${actorEmail}. Cross-user deletion prohibited.`,
         });
         return {
           success: false,
@@ -2024,7 +1870,7 @@ export class BiometricServiceClass {
     if (type === 'ALL' && !hasFace && !hasFp) {
       return {
         success: false,
-        message: 'No active or existing biometric credentials enrolled on this account to reset.',
+        message: 'No active biometric credentials enrolled on this account.',
       };
     }
 
@@ -2037,7 +1883,7 @@ export class BiometricServiceClass {
         actorId: actor.id,
         actorName: actor.name,
         actorRole: actor.role,
-        action: 'BIOMETRIC_RESET_REJECTED',
+        action: 'BIOMETRIC_AUTH_FAILURE',
         entityId: user.id,
         details: `Failed step-up password authentication for biometric reset on account ${user.email}. Attempt ${failResult.failedAttempts}/${MAX_FAILED_ATTEMPTS}.`,
       });
@@ -2094,11 +1940,6 @@ export class BiometricServiceClass {
       message: 'Reset authorization granted. Ready to purge credentials and begin fresh re-enrollment.',
       consequences,
       targetUser: { id: user.id, name: user.name, email: user.email },
-      existingEnrollment: {
-        hasFace,
-        hasFingerprint: hasFp,
-        credentialsCount: userCreds.length,
-      },
     };
   }
 
@@ -2109,27 +1950,18 @@ export class BiometricServiceClass {
   public executeReset(
     email: string,
     resetToken: string,
-    actorInput?: string | { email?: string; role?: string; id?: string; name?: string }
+    actorEmail?: string
   ): {
     success: boolean;
     message?: string;
     revokedCount?: number;
     resetType?: BiometricMethod | 'ALL';
     canReEnroll?: boolean;
-    freshChallengeId?: string;
-    reEnrollmentMethod?: BiometricMethod;
   } {
     const norm = email.toLowerCase().trim();
     const user = userService.getByEmail(norm);
     if (!user) {
       return { success: false, message: 'User not found.' };
-    }
-
-    if (this.consumedResetTokens.has(resetToken)) {
-      return {
-        success: false,
-        message: 'Security alert: Reset token has already been consumed (replay attack detected).',
-      };
     }
 
     const tokenRecord = this.resetTokens.get(resetToken);
@@ -2148,7 +1980,6 @@ export class BiometricServiceClass {
 
     // Atomically consume token (Single-use replay defense)
     tokenRecord.consumed = true;
-    this.consumedResetTokens.add(resetToken);
     this.resetTokens.delete(resetToken);
 
     // Purge credentials matching type
@@ -2163,7 +1994,6 @@ export class BiometricServiceClass {
       c.revokedAt = nowStr;
       c.revocationReason = 'User reset and re-enrollment requested';
       this.credentials.delete(key);
-      this.revokedCredentials.set(key, c);
       revokedCount++;
     }
 
@@ -2177,14 +2007,7 @@ export class BiometricServiceClass {
     // Reset rate limits
     this.recordSuccess(norm);
 
-    const actorEmailStr = typeof actorInput === 'string' ? actorInput : actorInput?.email;
-    const actorUser = actorEmailStr ? userService.getByEmail(actorEmailStr.toLowerCase().trim()) : null;
-    const actor = actorUser || {
-      id: (typeof actorInput === 'object' ? actorInput.id : undefined) || user.id,
-      name: (typeof actorInput === 'object' ? actorInput.name : undefined) || user.name,
-      role: (typeof actorInput === 'object' ? actorInput.role : undefined) || user.role,
-      email: actorEmailStr || user.email,
-    };
+    const actor = actorEmail ? (userService.getByEmail(actorEmail.toLowerCase().trim()) || user) : user;
     this.logAudit({
       actorId: actor.id,
       actorName: actor.name,
@@ -2203,16 +2026,11 @@ export class BiometricServiceClass {
       details: `Biometric credentials purged and reset to NOT_ENROLLED for ${user.email} (${tokenRecord.type}). Account ready for fresh enrollment.`,
     });
 
-    const reEnrollmentMethod: BiometricMethod = tokenRecord.type === 'ALL' || tokenRecord.type === 'FINGERPRINT' ? 'FINGERPRINT' : 'FACE';
-    const challengeRecord = this.createChallenge(norm, reEnrollmentMethod, 'REGISTRATION');
-
     return {
       success: true,
       revokedCount,
       resetType: tokenRecord.type,
       canReEnroll: true,
-      freshChallengeId: challengeRecord.id,
-      reEnrollmentMethod,
       message: 'Biometric credentials successfully reset. You may now perform a fresh enrollment.',
     };
   }

@@ -40,7 +40,7 @@ import {
 } from '../utils/deviceCapabilities.ts';
 
 interface LoginPageProps {
-  onLoginSuccess: (user: UserSession, redirectTab?: string) => void;
+  onLoginSuccess: (user: UserSession, redirectTab?: string, rememberMe?: boolean) => void;
   onNavigateRegister: () => void;
 }
 
@@ -51,6 +51,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   // Phase 18: Inputs default to empty with guiding placeholders for production
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false); // Phase 29: Unchecked by default (Req 1)
   const [showPassword, setShowPassword] = useState(false);
   const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
   const [isSmartResetModalOpen, setIsSmartResetModalOpen] = useState(false);
@@ -315,13 +316,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ email: email.trim(), password, rememberMe }),
       });
 
       const data = await res.json();
       if (res.ok && data.success && data.user) {
         triggerHaptic('success');
-        onLoginSuccess(data.user, data.redirectTab);
+        onLoginSuccess(data.user, data.redirectTab, rememberMe);
         return;
       } else if (data.message) {
         setErrorMessage(data.message);
@@ -329,10 +330,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       }
     } catch {
       // Standalone / client-side fallback
-      const localResult = userService.login(email.trim(), password);
+      const localResult = userService.login(email.trim(), password, rememberMe);
       if (localResult.success && localResult.user) {
         triggerHaptic('success');
-        onLoginSuccess(localResult.user, localResult.redirectTab);
+        onLoginSuccess(localResult.user, localResult.redirectTab, rememberMe);
         return;
       } else {
         setErrorMessage(localResult.message || 'Login failed. Please verify credentials.');
@@ -681,6 +682,28 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+            </div>
+
+            {/* Phase 29: Remember Me Checkbox (Req 1, 2) - Unchecked by Default */}
+            <div className="flex items-center justify-between py-1">
+              <label
+                htmlFor="remember-me-checkbox"
+                className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-700 dark:text-slate-300 font-medium group"
+              >
+                <input
+                  id="remember-me-checkbox"
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 dark:border-slate-700 text-ob-indigo-600 focus:ring-ob-indigo-500 dark:focus:ring-ob-indigo-400 bg-slate-50 dark:bg-slate-800 transition-colors cursor-pointer"
+                />
+                <span className="group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
+                  Remember Me on this device
+                </span>
+              </label>
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 hidden sm:inline">
+                30-day persistent session
+              </span>
             </div>
 
             <button

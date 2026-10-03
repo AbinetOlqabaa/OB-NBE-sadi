@@ -13,6 +13,15 @@ import type {
   DynamicAreaDefinition,
   DynamicColumnDefinition,
   SubmissionSnapshot,
+  LibraryFilterOptions,
+  LibraryQueryResult,
+  LibraryLifecycleState,
+  RemovalImpactAssessment,
+  GovernedRemovalResult,
+} from '../types/regulatory.ts';
+import {
+  deriveLibraryLifecycleState,
+  isFinalSubmittedStatus,
 } from '../types/regulatory.ts';
 import { getReportByKey } from '../data/report-registry.ts';
 import { getDepartmentForReport } from '../data/organizationHierarchy.ts';
@@ -20,6 +29,8 @@ import { WorkflowEngine } from './workflowEngine.ts';
 import { FormulaEngine } from '../utils/formulaEngine.ts';
 import { ValidationEngine } from '../utils/validationEngine.ts';
 import type { ValidationSummary } from '../utils/validationEngine.ts';
+import { ValidationRemediationService } from './validationRemediationService.ts';
+import type { NormalizedValidationSummary, ProposedFix } from '../types/remediation.ts';
 import { nbeAdapter } from './nbeAdapter.ts';
 import type { DeliveryResult } from './nbeAdapter.ts';
 import { auditService } from './auditService.ts';
@@ -29,6 +40,7 @@ import { configService } from './configService.ts';
 import { indexedDbStorage } from './indexedDbStorage.ts';
 import { effectiveAccessEngine } from './effectiveAccessEngine.ts';
 import { realtimeSsotEngine } from './realtimeSsotEngine.ts';
+import { BrowserSafeEventEmitter } from '../utils/browserEventEmitter.ts';
 
 // Default Demo User Accounts with verified Oromia Bank departments
 export const DEMO_USERS: UserSession[] = [
@@ -104,6 +116,17 @@ export const DEMO_USERS: UserSession[] = [
 
 class SubmissionServiceClass {
   private submissions: Map<string, ReportSubmission> = new Map();
+  public readonly events = new BrowserSafeEventEmitter();
+
+  public onSubmissionChange(callback: (sub: ReportSubmission) => void): () => void {
+    this.events.on('submissionChange', callback);
+    return () => this.events.off('submissionChange', callback);
+  }
+
+  public onSubmissionsUpdated(callback: (subs: ReportSubmission[]) => void): () => void {
+    this.events.on('submissionsUpdated', callback);
+    return () => this.events.off('submissionsUpdated', callback);
+  }
 
   constructor() {
     this.seedInitialSubmissions();
@@ -578,6 +601,10 @@ class SubmissionServiceClass {
    * 2. Maker must be assigned to the department that owns this report,
    *    OR have been granted special access by the Administrator.
    */
+  public createDraft(reportKey: string, user: UserSession): ReportSubmission {
+    return this.createSubmission(reportKey, user);
+  }
+
   public createSubmission(reportKey: string, user: UserSession): ReportSubmission {
     const report = getReportByKey(reportKey);
     if (!report) {
@@ -695,7 +722,10 @@ class SubmissionServiceClass {
       idempotencyKey: 'idemp_' + id + '_v1',
     };
 
-    const isOnline = typeof navigator !== 'undefined' ? Boolean(navigator.onLine) : true;
+    const isOnline =
+      typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean'
+        ? navigator.onLine
+        : true;
     submission.syncStatus = isOnline ? 'SYNCED' : 'PENDING_SYNC';
     submission.isOfflineDraft = !isOnline;
     submission.offlineSavedAt = now;
@@ -709,6 +739,11 @@ class SubmissionServiceClass {
     }).catch((err) => {
       console.warn('[SubmissionService] IndexedDB saveDraft warning:', err);
     });
+
+    try {
+      this.events.emit('submissionChange', submission);
+      this.events.emit('submissionsUpdated', this.getAll());
+    } catch (_) {}
 
     auditService.log({
       actorId: user.id,
@@ -869,7 +904,10 @@ class SubmissionServiceClass {
       integrityHash,
     };
 
-    const isOnline = typeof navigator !== 'undefined' ? Boolean(navigator.onLine) : true;
+    const isOnline =
+      typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean'
+        ? navigator.onLine
+        : true;
     const updated: ReportSubmission = {
       ...sub,
       version: nextVersion,
@@ -898,6 +936,27 @@ class SubmissionServiceClass {
     }).catch((err) => {
       console.warn('[SubmissionService] IndexedDB updateDraft save warning:', err);
     });
+
+    try {
+      this.events.emit('submissionChange', updated);
+      this.events.emit('submissionsUpdated', this.getAll());
+      realtimeSsotEngine.publishEvent({
+        eventType: 'REPORT_CHANGED',
+        action: 'UPDATE_DRAFT',
+        domain: 'REPORT',
+        entityId: updated.id,
+        topic: `REPORT:${updated.reportKey}`,
+        actor: { id: user.id, name: user.name, role: user.role },
+        summary: `Report ${updated.reportKey} draft updated to v${nextVersion} by ${user.name}`,
+        payload: {
+          submissionId: updated.id,
+          reportKey: updated.reportKey,
+          version: updated.version,
+          updatedAt: updated.updatedAt,
+          status: updated.status,
+        },
+      });
+    } catch (_) {}
 
     auditService.log({
       actorId: user.id,
@@ -1038,7 +1097,10 @@ class SubmissionServiceClass {
       idempotencyKey: 'idemp_' + newId + '_v1',
     };
 
-    const isOnline = typeof navigator !== 'undefined' ? Boolean(navigator.onLine) : true;
+    const isOnline =
+      typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean'
+        ? navigator.onLine
+        : true;
     newSubmission.syncStatus = isOnline ? 'SYNCED' : 'PENDING_SYNC';
     newSubmission.isOfflineDraft = !isOnline;
     newSubmission.offlineSavedAt = now;
@@ -1082,6 +1144,80 @@ class SubmissionServiceClass {
 
     const report = this.getEffectiveTemplate(sub);
     return ValidationEngine.validateReport(report, sub.values, sub.dynamicRows);
+  }
+
+  /**
+   * Phase 24: Authoritative Server-Side Validation Normalization & Remediation Inspection.
+   * Returns fully normalized validation items with 4-part explanations and auto-fix descriptors.
+   */
+  public validateSubmissionNormalized(id: string): NormalizedValidationSummary {
+    const sub = this.submissions.get(id);
+    if (!sub) throw new Error(`Submission not found: ${id}`);
+
+    const report = this.getEffectiveTemplate(sub);
+    return ValidationRemediationService.normalizeReportValidation(report, sub.values, sub.dynamicRows);
+  }
+
+  /**
+   * Phase 24: Authoritative Remediation Auto-Fix Execution.
+   * Applies deterministic fix, writes updated draft, re-runs validation, and logs safe audit trail.
+   */
+  public remediateSubmission(
+    id: string,
+    proposedFix: ProposedFix,
+    user: UserSession,
+    expectedVersion?: number
+  ): {
+    updatedSubmission: ReportSubmission;
+    revalidationSummary: NormalizedValidationSummary;
+    auditEntry: any;
+  } {
+    const sub = this.submissions.get(id);
+    if (!sub) throw new Error(`Submission not found: ${id}`);
+
+    // Concurrency conflict check
+    if (expectedVersion !== undefined && expectedVersion !== sub.version) {
+      throw new Error(
+        `CONCURRENT_MODIFICATION_CONFLICT: Submission ${id} has been modified concurrently (expected v${expectedVersion}, current server state is v${sub.version}). Please reload before applying remediation.`
+      );
+    }
+
+    // Role and status verification: only editable by Maker while in DRAFT or CORRECTION_REQUIRED
+    const evalResult = effectiveAccessEngine.evaluateAccess(user, sub.reportKey, 'CREATE_DRAFT', sub);
+    if (!evalResult.allowed && sub.makerId !== user.id && sub.makerName !== user.name) {
+      throw new Error(`REMEDIATION_FORBIDDEN: You do not have permission to modify submission ${id}.`);
+    }
+
+    if (sub.status !== 'DRAFT' && sub.status !== 'CORRECTION_REQUIRED') {
+      throw new Error(`CANNOT_REMEDIATE_SUBMITTED_REPORT: Submission ${id} is in '${sub.status}' state and cannot be modified.`);
+    }
+
+    const report = this.getEffectiveTemplate(sub);
+
+    const { updatedValues, updatedDynamicRows, revalidationSummary, auditEntry } =
+      ValidationRemediationService.applyAutoFix(
+        report,
+        sub.values,
+        sub.dynamicRows,
+        proposedFix,
+        user,
+        sub.id
+      );
+
+    // Save draft with updated values and bumped version
+    const updatedSubmission = this.updateDraft(
+      sub.id,
+      updatedValues,
+      updatedDynamicRows,
+      user,
+      sub.version
+    );
+
+    return {
+      updatedSubmission,
+      revalidationSummary,
+      auditEntry,
+    };
   }
 
   /**
@@ -1206,6 +1342,15 @@ class SubmissionServiceClass {
    * 1. Only CHECKERS can review. (Makers cannot approve; Admins are read-only).
    * 2. Checker must be from the same department, OR have Admin-granted special access.
    */
+  public approveSubmission(
+    id: string,
+    user: UserSession,
+    commentText?: string,
+    expectedVersion?: number
+  ): ReportSubmission {
+    return this.reviewSubmission(id, 'APPROVE', user, commentText);
+  }
+
   public reviewSubmission(
     id: string,
     action: 'APPROVE' | 'REJECT' | 'REQUEST_CORRECTION',
@@ -1565,12 +1710,40 @@ class SubmissionServiceClass {
     return this.updateDraft(id, targetSnapshot.values, targetSnapshot.dynamicRows, user);
   }
 
+  public getAuthorizedSubmission(id: string, user: UserSession): ReportSubmission {
+    const sub = this.submissions.get(id);
+    if (!sub) {
+      throw new Error(`Submission not found: ${id}`);
+    }
+    const evalResult = effectiveAccessEngine.evaluateSubmissionAccess(user, sub, 'VIEW');
+    if (!evalResult.allowed) {
+      throw new Error(`Forbidden: ${evalResult.reason}`);
+    }
+    return sub;
+  }
+
   public deleteSubmission(id: string, user: UserSession): boolean {
     const sub = this.submissions.get(id);
-    if (!sub) return false;
+    if (!sub) {
+      throw new Error(`Submission not found: ${id}`);
+    }
 
-    if (sub.status !== 'DRAFT' && sub.status !== 'CORRECTION_REQUIRED' && sub.status !== 'FAILED' && user.role !== 'ADMIN') {
-      throw new Error(`Cannot delete submission in ${sub.status} state. Only drafts can be deleted.`);
+    // Evaluate effective access engine rules
+    const evalResult = effectiveAccessEngine.evaluateSubmissionAccess(user, sub, 'DELETE_DRAFT');
+    if (!evalResult.allowed) {
+      throw new Error(`Forbidden: ${evalResult.reason}`);
+    }
+
+    // Absolute prohibition: Submitted records must never be hard-deleted under any circumstances (Requirement 6, 7)
+    const isSubmitted =
+      isFinalSubmittedStatus(sub.status) ||
+      sub.status === 'PENDING_CHECKER' ||
+      sub.status === 'APPROVED' ||
+      sub.status === 'SENT';
+    if (isSubmitted) {
+      throw new Error(
+        `Cannot delete submission in ${sub.status} state. Under NBE Directive BSD/03/2020, submitted reports are permanent immutable records.`
+      );
     }
 
     this.submissions.delete(id);
@@ -1584,9 +1757,631 @@ class SubmissionServiceClass {
       entityType: 'REPORT_SUBMISSION',
       entityId: id,
       correlationId: 'corr_' + id,
-      details: `${user.role} ${user.name} deleted draft ${sub.reportKey}`,
+      details: `${user.role} ${user.name} deleted draft ${sub.reportKey} (v${sub.version})`,
     });
     return true;
+  }
+
+  /**
+   * Phase 26: Calculates administrative removal impact and generates regulatory warning.
+   * Enforces Requirement 8: "Any destructive Admin action requires authorization, impact warning, explicit confirmation and audit logging."
+   */
+  public getRemovalImpactAssessment(id: string, user: UserSession): RemovalImpactAssessment {
+    const sub = this.submissions.get(id);
+    if (!sub) {
+      throw new Error(`Submission not found: ${id}`);
+    }
+    if (user.role !== 'ADMIN') {
+      throw new Error('Forbidden: Only Administrators can assess regulatory removal impact.');
+    }
+
+    const report = getReportByKey(sub.reportKey);
+    const reportTitle = report?.Title || sub.reportKey;
+    const lState = deriveLibraryLifecycleState(sub);
+    const isSubmitted =
+      isFinalSubmittedStatus(sub.status) ||
+      sub.status === 'PENDING_CHECKER' ||
+      sub.status === 'APPROVED' ||
+      sub.status === 'SENT';
+
+    const snapshotsCount = (sub.historicalSnapshots || []).length;
+    const relatedAudit = auditService.query({ entityId: id });
+    const auditCount = relatedAudit.length;
+
+    const regulatoryWarning = isSubmitted
+      ? `REGULATORY RETENTION NOTICE: Return ${sub.reportKey} (v${sub.version}, status: ${sub.status}) is a submitted statutory dossier. Under NBE Directive BSD/03/2020 and Banking Supervision Record Retention Mandates, submitted regulatory records CANNOT be destroyed. Governed archiving or voiding will retain all ${snapshotsCount} historical snapshots, formulas, data rows, and audit trails while retiring the dossier from active operational workflows.`
+      : `UNCOMMITTED DRAFT WARNING: Return ${sub.reportKey} is an unsubmitted draft. Permanent deletion will discard all uncommitted form fields and dynamic rows. An authoritative audit entry will be logged.`;
+
+    return {
+      submissionId: sub.id,
+      reportKey: sub.reportKey,
+      reportTitle,
+      department: sub.department || 'Prudential Reporting',
+      status: sub.status,
+      lifecycleState: lState,
+      version: sub.version,
+      nbeReferenceNumber: sub.nbeReferenceNumber,
+      isSubmittedRecord: isSubmitted,
+      canHardDelete: !isSubmitted,
+      governedActionRequired: isSubmitted ? 'GOVERNED_ARCHIVE_VOID' : 'HARD_DELETE_DRAFT',
+      regulatoryWarning,
+      affectedSnapshotsCount: snapshotsCount,
+      affectedAuditEntriesCount: auditCount,
+      confirmedRequired: true,
+      minReasonLength: 10,
+    };
+  }
+
+  /**
+   * Phase 26: Governed Administrative Record Removal & Archiving Engine
+   * Requirements 7 & 8:
+   * "If Admin is authorized to remove submitted records, prefer archive/void/soft-delete where regulatory retention requires it. Never silently destroy regulatory history."
+   * "Any destructive Admin action requires authorization, impact warning, explicit confirmation and audit logging."
+   */
+  public adminGovernedRemoveSubmission(
+    id: string,
+    user: UserSession,
+    options: { action: 'ARCHIVE' | 'VOID' | 'DELETE_DRAFT'; reason: string; confirmed: boolean }
+  ): GovernedRemovalResult {
+    const sub = this.submissions.get(id);
+    if (!sub) {
+      throw new Error(`Submission not found: ${id}`);
+    }
+
+    // Role verification
+    if (user.role !== 'ADMIN') {
+      throw new Error('Forbidden: Only Administrator can perform governed removal or archiving.');
+    }
+
+    // Confirmation verification
+    if (!options.confirmed) {
+      throw new Error('Explicit confirmation is required for governed administrative removal.');
+    }
+
+    // Justification verification (min 10 chars)
+    if (!options.reason || options.reason.trim().length < 10) {
+      throw new Error(
+        'A detailed regulatory justification of at least 10 characters is mandatory for administrative removal.'
+      );
+    }
+
+    const isSubmitted =
+      isFinalSubmittedStatus(sub.status) ||
+      sub.status === 'PENDING_CHECKER' ||
+      sub.status === 'APPROVED' ||
+      sub.status === 'SENT';
+
+    const now = new Date().toISOString();
+    const reasonText = options.reason.trim();
+
+    // If submitted record, HARD DELETE is strictly forbidden
+    if (isSubmitted) {
+      if (options.action === 'DELETE_DRAFT') {
+        throw new Error(
+          `Cannot hard-delete submitted regulatory submission ${id}. Under NBE Directive BSD/03/2020, submitted reports are permanent immutable records. Governed archiving or voiding must be used to preserve regulatory history.`
+        );
+      }
+
+      const targetStatus: SubmissionStatus = options.action === 'ARCHIVE' ? 'ARCHIVED' : 'VOIDED';
+      const prevStatus = sub.status;
+
+      // Capture archival snapshot
+      const valuesSnapshot = JSON.parse(JSON.stringify(sub.values || {}));
+      const dynamicSnapshot = JSON.parse(JSON.stringify(sub.dynamicRows || {}));
+      const tmpl =
+        sub.templateSnapshot || this.createTemplateSnapshot(this.getEffectiveTemplate(sub));
+      const integrityHash = this.computeIntegrityHash({
+        id: sub.id,
+        reportKey: sub.reportKey,
+        version: sub.version,
+        templateVersion: sub.templateVersion || 1,
+        values: valuesSnapshot,
+        status: targetStatus,
+      });
+
+      const archiveSnapshot: SubmissionSnapshot = {
+        snapshotId: `snap_${sub.id}_v${sub.version}_${targetStatus.toLowerCase()}_${Date.now()}`,
+        version: sub.version,
+        templateVersion: sub.templateVersion || 1,
+        dataVersion: sub.dataVersion || sub.version,
+        timestamp: now,
+        status: targetStatus,
+        capturedBy: user.name,
+        capturedByRole: user.role,
+        reason: `${targetStatus} by Administrator: ${reasonText}`,
+        values: valuesSnapshot,
+        dynamicRows: dynamicSnapshot,
+        templateSnapshot: tmpl,
+        structuralHash: sub.structuralHash,
+        integrityHash,
+      };
+
+      const updatedSub: ReportSubmission = {
+        ...sub,
+        status: targetStatus,
+        updatedAt: now,
+        isArchived: options.action === 'ARCHIVE',
+        archivedAt: options.action === 'ARCHIVE' ? now : sub.archivedAt,
+        archivedBy: options.action === 'ARCHIVE' ? user.id : sub.archivedBy,
+        archivedByName: options.action === 'ARCHIVE' ? user.name : sub.archivedByName,
+        archiveReason: options.action === 'ARCHIVE' ? reasonText : sub.archiveReason,
+        isVoided: options.action === 'VOID',
+        voidedAt: options.action === 'VOID' ? now : sub.voidedAt,
+        voidedBy: options.action === 'VOID' ? user.id : sub.voidedBy,
+        voidReason: options.action === 'VOID' ? reasonText : sub.voidReason,
+        historicalSnapshots: [...(sub.historicalSnapshots || []), archiveSnapshot],
+        comments: [
+          ...(sub.comments || []),
+          {
+            id: 'comm_' + Date.now(),
+            userId: user.id,
+            userName: user.name,
+            userRole: user.role as any,
+            comment: `Governed administrative action: ${targetStatus} (Previous status: ${prevStatus}). Justification: ${reasonText}`,
+            action: targetStatus as any,
+            timestamp: now,
+          },
+        ],
+      };
+
+      this.submissions.set(id, updatedSub);
+      indexedDbStorage.saveDraft(updatedSub).catch(() => {});
+
+      const auditAction =
+        options.action === 'ARCHIVE' ? 'ADMIN_ARCHIVE_SUBMISSION' : 'ADMIN_VOID_SUBMISSION';
+      const auditLog = auditService.log({
+        actorId: user.id,
+        actorName: user.name,
+        actorRole: 'ADMIN',
+        action: auditAction as any,
+        entityType: 'REPORT_SUBMISSION',
+        entityId: id,
+        correlationId: 'corr_gov_rem_' + id,
+        details: `Administrator ${user.name} governed ${options.action.toLowerCase()} on submitted report ${sub.reportKey} (v${sub.version}, NBE Ref: ${sub.nbeReferenceNumber || 'N/A'}). Justification: ${reasonText}`,
+      });
+
+      try {
+        realtimeSsotEngine.publishEvent({
+          eventType: 'WORKFLOW_STATUS_CHANGED',
+          action: targetStatus,
+          domain: 'WORKFLOW',
+          entityId: id,
+          topic: 'WORKFLOWS',
+          actor: { id: user.id, name: user.name, role: user.role },
+          summary: `Report ${sub.reportKey} ${targetStatus} by Administrator ${user.name}`,
+          payload: {
+            submissionId: id,
+            reportKey: sub.reportKey,
+            status: targetStatus,
+            reason: reasonText,
+          },
+        });
+      } catch (_) {}
+
+      return {
+        success: true,
+        action: options.action,
+        submissionId: id,
+        reportKey: sub.reportKey,
+        status: targetStatus,
+        message: `Submission ${id} successfully marked as ${targetStatus}. Full regulatory history and snapshots permanently retained.`,
+        regulatoryAuditId: auditLog.id,
+        preservedSnapshotsCount: (updatedSub.historicalSnapshots || []).length,
+      };
+    } else {
+      // Unsubmitted draft deletion
+      this.submissions.delete(id);
+      indexedDbStorage.deleteDraft(id).catch(() => {});
+
+      const auditLog = auditService.log({
+        actorId: user.id,
+        actorName: user.name,
+        actorRole: 'ADMIN',
+        action: 'ADMIN_DELETE_DRAFT' as any,
+        entityType: 'REPORT_SUBMISSION',
+        entityId: id,
+        correlationId: 'corr_del_draft_' + id,
+        details: `Administrator ${user.name} removed unsubmitted draft ${sub.reportKey} (v${sub.version}). Justification: ${reasonText}`,
+      });
+
+      return {
+        success: true,
+        action: 'DELETE_DRAFT',
+        submissionId: id,
+        reportKey: sub.reportKey,
+        status: 'DRAFT',
+        message: `Unsubmitted draft ${id} permanently removed by Administrator.`,
+        regulatoryAuditId: auditLog.id,
+        preservedSnapshotsCount: 0,
+      };
+    }
+  }
+
+  /**
+   * Phase 26: Flag/Unflag review record with comment and audit logging.
+   * Requirement 1: "Checker Library: show only authorized review records and provide view/review/comment/flag/request-correction/approve actions"
+   */
+  public flagSubmission(
+    id: string,
+    user: UserSession,
+    reason: string,
+    flag: boolean = true
+  ): ReportSubmission {
+    const sub = this.submissions.get(id);
+    if (!sub) throw new Error(`Submission not found: ${id}`);
+
+    // Access check: Checker (within review scope), Auditor, Admin
+    const evalResult = effectiveAccessEngine.evaluateSubmissionAccess(user, sub, 'FLAG');
+    if (!evalResult.allowed) {
+      throw new Error(`Flag denied: ${evalResult.reason}`);
+    }
+
+    const now = new Date().toISOString();
+    const updatedSub: ReportSubmission = {
+      ...sub,
+      flagged: flag,
+      flagReason: flag ? reason : undefined,
+      flaggedBy: flag ? user.name : undefined,
+      flaggedAt: flag ? now : undefined,
+      comments: [
+        ...(sub.comments || []),
+        {
+          id: 'comm_' + Date.now(),
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role as any,
+          comment: flag
+            ? `[FLAGGED FOR ATTENTION] Reason: ${reason}`
+            : `[FLAG CLEARED] Reason: ${reason}`,
+          action: 'FLAG' as any,
+          timestamp: now,
+        },
+      ],
+      updatedAt: now,
+    };
+
+    this.submissions.set(id, updatedSub);
+    indexedDbStorage.saveDraft(updatedSub).catch(() => {});
+
+    auditService.log({
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      action: (flag ? 'FLAG_SUBMISSION' : 'UNFLAG_SUBMISSION') as any,
+      entityType: 'REPORT_SUBMISSION',
+      entityId: id,
+      correlationId: 'corr_flag_' + id,
+      details: `${user.role} ${user.name} ${flag ? 'flagged' : 'unflagged'} submission ${sub.reportKey}. Notes: ${reason}`,
+    });
+
+    return updatedSub;
+  }
+
+  /**
+   * Phase 26: Add review/audit comment to submission.
+   */
+  public addSubmissionComment(
+    id: string,
+    user: UserSession,
+    commentText: string,
+    category: 'GENERAL' | 'AUDIT' | 'CHECKER_QUERY' | 'CORRECTION_NOTE' = 'GENERAL'
+  ): ReportSubmission {
+    const sub = this.submissions.get(id);
+    if (!sub) throw new Error(`Submission not found: ${id}`);
+
+    const evalResult = effectiveAccessEngine.evaluateSubmissionAccess(user, sub, 'COMMENT');
+    if (!evalResult.allowed) {
+      throw new Error(`Comment denied: ${evalResult.reason}`);
+    }
+
+    const now = new Date().toISOString();
+    const updatedSub: ReportSubmission = {
+      ...sub,
+      comments: [
+        ...(sub.comments || []),
+        {
+          id: 'comm_' + Date.now(),
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role as any,
+          comment: `[${category}] ${commentText}`,
+          action: 'COMMENT' as any,
+          timestamp: now,
+        },
+      ],
+      updatedAt: now,
+    };
+
+    this.submissions.set(id, updatedSub);
+    indexedDbStorage.saveDraft(updatedSub).catch(() => {});
+
+    auditService.log({
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      action: 'ADD_COMMENT' as any,
+      entityType: 'REPORT_SUBMISSION',
+      entityId: id,
+      correlationId: 'corr_comment_' + id,
+      details: `${user.role} ${user.name} commented on ${sub.reportKey} [${category}]: ${commentText}`,
+    });
+
+    return updatedSub;
+  }
+
+  /**
+   * Authoritative Library Query Engine (Requirement 1, 2, 4, 5, 7, 9, 10)
+   * Enforces backend server-side permission filtering across all 4 roles:
+   * - MAKER: ownership, department boundary, report types, special access grants
+   * - CHECKER: authorized review records, department matching, linked depts, special access
+   * - AUDITOR: institutional read-only inspection visibility
+   * - ADMIN: comprehensive institutional monitoring & governed lifecycle oversight
+   */
+  public queryLibrary(user: UserSession, options: LibraryFilterOptions = {}): LibraryQueryResult {
+    const {
+      search = '',
+      lifecycleState = 'ALL',
+      status = 'ALL',
+      reportType,
+      frequency,
+      startDate,
+      endDate,
+      sortBy = 'updatedAt',
+      sortOrder = 'desc',
+      page = 1,
+      pageSize = 10,
+    } = options;
+
+    // 1. Authoritative Backend Access Control (Requirement 4, 5, 10)
+    // Never fetch all records and hide unauthorized records only in the frontend.
+    const all = this.getAll();
+    let authorized: ReportSubmission[] = [];
+
+    if (user.role === 'ADMIN' || user.role === 'AUDITOR') {
+      // Oversight roles have visibility across all institutional records
+      authorized = all;
+    } else if (user.role === 'MAKER') {
+      // Maker ONLY sees records within their authorized scope:
+      // Allowed report types (home dept + M:N linked + direct assignment + special access)
+      const allowedKeys = new Set(userService.getAllowedReportKeysForUser(user));
+      const userDept = (user.department || '').trim().toLowerCase();
+
+      authorized = all.filter((s) => {
+        // Must be an authorized report type
+        if (!allowedKeys.has(s.reportKey)) return false;
+        // Must either be owned by the user, or belong to user's department, or covered by active special access
+        const isOwner = s.makerId === user.id;
+        const isDept = s.department && s.department.trim().toLowerCase() === userDept;
+        const hasSpecial = user.specialAccessGrants?.some((g) => {
+          const { active } = effectiveAccessEngine.isGrantActive(g);
+          if (!active) return false;
+          if (g.scope === 'ALL_REPORTS') return true;
+          if (g.reportKey && g.reportKey.toLowerCase() === s.reportKey.toLowerCase()) return true;
+          if (
+            g.department &&
+            s.department &&
+            g.department.toLowerCase() === s.department.toLowerCase()
+          )
+            return true;
+          if (
+            Array.isArray(g.departments) &&
+            s.department &&
+            g.departments.some((d) => d.toLowerCase() === s.department!.toLowerCase())
+          )
+            return true;
+          return false;
+        });
+        return isOwner || isDept || hasSpecial;
+      });
+    } else if (user.role === 'CHECKER') {
+      // Checker ONLY sees authorized review records within Checker's authorized scope
+      const userDept = (user.department || '').trim().toLowerCase();
+
+      authorized = all.filter((s) => {
+        const report = getReportByKey(s.reportKey);
+        const ssotReport = configService.getReportDefinition(s.reportKey);
+        const defaultDept = ssotReport?.defaultDepartmentId
+          ? configService.getDepartmentById(ssotReport.defaultDepartmentId)
+          : null;
+        const reportPrimaryDept = (
+          s.department ||
+          report?.department ||
+          defaultDept?.name ||
+          getDepartmentForReport(s.reportKey) ||
+          ''
+        )
+          .trim()
+          .toLowerCase();
+
+        const linkedDepts = departmentService.getDepartmentsForReport(s.reportKey);
+        const configLinkedDepts = (ssotReport?.departmentIds || []).map((id) => {
+          const d = configService.getDepartmentById(id);
+          return (d ? d.name : id).trim().toLowerCase();
+        });
+        const isHomeDept = Boolean(
+          userDept &&
+            (userDept === reportPrimaryDept ||
+              (s.department && userDept === s.department.toLowerCase()))
+        );
+        const isLinkedDept = Boolean(
+          userDept &&
+            (linkedDepts.some((d) => d.toLowerCase() === userDept) ||
+              configLinkedDepts.includes(userDept))
+        );
+        const directAssignments = effectiveAccessEngine.getUserDirectReportAssignments(user.id);
+        const isDirectAssignment = directAssignments.includes(s.reportKey);
+
+        const hasSpecial = user.specialAccessGrants?.some((g) => {
+          const { active } = effectiveAccessEngine.isGrantActive(g);
+          if (!active) return false;
+          if (g.scope === 'ALL_REPORTS') return true;
+          if (g.reportKey && g.reportKey.toLowerCase() === s.reportKey.toLowerCase()) return true;
+          if (
+            g.department &&
+            (g.department.toLowerCase() === reportPrimaryDept ||
+              (s.department && g.department.toLowerCase() === s.department.toLowerCase()))
+          )
+            return true;
+          if (
+            Array.isArray(g.departments) &&
+            g.departments.some(
+              (d) =>
+                d.toLowerCase() === reportPrimaryDept ||
+                (s.department && d.toLowerCase() === s.department.toLowerCase())
+            )
+          )
+            return true;
+          return false;
+        });
+
+        const hasAuthority = isHomeDept || isLinkedDept || isDirectAssignment || hasSpecial;
+        return hasAuthority;
+      });
+    } else {
+      authorized = [];
+    }
+
+    // 2. Compute authoritative stats on ALL authorized records before narrowing by search/filters
+    const stats = {
+      all: authorized.length,
+      draft: 0,
+      inProgress: 0,
+      returned: 0,
+      submitted: 0,
+      reusedCopy: 0,
+      archived: 0,
+      voided: 0,
+    };
+
+    for (const sub of authorized) {
+      const lState = deriveLibraryLifecycleState(sub);
+      if (lState === 'DRAFT') stats.draft++;
+      else if (lState === 'IN_PROGRESS') stats.inProgress++;
+      else if (lState === 'RETURNED') stats.returned++;
+      else if (lState === 'SUBMITTED') stats.submitted++;
+      else if (lState === 'REUSED_COPY') stats.reusedCopy++;
+      else if (lState === 'ARCHIVED') stats.archived++;
+      else if (lState === 'VOIDED') stats.voided++;
+    }
+
+    // 3. Filter by search query (server-side, operates strictly on authorized records)
+    let filtered = authorized;
+    const q = search.trim().toLowerCase();
+    if (q) {
+      filtered = filtered.filter((s) => {
+        const report = getReportByKey(s.reportKey);
+        const title = report?.Title?.toLowerCase() || '';
+        const desc = report?.Description?.toLowerCase() || '';
+        const cat = report?.Category?.toLowerCase() || '';
+        const rKey = s.reportKey.toLowerCase();
+        const maker = (s.makerName || '').toLowerCase();
+        const nbeRef = (s.nbeReferenceNumber || '').toLowerCase();
+        const dept = (s.department || '').toLowerCase();
+        const subId = s.id.toLowerCase();
+
+        return (
+          subId.includes(q) ||
+          rKey.includes(q) ||
+          title.includes(q) ||
+          desc.includes(q) ||
+          cat.includes(q) ||
+          maker.includes(q) ||
+          nbeRef.includes(q) ||
+          dept.includes(q)
+        );
+      });
+    }
+
+    // 4. Filter by lifecycle state
+    if (lifecycleState && lifecycleState !== 'ALL') {
+      filtered = filtered.filter((s) => deriveLibraryLifecycleState(s) === lifecycleState);
+    }
+
+    // 5. Filter by raw status
+    if (status && status !== 'ALL') {
+      filtered = filtered.filter((s) => s.status === status);
+    }
+
+    // 6. Filter by reportType / category
+    if (reportType && reportType !== 'ALL') {
+      filtered = filtered.filter((s) => {
+        if (s.reportKey === reportType) return true;
+        const report = getReportByKey(s.reportKey);
+        return report?.Category === reportType || report?.department === reportType;
+      });
+    }
+
+    // 7. Filter by frequency
+    if (frequency && frequency !== 'ALL') {
+      filtered = filtered.filter((s) => {
+        const report = getReportByKey(s.reportKey);
+        return report?.Frequency === frequency;
+      });
+    }
+
+    // 8. Filter by date range
+    if (startDate) {
+      const startMs = new Date(startDate).getTime();
+      filtered = filtered.filter((s) => new Date(s.updatedAt || s.createdAt).getTime() >= startMs);
+    }
+    if (endDate) {
+      const endMs = new Date(endDate).getTime() + 86400000; // inclusive of whole day
+      filtered = filtered.filter((s) => new Date(s.updatedAt || s.createdAt).getTime() <= endMs);
+    }
+
+    // 9. Sorting
+    filtered.sort((a, b) => {
+      let valA: any;
+      let valB: any;
+      switch (sortBy) {
+        case 'createdAt':
+          valA = new Date(a.createdAt).getTime();
+          valB = new Date(b.createdAt).getTime();
+          break;
+        case 'reportKey':
+          valA = a.reportKey;
+          valB = b.reportKey;
+          break;
+        case 'title':
+          valA = getReportByKey(a.reportKey)?.Title || a.reportKey;
+          valB = getReportByKey(b.reportKey)?.Title || b.reportKey;
+          break;
+        case 'status':
+          valA = a.status;
+          valB = b.status;
+          break;
+        case 'version':
+          valA = a.version;
+          valB = b.version;
+          break;
+        case 'updatedAt':
+        default:
+          valA = new Date(a.updatedAt || a.createdAt).getTime();
+          valB = new Date(b.updatedAt || b.createdAt).getTime();
+          break;
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    // 10. Server-side Pagination
+    const total = filtered.length;
+    const p = Math.max(1, Number(page) || 1);
+    const sz = Math.max(1, Number(pageSize) || 10);
+    const totalPages = Math.max(1, Math.ceil(total / sz));
+    const startIdx = (p - 1) * sz;
+    const items = filtered.slice(startIdx, startIdx + sz);
+
+    return {
+      items,
+      total,
+      page: p,
+      pageSize: sz,
+      totalPages,
+      stats,
+    };
   }
 
   /**

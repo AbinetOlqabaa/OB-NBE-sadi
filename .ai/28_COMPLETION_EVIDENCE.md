@@ -29,7 +29,6 @@
 | **GATE-17** | Relationship & Authoritative Access Engine | `npx tsx src/tests/run-all-tests.ts` | **PASSED** | 10/10 parts passed, 4-role matrix, assignments, cache. |
 | **GATE-18** | Configuration Governance, Versioning & Rollback | `npx tsx src/tests/run-all-tests.ts` | **PASSED** | 57 assertions, impact analysis, dual-review 4-eyes, official explain audit. |
 | **GATE-19** | Phase 10 Biometric Architecture & Security Foundation | `npx tsx src/tests/run-all-tests.ts` | **PASSED** | 10 test suites, 45 assertions, lifecycle states, challenge replay defense, WebAuthn counters, protected face engine, rate limiting lockout, step-up reset, migration. |
-| **GATE-20** | 24_DECISIONS.md ADR Acceptance Testing (ADR-001 to ADR-005) | `npx tsx src/tests/adr-decisions-acceptance.test.ts` | **PASSED** | 5 ADRs verified: Metadata engine, safe AST formula engine + payload injection resistance, full-stack server + Vite mount, persistent store + non-repudiation audit, and 6-scenario NBE simulator. |
 
 ---
 

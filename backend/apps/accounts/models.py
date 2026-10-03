@@ -206,3 +206,32 @@ class DepartmentMember(models.Model):
     def __str__(self):
         primary_tag = " (Primary)" if self.is_primary else ""
         return f"{self.user.email} in {self.department.name}{primary_tag}"
+
+
+class PersistentSession(models.Model):
+    """
+    Phase 29: Server-controlled persistent 'Remember Me' authentication session
+    with defined maximum lifetime (30 days), cryptographic token hashing,
+    and instantaneous revocation on logout, password change, or account disablement.
+    """
+    id = models.CharField(max_length=64, primary_key=True)
+    user = models.ForeignKey(UserAccount, on_delete=models.CASCADE, related_name='persistent_sessions')
+    token_hash = models.CharField(max_length=64, db_index=True)
+    device_info = models.CharField(max_length=255, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    last_used_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    is_revoked = models.BooleanField(default=False, db_index=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_reason = models.CharField(max_length=64, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Persistent Remember Me Session'
+        verbose_name_plural = 'Persistent Remember Me Sessions'
+
+    def __str__(self):
+        status_str = "REVOKED" if self.is_revoked else "ACTIVE"
+        return f"PersistentSession({self.id}) for {self.user.email} [{status_str}]"
+

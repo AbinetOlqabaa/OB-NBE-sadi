@@ -1368,11 +1368,6 @@ export function getReportByKey(key: string): ReportMetadata | undefined {
 
 export const getReportDefinition = getReportByKey;
 
-export const reportRegistry: Record<string, ReportMetadata> = new Proxy({} as Record<string, ReportMetadata>, {
-  get: (_, prop: string) => getReportByKey(prop),
-  has: (_, prop: string) => Boolean(getReportByKey(prop)),
-});
-
 export function getReportsByCategory(category: string): ReportMetadata[] {
   return getAllReports().filter((r) => r.Category === category);
 }

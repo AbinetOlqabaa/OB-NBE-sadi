@@ -23,6 +23,7 @@ import {
   Laptop,
   Network,
   Activity,
+  BookOpen,
 } from 'lucide-react';
 import { ViewTab } from './Sidebar.tsx';
 import { ReportMetadata, UserSession } from '../types/regulatory.ts';
@@ -78,6 +79,15 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       allowedRoles: ['ADMIN', 'MAKER'],
     },
     {
+      id: 'LIBRARY' as ViewTab,
+      title: 'Maker Library & Dossiers',
+      subtitle: 'Authoritative archive of drafts, in-progress returns, and submitted dossiers',
+      icon: BookOpen,
+      shortcut: `${modKey}+L`,
+      category: 'Views',
+      allowedRoles: ['ADMIN', 'MAKER', 'CHECKER', 'AUDITOR'],
+    },
+    {
       id: 'CHECKER_INBOX' as ViewTab,
       title: 'Checker Inbox',
       subtitle: 'Review submissions, 4-eyes approval & NBE delivery',
@@ -120,7 +130,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       icon: Database,
       shortcut: `${modKey}+Shift+S`,
       category: 'Views',
-      allowedRoles: ['ADMIN', 'MAKER', 'CHECKER'],
+      allowedRoles: ['ADMIN'],
     },
     {
       id: 'AUDIT_TRAIL' as ViewTab,
@@ -129,7 +139,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       icon: History,
       shortcut: `${modKey}+Shift+L`,
       category: 'Views',
-      allowedRoles: ['ADMIN', 'MAKER', 'CHECKER', 'NBE_OFFICER'],
+      allowedRoles: ['ADMIN', 'MAKER', 'CHECKER', 'AUDITOR', 'NBE_OFFICER'],
     },
     {
       id: 'SYSTEM_HEALTH' as ViewTab,
@@ -138,7 +148,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       icon: Activity,
       shortcut: `${modKey}+Shift+H`,
       category: 'Views',
-      allowedRoles: ['ADMIN', 'MAKER', 'CHECKER', 'NBE_OFFICER'],
+      allowedRoles: ['ADMIN'],
     },
     {
       id: 'DOCUMENTATION' as ViewTab,
@@ -147,7 +157,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       icon: HelpCircle,
       shortcut: `${modKey}+Shift+D`,
       category: 'Views',
-      allowedRoles: ['ADMIN', 'MAKER', 'CHECKER', 'NBE_OFFICER'],
+      allowedRoles: ['ADMIN', 'MAKER', 'CHECKER', 'AUDITOR', 'NBE_OFFICER'],
     },
   ].filter((a) => a.allowedRoles.includes(currentUser.role));
 

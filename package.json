@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "NODE_ENV=development tsx server.ts",
     "dev:vite": "vite --host 0.0.0.0 --port 5173",
     "serve": "vite --host 0.0.0.0 --port 5173",
     "build": "vite build",

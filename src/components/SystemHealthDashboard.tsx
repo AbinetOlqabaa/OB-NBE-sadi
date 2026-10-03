@@ -92,6 +92,10 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
   } = useBiometricAuth();
 
   const loadCapabilities = useCallback(async () => {
+    if (currentUser?.role !== 'ADMIN') {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     try {
       const [caps, hw] = await Promise.all([
@@ -106,7 +110,7 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [currentUser.email]);
+  }, [currentUser?.email, currentUser?.role]);
 
   useEffect(() => {
     loadCapabilities();
@@ -252,6 +256,18 @@ export const SystemHealthDashboard: React.FC<SystemHealthDashboardProps> = ({
     if (deviceCaps?.isBiometricEnabledByUser !== false) score += 10;
     return Math.min(score, 100);
   };
+
+  if (currentUser?.role !== 'ADMIN') {
+    return (
+      <div className="p-8 max-w-lg mx-auto my-12 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl space-y-3">
+        <ShieldAlert className="w-10 h-10 mx-auto text-amber-500" />
+        <h3 className="font-bold text-slate-900 dark:text-white text-base">Access Restricted</h3>
+        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+          Authentication Hardware & System Health telemetry is reserved strictly for Platform Administrators per Phase 28 supervisory governance.
+        </p>
+      </div>
+    );
+  }
 
   const healthScore = calculateHealthScore();
 

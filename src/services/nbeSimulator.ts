@@ -4,6 +4,22 @@
  */
 
 import type { SimulationScenarioConfig } from '../types/regulatory.ts';
+import { configService } from './configService.ts';
+import { nbeEndpointRegistry } from './nbeEndpointRegistry.ts';
+
+export interface SimulatorReportOption {
+  returnKey: string;
+  code: string;
+  name: string;
+  version: number;
+  status: string;
+  frequency: string;
+  category: string;
+  endpointUrl: string;
+  environmentTarget: string;
+  fieldCount: number;
+  dynamicAreaCount: number;
+}
 
 export interface ReceivedReportRecord {
   id: string;
@@ -430,6 +446,150 @@ class NBESimulatorService {
       statusCode: 200,
       body: respBody,
     };
+  }
+
+  /**
+   * Discovers all available reports from SSOT for dynamic simulator registration.
+   * Filters out RETIRED reports to preserve active selection hygiene (Req 9, 14).
+   */
+  public getAvailableReports(): SimulatorReportOption[] {
+    const allDefs = configService.getReports();
+    const activeAndDraftDefs = allDefs.filter((d) => d.status !== 'RETIRED');
+
+    return activeAndDraftDefs.map((def) => {
+      const activeVer = def.activeVersionSnapshot;
+      const versions = configService.getReportVersions(def.returnKey);
+      const latestVer = activeVer || (versions.length > 0 ? versions[versions.length - 1] : undefined);
+      const endpointConfig = nbeEndpointRegistry.getEndpointForReport(def.returnKey, latestVer?.versionNumber);
+
+      const fieldCount = latestVer?.fields?.length || 0;
+      const dynamicAreaCount = latestVer?.columns?.length || 0;
+
+      return {
+        returnKey: def.returnKey,
+        code: def.code || def.returnKey,
+        name: def.name,
+        version: latestVer?.versionNumber || def.currentVersion || 1,
+        status: def.status,
+        frequency: def.frequency,
+        category: def.category,
+        endpointUrl: endpointConfig.endpointUrl,
+        environmentTarget: endpointConfig.environmentTarget,
+        fieldCount,
+        dynamicAreaCount,
+      };
+    });
+  }
+
+  /**
+   * Generates a canonical NBE JSON payload using active template metadata.
+   * Strips sample values while honoring field data types and explicit structural defaults (Req 9).
+   */
+  public buildSimulatedPayload(reportKey: string, versionNumber?: number): any {
+    const normalizedKey = (reportKey || '').trim().toUpperCase();
+    const def = configService.getReportDefinition(normalizedKey);
+    if (!def) {
+      throw new Error(`Report definition '${normalizedKey}' not found.`);
+    }
+
+    const versions = configService.getReportVersions(normalizedKey);
+    let targetVersion = versionNumber ? versions.find((v) => v.versionNumber === versionNumber) : def.activeVersionSnapshot;
+    if (!targetVersion && versions.length > 0) {
+      targetVersion = versions[versions.length - 1];
+    }
+
+    const fields = targetVersion?.fields || [];
+    const columns = targetVersion?.columns || [];
+
+    const returnItems = fields.map((f, idx) => {
+      let mockVal: any;
+      if (f.defaultValue !== undefined && f.defaultValue !== '') {
+        mockVal = f.defaultValue;
+      } else if (f.dataType === 'NUMERIC') {
+        mockVal = (idx + 1) * 12500000;
+      } else if (f.dataType === 'DATE') {
+        mockVal = '2026-01-31';
+      } else {
+        mockVal = `OROMIA_${f.itemCode}_VAL`;
+      }
+      return {
+        Code: f.itemCode,
+        Value: mockVal,
+      };
+    });
+
+    const dynamicAreas = columns.length > 0 ? [
+      {
+        Area: 1,
+        Rows: [
+          columns.reduce((acc, col, cIdx) => {
+            acc[col.columnKey] = col.defaultValue !== undefined ? col.defaultValue : (col.dataType === 'NUMERIC' ? (cIdx + 1) * 500000 : `SAMPLE_${col.columnKey}`);
+            return acc;
+          }, {} as Record<string, any>)
+        ]
+      }
+    ] : [];
+
+    const finYear = def.finYear || 2026;
+    return {
+      ReturnKey: normalizedKey,
+      InstCode: def.instCode || '0000013',
+      FinYear: finYear,
+      StartDate: `${finYear}-01-01`,
+      EndDate: `${finYear}-01-31`,
+      ReturnItemsList: returnItems,
+      DynamicItemsList: dynamicAreas,
+    };
+  }
+
+  /**
+   * Simulates end-to-end report transmission through the dynamic endpoint route.
+   */
+  public async simulateReportTransmission(
+    reportKey: string,
+    options?: {
+      customPayload?: any;
+      scenarioOverride?: SimulationScenarioConfig['mode'];
+      idempotencyKey?: string;
+    }
+  ): Promise<{ statusCode: number; body: any; payload: any; headers: Record<string, string>; endpointConfig: any }> {
+    const normalizedKey = (reportKey || '').trim().toUpperCase();
+    const endpointConfig = nbeEndpointRegistry.getEndpointForReport(normalizedKey);
+    const payload = options?.customPayload || this.buildSimulatedPayload(normalizedKey);
+
+    const idempotencyKey = options?.idempotencyKey || `SIM_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const correlationId = `corr_sim_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+    const headers: Record<string, string> = {
+      'content-type': endpointConfig.contentType || 'application/json',
+      'idempotency-key': idempotencyKey,
+      'x-correlation-id': correlationId,
+      'x-institution-code': payload.InstCode || '0000013',
+      'x-nbe-environment': endpointConfig.environmentTarget,
+      'x-nbe-auth-profile': endpointConfig.authProfileRef,
+      'authorization': `Bearer NBE_${endpointConfig.authProfileRef.toUpperCase()}`,
+    };
+
+    let originalMode: SimulationScenarioConfig['mode'] | undefined;
+    if (options?.scenarioOverride) {
+      originalMode = this.scenario.mode;
+      this.scenario.mode = options.scenarioOverride;
+    }
+
+    try {
+      const result = await this.processSubmission(payload, headers);
+      return {
+        statusCode: result.statusCode,
+        body: result.body,
+        payload,
+        headers,
+        endpointConfig,
+      };
+    } finally {
+      if (originalMode) {
+        this.scenario.mode = originalMode;
+      }
+    }
   }
 }
 

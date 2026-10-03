@@ -96,7 +96,8 @@ export async function runPhase5VerificationHardeningTests() {
     { tab: 'CHECKER_INBOX', allowedRoles: ['ADMIN', 'CHECKER'] },
     { tab: 'AUDITOR_DASHBOARD', allowedRoles: ['ADMIN', 'AUDITOR'] },
     { tab: 'NBE_SIMULATOR', allowedRoles: ['ADMIN', 'CHECKER', 'AUDITOR'] },
-    { tab: 'PHASE2_SSOT', allowedRoles: ['ADMIN', 'MAKER', 'CHECKER', 'AUDITOR'] },
+    { tab: 'PHASE2_SSOT', allowedRoles: ['ADMIN'] },
+    { tab: 'SYSTEM_HEALTH', allowedRoles: ['ADMIN'] },
     { tab: 'AUDIT_TRAIL', allowedRoles: ['ADMIN', 'MAKER', 'CHECKER', 'AUDITOR'] },
   ];
 

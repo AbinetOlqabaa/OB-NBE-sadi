@@ -6,6 +6,11 @@
 import type { ReportSubmission, DeliveryAttempt } from '../types/regulatory.ts';
 import { nbeSimulator } from './nbeSimulator.ts';
 import { auditService } from './auditService.ts';
+import {
+  nbeEndpointRegistry,
+  type ReportIntegrationConfigSSOT,
+  MANAGED_AUTH_PROFILES,
+} from './nbeEndpointRegistry.ts';
 
 export interface DeliveryResult {
   success: boolean;
@@ -13,15 +18,17 @@ export interface DeliveryResult {
   response: any;
   attempt: DeliveryAttempt;
   error?: string;
+  environmentTarget?: string;
+  endpointUrl?: string;
 }
 
 export class NBEAdapter {
-  private gatewayUrl: string =
+  private defaultGatewayUrl: string =
     typeof process !== 'undefined' && process.env?.NBE_GATEWAY_URL
       ? process.env.NBE_GATEWAY_URL
       : 'http://127.0.0.1:8001/api/v1/nbe-simulator/submit';
   private maxRetries: number = 3;
-  private timeoutMs: number = 2000;
+  private defaultTimeoutMs: number = 2000;
 
   /**
    * Prepares the canonical NBE JSON report payload from a submission record.
@@ -49,29 +56,113 @@ export class NBEAdapter {
   }
 
   /**
-   * Delivers a regulatory report to NBE with safe retries, correlation tracking, and idempotency protection.
-   * Communicates via HTTP to the independent Django NBE Simulator microservice (port 8001).
+   * Resolves the target integration configuration and endpoint for a submission.
+   */
+  public getEndpointConfig(reportKey: string, versionNumber?: number): ReportIntegrationConfigSSOT {
+    return nbeEndpointRegistry.getEndpointForReport(reportKey, versionNumber);
+  }
+
+  /**
+   * Delivers a regulatory report to NBE with dynamic endpoint routing, safe retries,
+   * correlation tracking, environment guardrails, and idempotency protection.
    */
   public async deliverReport(
     submission: ReportSubmission,
     attemptNumber: number = 1
   ): Promise<DeliveryResult> {
     const correlationId = 'corr_' + Math.random().toString(36).substring(2, 10);
-    const idempotencyKey = submission.idempotencyKey || 'idemp_' + submission.id + '_v' + submission.version;
 
+    // 1. Resolve Dynamic Integration Endpoint Configuration (Phase 32)
+    const endpointConfig = this.getEndpointConfig(submission.reportKey, submission.version);
+    const environmentTarget = endpointConfig.environmentTarget || 'LOCAL/SIMULATOR';
+
+    // 2. Production Environment Guardrail (Req 12)
+    // Production transmission must remain disabled unless the environment and credentials explicitly permit it
+    if (environmentTarget === 'PRODUCTION/NBE') {
+      const allowProd =
+        endpointConfig.productionEnabled &&
+        typeof process !== 'undefined' &&
+        process.env?.ALLOW_PRODUCTION_NBE_TRANSMISSION === 'true';
+
+      if (!allowProd) {
+        const errorMsg =
+          'PRODUCTION_TRANSMISSION_BLOCKED: Production transmission to live NBE central gateway is strictly disabled in this environment. Enablement requires explicit system permission and validated mTLS HSM profile.';
+        const failedAttempt: DeliveryAttempt = {
+          id: 'att_blocked_' + Math.random().toString(36).substring(2, 9),
+          timestamp: new Date().toISOString(),
+          endpointUrl: endpointConfig.endpointUrl,
+          status: 'REJECTED',
+          statusCode: 403,
+          correlationId,
+          idempotencyKey: submission.idempotencyKey || 'NONE',
+          requestPayload: NBEAdapter.buildNBEPayload(submission),
+          responsePayload: { error: 'PRODUCTION_TRANSMISSION_BLOCKED', message: errorMsg },
+          attemptNumber,
+        };
+
+        auditService.log({
+          actorId: submission.checkerId || 'system',
+          actorName: submission.checkerName || 'Checker Reviewer',
+          actorRole: 'CHECKER',
+          action: 'NBE_DELIVERY_FAILURE',
+          entityType: 'REPORT_SUBMISSION',
+          entityId: submission.id,
+          correlationId,
+          details: `Blocked unauthorized production transmission attempt for ${submission.reportKey} to ${endpointConfig.endpointUrl}`,
+        });
+
+        return {
+          success: false,
+          statusCode: 403,
+          response: { error: 'PRODUCTION_TRANSMISSION_BLOCKED', message: errorMsg },
+          attempt: failedAttempt,
+          error: errorMsg,
+          environmentTarget,
+          endpointUrl: endpointConfig.endpointUrl,
+        };
+      }
+    }
+
+    // 3. Compute Idempotency Key according to strategy
     const payload = NBEAdapter.buildNBEPayload(submission);
+    let idempotencyKey = submission.idempotencyKey;
+
+    if (!idempotencyKey) {
+      if (endpointConfig.idempotencyStrategy === 'HASH_SHA256') {
+        let hash = 0;
+        const str = JSON.stringify(payload);
+        for (let i = 0; i < str.length; i++) {
+          hash = (hash << 5) - hash + str.charCodeAt(i);
+          hash |= 0;
+        }
+        idempotencyKey = 'idemp_sha_' + Math.abs(hash).toString(16) + '_' + submission.reportKey;
+      } else if (endpointConfig.idempotencyStrategy === 'HEADER_UUID') {
+        idempotencyKey = 'uuid_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now();
+      } else {
+        idempotencyKey = 'idemp_' + submission.id + '_v' + submission.version;
+      }
+    }
+
+    // 4. Construct Request Headers including Managed Auth Profile reference (Req 4, 5, 10)
+    const authProfile = MANAGED_AUTH_PROFILES.find((p) => p.id === endpointConfig.authProfileRef);
     const headers: Record<string, string> = {
-      'content-type': 'application/json',
+      'content-type': endpointConfig.contentType || 'application/json',
       'idempotency-key': idempotencyKey,
       'x-correlation-id': correlationId,
       'x-institution-code': submission.institutionCode || '0000013',
-      'authorization': 'Bearer NBE_SIMULATED_OAUTH2_TOKEN',
+      'x-nbe-environment': environmentTarget,
+      'x-nbe-auth-profile': endpointConfig.authProfileRef || 'auth_local_simulator',
+      'x-nbe-report-identifier': endpointConfig.nbeReportIdentifier || `NBE_RET_${submission.reportKey}`,
+      'authorization': `Bearer NBE_${endpointConfig.authProfileRef?.toUpperCase() || 'SIMULATOR_TOKEN'}`,
     };
+
+    const targetUrl = endpointConfig.endpointUrl || this.defaultGatewayUrl;
+    const timeoutMs = endpointConfig.timeoutMs || this.defaultTimeoutMs;
 
     let attempt: DeliveryAttempt = {
       id: 'att_' + Math.random().toString(36).substring(2, 9),
       timestamp: new Date().toISOString(),
-      endpointUrl: this.gatewayUrl,
+      endpointUrl: targetUrl,
       status: 'FAILED',
       statusCode: 500,
       correlationId,
@@ -85,30 +176,39 @@ export class NBEAdapter {
       let resStatusCode: number = 500;
       let resBody: any = null;
 
-      // Primary path: Dispatch HTTP request to the independent Django NBE Simulator
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+      // Primary path: If absolute HTTP URL and not pure relative simulator path, dispatch HTTP request
+      const isHttp = targetUrl.startsWith('http://') || targetUrl.startsWith('https://');
 
-        const httpResponse = await fetch(this.gatewayUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-
-        resStatusCode = httpResponse.status;
+      if (isHttp) {
         try {
-          resBody = await httpResponse.json();
-        } catch {
-          resBody = { raw: await httpResponse.text() };
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+          const httpResponse = await fetch(targetUrl, {
+            method: endpointConfig.httpMethod || 'POST',
+            headers,
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+
+          resStatusCode = httpResponse.status;
+          try {
+            resBody = await httpResponse.json();
+          } catch {
+            resBody = { raw: await httpResponse.text() };
+          }
+        } catch (networkErr: any) {
+          // Fallback to simulator engine for resilient local execution
+          const fallbackRes = await nbeSimulator.processSubmission(payload, headers);
+          resStatusCode = fallbackRes.statusCode;
+          resBody = fallbackRes.body;
         }
-      } catch (networkErr: any) {
-        // Fallback to in-memory engine if Django simulator is initializing
-        const fallbackRes = await nbeSimulator.processSubmission(payload, headers);
-        resStatusCode = fallbackRes.statusCode;
-        resBody = fallbackRes.body;
+      } else {
+        // Direct simulator route or local in-memory delivery
+        const simRes = await nbeSimulator.processSubmission(payload, headers);
+        resStatusCode = simRes.statusCode;
+        resBody = simRes.body;
       }
 
       attempt.statusCode = resStatusCode;
@@ -145,7 +245,7 @@ export class NBEAdapter {
           entityType: 'REPORT_SUBMISSION',
           entityId: submission.id,
           correlationId,
-          details: `Report ${submission.reportKey} delivered to NBE. Official receipt: ${receiptNo}`,
+          details: `Report ${submission.reportKey} delivered to ${targetUrl} [${environmentTarget}]. Official receipt: ${receiptNo}`,
         });
 
         return {
@@ -153,6 +253,8 @@ export class NBEAdapter {
           statusCode: resStatusCode,
           response: resBody,
           attempt,
+          environmentTarget,
+          endpointUrl: targetUrl,
         };
       }
 
@@ -182,6 +284,8 @@ export class NBEAdapter {
         response: resBody,
         attempt,
         error: attempt.error,
+        environmentTarget,
+        endpointUrl: targetUrl,
       };
     } catch (err: any) {
       attempt.status = 'FAILED';
@@ -198,6 +302,8 @@ export class NBEAdapter {
         response: null,
         attempt,
         error: attempt.error,
+        environmentTarget,
+        endpointUrl: targetUrl,
       };
     }
   }

@@ -25,8 +25,6 @@ export type BiometricLifecycleState =
   | 'FAILED_LOCKED'
   | 'CAPABILITY_UNAVAILABLE';
 
-export type BiometricCredentialStatus = BiometricLifecycleState;
-
 export interface ProtectedFaceTemplate {
   vectorHash: string; // Salted HMAC-SHA256 non-invertible representation
   qualityScore: number; // 0.00 to 1.00
@@ -171,13 +169,10 @@ export type BiometricAuditAction =
   | 'BIOMETRIC_REVOKED'
   | 'BIOMETRIC_SUSPENDED'
   | 'BIOMETRIC_RESUMED'
-  | 'BIOMETRIC_REACTIVATED'
   | 'BIOMETRIC_RESET_REQUESTED'
   | 'BIOMETRIC_RESET_COMPLETED'
-  | 'BIOMETRIC_RESET_REJECTED'
   | 'BIOMETRIC_LOCKOUT'
   | 'BIOMETRIC_DEVICE_UPDATED'
-  | 'BIOMETRIC_DEVICE_RENAMED'
   | 'BIOMETRIC_MIGRATION'
   | 'BIOMETRIC_SUSPICIOUS_ATTEMPT'
   | 'BIOMETRIC_PRIVACY_EXPORT'

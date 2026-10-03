@@ -46,6 +46,7 @@ import {
   Fingerprint,
   ChevronDown,
   Info,
+  Upload,
 } from 'lucide-react';
 import { UserAccount, UserRole, UserStatus, userService } from '../services/userService.ts';
 import { ReportMetadata, ReportSubmission, SpecialAccessGrant, UserSession } from '../types/regulatory.ts';
@@ -60,6 +61,7 @@ import {
 } from '../data/organizationHierarchy.ts';
 import { departmentService } from '../services/departmentService.ts';
 import { ReportTemplateStudioModal } from './ReportTemplateStudioModal.tsx';
+import { NbeReportPackageImportModal } from './NbeReportPackageImportModal.tsx';
 import { BulkOperationsModal } from './BulkOperationsModal.tsx';
 import { bulkOperationsEngine, type BulkTargetType } from '../services/bulkOperationsEngine.ts';
 import { ConfigurationGovernanceView } from './ConfigurationGovernanceView.tsx';
@@ -85,6 +87,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [activeSubTab, setActiveSubTab] = useState<AdminSubTab>('REPORTS_OVERSIGHT');
   const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [studioReportKey, setStudioReportKey] = useState<string | undefined>(undefined);
+  const [isNbeImportOpen, setIsNbeImportOpen] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
@@ -1197,6 +1200,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <Layers className="w-3.5 h-3.5 text-ob-green-600" />
             <span>Template Studio</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsNbeImportOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 touch-manipulation touch-press bg-ob-indigo-50 dark:bg-ob-indigo-950 text-ob-indigo-800 dark:text-ob-indigo-300 border border-ob-indigo-300 dark:border-ob-indigo-700 hover:bg-ob-indigo-100 dark:hover:bg-ob-indigo-900"
+            title="Import an NBE-provided JSON report definition package and normalize into a governed DRAFT"
+          >
+            <Upload className="w-3.5 h-3.5 text-ob-indigo-600 dark:text-ob-indigo-400" />
+            <span>Import NBE JSON</span>
           </button>
 
           <button
@@ -3914,6 +3927,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           onSuccess={(msg) => {
             showNotice('success', msg);
             refreshAllData();
+          }}
+        />
+      )}
+
+      {/* NBE JSON REPORT PACKAGE IMPORT MODAL (Phase 31) */}
+      {isNbeImportOpen && (
+        <NbeReportPackageImportModal
+          isOpen={isNbeImportOpen}
+          onClose={() => setIsNbeImportOpen(false)}
+          currentUser={currentUser}
+          onImportSuccess={(key, msg) => {
+            showNotice('success', msg);
+            refreshAllData();
+          }}
+          onOpenStudio={(key) => {
+            setStudioReportKey(key);
+            setIsStudioOpen(true);
           }}
         />
       )}

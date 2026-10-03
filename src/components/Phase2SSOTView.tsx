@@ -16,8 +16,9 @@ import {
   TrendingUp,
   FileSpreadsheet,
   Zap,
+  ShieldAlert,
 } from 'lucide-react';
-import { ReportMetadata } from '../types/regulatory';
+import { ReportMetadata, UserSession } from '../types/regulatory';
 
 interface QualityReport {
   overallScore: number;
@@ -52,11 +53,13 @@ interface IngestionJobRecord {
 
 interface Phase2SSOTViewProps {
   templates: ReportMetadata[];
+  currentUser?: UserSession | null;
   onOpenGeneratedSubmission?: (reportKey: string) => void;
 }
 
 export const Phase2SSOTView: React.FC<Phase2SSOTViewProps> = ({
   templates,
+  currentUser,
   onOpenGeneratedSubmission,
 }) => {
   const [selectedSource, setSelectedSource] = useState<
@@ -81,6 +84,9 @@ export const Phase2SSOTView: React.FC<Phase2SSOTViewProps> = ({
   const [generatedSuccessMsg, setGeneratedSuccessMsg] = useState<string | null>(null);
 
   const loadPhase2Data = async () => {
+    if (currentUser && currentUser.role !== 'ADMIN') {
+      return;
+    }
     try {
       const [qRes, rRes] = await Promise.all([
         fetch('/api/phase2/quality').then((r) => (r.ok ? r.json() : null)),
@@ -213,6 +219,18 @@ export const Phase2SSOTView: React.FC<Phase2SSOTViewProps> = ({
 
   // Group templates by category for structured dropdown navigation
   const categories = Array.from(new Set(templates.map((t) => t.Category || 'General')));
+
+  if (currentUser && currentUser.role !== 'ADMIN') {
+    return (
+      <div className="p-8 max-w-lg mx-auto my-12 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl space-y-3">
+        <ShieldAlert className="w-10 h-10 mx-auto text-amber-500" />
+        <h3 className="font-bold text-slate-900 dark:text-white text-base">Access Restricted</h3>
+        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+          The Phase 2 Single Source of Truth (SSOT) Lakehouse & Medallion Pipeline is reserved strictly for Platform Administrators per Phase 28 supervisory governance.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col overflow-hidden space-y-2.5 font-sans">

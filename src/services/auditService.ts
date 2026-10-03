@@ -92,7 +92,10 @@ class AuditServiceClass {
   }
 
   public log(entry: Omit<AuditLogEntry, 'id' | 'timestamp'> & { isOffline?: boolean; syncStatus?: 'SYNCED' | 'PENDING_SYNC' }): AuditLogEntry {
-    const isOnline = typeof navigator !== 'undefined' ? Boolean(navigator.onLine) : true;
+    const isOnline =
+      typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean'
+        ? navigator.onLine
+        : true;
     const syncStatus = entry.syncStatus || (isOnline ? 'SYNCED' : 'PENDING_SYNC');
     const isOfflineRecord = entry.isOffline !== undefined ? entry.isOffline : !isOnline;
 
@@ -188,6 +191,38 @@ class AuditServiceClass {
 
   public getLogsByCorrelation(correlationId: string): AuditLogEntry[] {
     return this.logs.filter((l) => l.correlationId === correlationId);
+  }
+
+  public query(filter: {
+    entityId?: string;
+    actorId?: string;
+    action?: string;
+    correlationId?: string;
+    startDate?: string;
+    endDate?: string;
+  } = {}): AuditLogEntry[] {
+    let res = this.logs;
+    if (filter.entityId) {
+      res = res.filter((l) => l.entityId === filter.entityId);
+    }
+    if (filter.actorId) {
+      res = res.filter((l) => l.actorId === filter.actorId);
+    }
+    if (filter.action) {
+      res = res.filter((l) => l.action === filter.action);
+    }
+    if (filter.correlationId) {
+      res = res.filter((l) => l.correlationId === filter.correlationId);
+    }
+    if (filter.startDate) {
+      const startMs = new Date(filter.startDate).getTime();
+      res = res.filter((l) => new Date(l.timestamp).getTime() >= startMs);
+    }
+    if (filter.endDate) {
+      const endMs = new Date(filter.endDate).getTime();
+      res = res.filter((l) => new Date(l.timestamp).getTime() <= endMs);
+    }
+    return [...res];
   }
 }
 

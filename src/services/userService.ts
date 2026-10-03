@@ -15,6 +15,7 @@ import { auditService } from './auditService.ts';
 import { effectiveAccessEngine } from './effectiveAccessEngine.ts';
 import { realtimeSsotEngine } from './realtimeSsotEngine.ts';
 import { configService } from './configService.ts';
+import { sessionService } from './sessionService.ts';
 
 export type UserRole = 'ADMIN' | 'MAKER' | 'CHECKER' | 'AUDITOR';
 export type UserStatus = 'ACTIVE' | 'PENDING_APPROVAL' | 'DISABLED';
@@ -288,6 +289,7 @@ class UserServiceClass {
   public resetDevelopmentSeedData(): { success: boolean; usersCount: number; message: string } {
     this.users.clear();
     this.seedUsers();
+    sessionService.resetSessions();
     this.resetListeners.forEach((cb) => {
       try { cb(); } catch {}
     });
@@ -397,7 +399,9 @@ class UserServiceClass {
 
   public login(
     email: string,
-    password?: string
+    password?: string,
+    rememberMe?: boolean,
+    deviceInfo?: string
   ): {
     success: boolean;
     user?: UserAccount;
@@ -406,6 +410,13 @@ class UserServiceClass {
     sessionToken?: string;
     sessionExpiresAt?: string;
     authMethod?: 'PASSWORD';
+    rememberMe?: boolean;
+    persistentSession?: {
+      sessionId: string;
+      token: string;
+      expiresAt: string;
+      cookieHeader: string;
+    };
   } {
     if (!email || !email.trim()) {
       return { success: false, message: 'Corporate email address is required.' };
@@ -451,6 +462,14 @@ class UserServiceClass {
     const { password: pw, ...safe } = user;
     const sessionToken = `sess_pwd_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     const sessionExpiresAt = new Date(Date.now() + 8 * 3600 * 1000).toISOString();
+
+    let persistentSession: { sessionId: string; token: string; expiresAt: string; cookieHeader: string } | undefined;
+    if (rememberMe) {
+      persistentSession = sessionService.createPersistentSession(safe as UserAccount, {
+        deviceInfo: deviceInfo || 'Institutional Workstation / Browser',
+      });
+    }
+
     return {
       success: true,
       user: safe as UserAccount,
@@ -458,6 +477,8 @@ class UserServiceClass {
       sessionToken,
       sessionExpiresAt,
       authMethod: 'PASSWORD' as const,
+      rememberMe: Boolean(rememberMe),
+      persistentSession,
       message: 'Login successful.',
     };
   }
@@ -550,6 +571,7 @@ class UserServiceClass {
     }
 
     user.password = newPassword;
+    sessionService.revokeAllUserSessions(normEmail, 'PASSWORD_CHANGED');
     const { password: pw, ...safe } = user;
     return {
       success: true,
@@ -692,6 +714,31 @@ class UserServiceClass {
     };
   }
 
+  /**
+   * Checks for existing fingerprint and face enrollment records in the user profile.
+   * Returns enrollment status flags and user details.
+   */
+  public checkBiometricEnrollment(emailOrUserId: string): {
+    hasFingerprint: boolean;
+    hasFace: boolean;
+    hasEnrolledBiometrics: boolean;
+    credentials: BiometricCredential[];
+    user?: UserAccount;
+  } {
+    const norm = (emailOrUserId || '').toLowerCase().trim();
+    const user = this.getByEmail(norm) || this.getById(norm);
+    const creds = user?.biometricCredentials || [];
+    const hasFingerprint = creds.some((c) => c.type === 'FINGERPRINT');
+    const hasFace = creds.some((c) => c.type === 'FACE');
+    return {
+      hasFingerprint,
+      hasFace,
+      hasEnrolledBiometrics: hasFingerprint || hasFace,
+      credentials: creds,
+      user,
+    };
+  }
+
   public updateUserStatus(
     userId: string,
     status: UserStatus,
@@ -706,6 +753,8 @@ class UserServiceClass {
     if (status === 'ACTIVE') {
       user.approvedAt = new Date().toISOString();
       user.approvedBy = `${adminName} (ADMIN)`;
+    } else if (status === 'DISABLED') {
+      sessionService.revokeAllUserSessions(user.email, 'ACCOUNT_DISABLED');
     }
     effectiveAccessEngine.invalidateUser(userId);
 
