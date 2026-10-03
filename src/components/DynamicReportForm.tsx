@@ -60,7 +60,9 @@ import {
   Loader2,
   AlertTriangle,
   RefreshCw,
+  RotateCcw,
 } from 'lucide-react';
+import { templateInitializationService } from '../services/templateInitializationService.ts';
 
 export interface NavigationGuardHandler {
   hasUnsavedChanges: () => boolean;
@@ -138,6 +140,12 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
   const [leaveSafetyModalOpen, setLeaveSafetyModalOpen] = useState<boolean>(false);
   const [leaveSafetyError, setLeaveSafetyError] = useState<string | null>(null);
   const [isFlushing, setIsFlushing] = useState<boolean>(false);
+
+  // Phase 33: Data Entry Ergonomics, Touch Tracking & Reset to Template Defaults
+  const [touchedFields, setTouchedFields] = useState<Set<string>>(new Set());
+  const [submissionAttempted, setSubmissionAttempted] = useState<boolean>(false);
+  const [resetModalOpen, setResetModalOpen] = useState<boolean>(false);
+  const [isResetting, setIsResetting] = useState<boolean>(false);
 
   // Optimistic Concurrency Conflict Resolution State (Requirement 7)
   const [conflictModalOpen, setConflictModalOpen] = useState<boolean>(false);
@@ -628,8 +636,43 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [values, dynamicRows, isEffectiveReadOnly]);
 
+  // Phase 33: Reset unsubmitted draft to template defaults without modifying definition
+  const handleResetToDefaults = async () => {
+    try {
+      setIsResetting(true);
+      const resetSub = submissionService.resetToTemplateDefaults(submission.id, currentUser);
+      setValues(resetSub.values || {});
+      valuesRef.current = resetSub.values || {};
+      setDynamicRows(resetSub.dynamicRows || {});
+      dynamicRowsRef.current = resetSub.dynamicRows || {};
+      setCurrentVersion(resetSub.version);
+      currentVersionRef.current = resetSub.version;
+      setTouchedFields(new Set());
+      setSubmissionAttempted(false);
+      setHasUnsavedChanges(false);
+      hasUnsavedChangesRef.current = false;
+      setSaveStatus('SAVED');
+      setLastSavedTime(new Date().toLocaleTimeString());
+      recalculateAndValidate(resetSub.values || {}, resetSub.dynamicRows || {});
+      setResetModalOpen(false);
+      setSaveFeedback(`Draft reset to clean template defaults (v${resetSub.version}). Report definition preserved intact.`);
+      vibrate(30);
+      setTimeout(() => setSaveFeedback(null), 4000);
+    } catch (err: any) {
+      setSaveFeedback(`Reset failed: ${err.message}`);
+      setTimeout(() => setSaveFeedback(null), 4000);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   const handleFieldChange = (code: string, value: string | number) => {
     if (isEffectiveReadOnly) return;
+    setTouchedFields((prev) => {
+      const next = new Set(prev);
+      next.add(code);
+      return next;
+    });
     const nextValues = { ...values, [code]: value };
     const calculated = recalculateAndValidate(nextValues, dynamicRows);
     setValues(calculated);
@@ -1044,6 +1087,17 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
 
               <button
                 type="button"
+                onClick={() => setResetModalOpen(true)}
+                disabled={isResetting || isAutoSaving}
+                className="min-h-[44px] sm:min-h-[34px] flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl sm:rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shadow-2xs touch-manipulation touch-press cursor-pointer"
+                title="Reset unsubmitted draft to clean template defaults without modifying definition"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                <span>Reset to Defaults</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleManualSave}
                 disabled={isAutoSaving}
                 className={`min-h-[44px] sm:min-h-[34px] flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl sm:rounded-lg transition-colors cursor-pointer touch-manipulation touch-press ${
@@ -1068,8 +1122,19 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
 
               <button
                 type="button"
-                onClick={() => setSubmitModalOpen(true)}
-                disabled={!validation?.isValid}
+                onClick={() => {
+                  setSubmissionAttempted(true);
+                  const fullVal = ZodValidationService.validateReport(metadata, values, dynamicRows);
+                  if (fullVal.isValid) {
+                    setSubmitModalOpen(true);
+                  } else {
+                    setSaveFeedback(`Submission blocked: ${fullVal.errorsCount} mandatory field(s) or constraint(s) must be satisfied.`);
+                    setAssistantOpen(true);
+                    vibrate(40);
+                    setTimeout(() => setSaveFeedback(null), 4000);
+                  }
+                }}
+                disabled={submissionAttempted && !validation?.isValid}
                 title={
                   validation?.isValid
                     ? 'Submit prepared regulatory return for Checker 4-eyes review'
@@ -1078,7 +1143,7 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
                 className={`min-h-[44px] sm:min-h-[34px] flex items-center gap-1 px-3.5 py-1.5 text-xs font-bold rounded-xl sm:rounded-lg transition-colors shadow-2xs touch-manipulation touch-press ${
                   validation?.isValid
                     ? 'bg-ob-indigo-600 text-white hover:bg-ob-indigo-700 cursor-pointer'
-                    : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'
+                    : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-pointer'
                 }`}
               >
                 <Send className="w-4 h-4 sm:w-3 sm:h-3" />
@@ -1238,6 +1303,11 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span>Zod Validated: All Constraints Passed (100%)</span>
               </span>
+            ) : !submissionAttempted && touchedFields.size === 0 ? (
+              <span className="text-ob-indigo-700 dark:text-ob-indigo-300 font-bold flex items-center gap-1.5 bg-ob-indigo-50 dark:bg-ob-indigo-950/60 border border-ob-indigo-200 dark:border-ob-indigo-800/80 px-2.5 py-0.5 rounded-md">
+                <Layers className="w-3.5 h-3.5 text-ob-indigo-600 dark:text-ob-indigo-400 shrink-0" />
+                <span>Clean Template Initialized • {metadata.ReturnItemsList.filter((i) => i._required).length} Mandatory Field(s)</span>
+              </span>
             ) : (
               <span className="text-rose-700 dark:text-rose-300 font-bold flex items-center gap-1.5 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800/80 px-2 py-0.5 rounded-md">
                 <AlertCircle className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
@@ -1249,7 +1319,7 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
       </div>
 
       {/* 3.5 Real-Time Zod Validation Error Banner */}
-      {validation && !validation.isValid && (
+      {validation && !validation.isValid && (submissionAttempted || touchedFields.size > 0) && (
         <div className="bg-rose-50 dark:bg-rose-950/80 border border-rose-300 dark:border-rose-900 rounded-xl px-3.5 py-2.5 text-xs flex flex-col gap-2 shadow-2xs shrink-0 animate-in fade-in">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -1416,6 +1486,13 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
                   const hasError = !!fieldError && fieldError.severity === 'ERROR';
                   const hasWarning = !!fieldError && fieldError.severity === 'WARNING';
 
+                  const isSupplied = templateInitializationService.isFieldSupplied(currentVal);
+                  const isTouched = touchedFields.has(item.Code) || submissionAttempted;
+                  const isMandatoryMissing = item._required && !isSupplied;
+                  // In DRAFT_ENTRY before touch/submission, suppress premature error noise on untouched missing mandatory fields
+                  const showActiveError = hasError && (isTouched || !isMandatoryMissing);
+                  const showActiveWarning = hasWarning && (isTouched || !isMandatoryMissing);
+
                   const isHighlighted = highlightedFieldCode === item.Code;
                   const remediationItem = remediationSummary?.items.find((i) => i.fieldCode === item.Code);
 
@@ -1425,9 +1502,9 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
                       className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${
                         isHighlighted
                           ? 'ring-2 ring-amber-500 bg-amber-100/70 dark:bg-amber-950/60 animate-pulse'
-                          : hasError
+                          : showActiveError
                           ? 'bg-rose-50/40 dark:bg-rose-950/20'
-                          : hasWarning
+                          : showActiveWarning
                           ? 'bg-amber-50/30 dark:bg-amber-950/15'
                           : item.isTotal
                           ? 'bg-slate-50/70 dark:bg-slate-800/40 font-semibold'
@@ -1436,7 +1513,7 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
                     >
                       <td className="py-2 px-3 font-mono text-slate-600 dark:text-slate-400 select-all font-medium text-[11px] sm:text-xs align-top">
                         <div className="flex items-center gap-1">
-                          {hasError && <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />}
+                          {showActiveError && <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />}
                           <span>{item.Code}</span>
                         </div>
                       </td>
@@ -1445,7 +1522,18 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
                           <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-1.5">
                             <span className="leading-snug">{item._description}</span>
                             <div className="flex items-center gap-1 shrink-0">
-                              {item._required && <span className="text-rose-500 font-bold text-xs" title="Mandatory regulatory field">*</span>}
+                              {item._required && (
+                                <span
+                                  className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.2 rounded ${
+                                    isSupplied
+                                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                      : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                  }`}
+                                  title={isSupplied ? 'Mandatory regulatory field supplied' : 'Mandatory regulatory field: not yet supplied'}
+                                >
+                                  {isSupplied ? 'Required ✓' : '* Required'}
+                                </span>
+                              )}
                               {isFormula && (
                                 <span
                                   className="inline-flex items-center gap-0.5 text-[10px] text-ob-indigo-700 dark:text-ob-indigo-300 bg-ob-indigo-50 dark:bg-ob-indigo-950 px-1 py-0.2 rounded border border-ob-indigo-200 dark:border-ob-indigo-800"
@@ -1459,7 +1547,7 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
                           </div>
 
                           {/* Real-time field validation error message & inline auto-fix */}
-                          {fieldError && (
+                          {fieldError && (showActiveError || showActiveWarning) && (
                             <div
                               id={`error-${item.Code}`}
                               className={`flex flex-col gap-1.5 text-[11px] font-medium p-2 rounded-md border animate-in fade-in duration-150 ${
@@ -1507,10 +1595,16 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
                             </div>
                           )}
 
-                          {!fieldError && item._required && currentVal !== '' && currentVal !== undefined && (
+                          {!fieldError && item._required && isSupplied && (
                             <div className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
                               <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
                               <span>Mandatory field compliant</span>
+                            </div>
+                          )}
+
+                          {!isTouched && item._required && !isSupplied && (
+                            <div className="flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                              <span>Not yet supplied • Enter {item._dataType.toLowerCase()} figure before submission</span>
                             </div>
                           )}
                         </div>
@@ -1544,7 +1638,7 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
                                 inputMode={item._dataType === 'NUMERIC' ? 'decimal' : undefined}
                                 value={currentVal}
                                 readOnly={isFormula}
-                                placeholder={isFormula ? 'Auto' : '0.00'}
+                                placeholder={templateInitializationService.getSchemaAwarePlaceholder(item, isFormula)}
                                 onFocus={() => {
                                   if (!isFormula) {
                                     setFocusedFieldCode(item.Code);
@@ -1566,12 +1660,12 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
                                 className={`w-full min-h-[44px] sm:min-h-[32px] px-2.5 py-1.5 text-xs border rounded-lg transition-colors touch-manipulation ${
                                   isFormula
                                     ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 cursor-not-allowed text-right font-mono tabular-nums font-semibold'
-                                    : hasError
+                                    : showActiveError
                                     ? 'bg-rose-50/60 dark:bg-rose-950/40 border-rose-400 dark:border-rose-600 text-slate-900 dark:text-white focus:border-rose-500 focus:ring-1 focus:ring-rose-500 focus:outline-none text-right font-mono tabular-nums font-semibold'
-                                    : hasWarning
+                                    : showActiveWarning
                                     ? 'bg-amber-50/50 dark:bg-amber-950/30 border-amber-400 dark:border-amber-600 text-slate-900 dark:text-white focus:border-amber-500 focus:ring-1 focus:ring-amber-500 focus:outline-none text-right font-mono tabular-nums font-medium'
                                     : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:border-ob-indigo-500 focus:outline-none text-right font-mono tabular-nums font-medium'
-                                }`}
+                                  }`}
                               />
                             )}
                           </div>
@@ -1932,6 +2026,58 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>Retry Save</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Phase 33: Reset to Template Defaults Confirmation Modal */}
+      {resetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+                <RotateCcw className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Reset Draft to Template Defaults
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Return: {metadata.Code} • v{currentVersion}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              Are you sure you want to reset all input fields in this draft to their clean template defaults?
+              All unsubmitted figures and rows will be cleared. The underlying NBE statutory report definition will remain permanently intact and unmodified.
+            </p>
+
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/60 text-[11px] text-slate-600 dark:text-slate-300 space-y-1">
+              <div className="font-semibold text-slate-800 dark:text-slate-200">Regulatory Integrity Note:</div>
+              <div>• Structural titles, subtitles, row/column labels are 100% preserved.</div>
+              <div>• Editable fields are reset to clean schema-aware initial states without inventing figures.</div>
+              <div>• Version will be incremented to v{currentVersion + 1} and recorded in the audit trail.</div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setResetModalOpen(false)}
+                disabled={isResetting}
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleResetToDefaults}
+                disabled={isResetting}
+                className="px-4 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5"
+              >
+                {isResetting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Confirm Reset to Defaults</span>
               </button>
             </div>
           </div>

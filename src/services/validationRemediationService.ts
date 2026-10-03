@@ -18,6 +18,7 @@ import type {
 } from '../types/remediation.ts';
 import { FormulaEngine } from '../utils/formulaEngine.ts';
 import { auditService } from './auditService.ts';
+import { templateInitializationService } from './templateInitializationService.ts';
 
 /**
  * Checks whether an item represents an asset, capital, paid-up capital, deposit, or reserve
@@ -123,7 +124,7 @@ export class ValidationRemediationService {
       const isFormula = metadata.Formulas.some((f) => f.targetCode === item.Code);
       const formulaDef = metadata.Formulas.find((f) => f.targetCode === item.Code);
 
-      const hasValue = val !== undefined && val !== null && val !== '';
+      const hasValue = templateInitializationService.isFieldSupplied(val);
 
       // 1A. Mandatory Field Blank Check
       if (item._required && !hasValue) {
@@ -137,7 +138,7 @@ export class ValidationRemediationService {
           path: item.Code,
           message: `Mandatory regulatory field '${item._description}' (${item.Code}) is blank.`,
           explanation: {
-            whatIsWrong: `The required field '${item._description}' (${item.Code}) contains no value.`,
+            whatIsWrong: `The required field '${item._description}' (${item.Code}) contains no value or has not yet been supplied.`,
             whyItMatters: `NBE Directive BSD/03/2020 strictly requires all mandatory schedule line items to be populated before submission. Blank mandatory items cause automated rejection at the supervisory gateway.`,
             howToFix: `Enter the verified balance or figure from your department's core banking general ledger or trial balance.`,
             expectedFormat: `A non-empty ${item._dataType.toLowerCase()} figure compliant with the reporting period.`,
@@ -556,7 +557,7 @@ export class ValidationRemediationService {
                 : (row as any)[col.Code];
 
             const cellKey = `${area.Area}:${row.id}:${col.Code}`;
-            const hasCellVal = rawVal !== undefined && rawVal !== null && rawVal !== '';
+            const hasCellVal = templateInitializationService.isFieldSupplied(rawVal);
 
             // Mandatory dynamic cell check
             if (col._required && !hasCellVal) {
@@ -662,7 +663,20 @@ export class ValidationRemediationService {
 
     // 3. Inspect Higher-Order Business Rules (BUSINESS_RULE_ERROR)
     if (metadata.ValidationRules && metadata.ValidationRules.length > 0) {
+      // Phase 33 Requirement 8: Check if any business data has been supplied.
+      // If template is completely untouched/clean, mandatory missing checks already flag unsupplied fields.
+      // Do not produce duplicate balancing errors across untouched empty templates.
+      const hasAnyBusinessData = templateInitializationService.hasMakerEnteredBusinessData(
+        metadata,
+        values,
+        dynamicRows
+      );
+
       for (const rule of metadata.ValidationRules) {
+        if (!hasAnyBusinessData) {
+          continue;
+        }
+
         try {
           const dynRowsMapped: Record<number, Record<string, any>[]> = {};
           for (const [aId, rList] of Object.entries(dynamicRows)) {

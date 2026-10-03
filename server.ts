@@ -935,6 +935,27 @@ app.post('/api/regulatory/submissions/:id/comment', (req, res) => {
   }
 });
 
+// Phase 33: Reset Draft to Template Defaults (Requirement 10)
+app.post('/api/regulatory/submissions/:id/reset-defaults', (req, res) => {
+  const { user } = req.body || {};
+  const queryUser = req.query.userEmail
+    ? userService.getByEmail(req.query.userEmail as string)
+    : req.query.userId
+    ? userService.getById(req.query.userId as string)
+    : null;
+  const activeUser = user || queryUser || DEMO_USERS[0];
+
+  try {
+    const updated = submissionService.resetToTemplateDefaults(req.params.id, activeUser);
+    res.json(updated);
+  } catch (err: any) {
+    const status = err.message.includes('not found')
+      ? 404
+      : getAuthOrClientStatusCode(err.message);
+    res.status(status).json({ error: err.message });
+  }
+});
+
 // Phase 26: Dossier Audit Events Inspection (Requirement 2)
 app.get('/api/regulatory/submissions/:id/audit-events', (req, res) => {
   const { userEmail, userId } = req.query as any;

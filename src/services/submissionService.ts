@@ -41,6 +41,7 @@ import { indexedDbStorage } from './indexedDbStorage.ts';
 import { effectiveAccessEngine } from './effectiveAccessEngine.ts';
 import { realtimeSsotEngine } from './realtimeSsotEngine.ts';
 import { BrowserSafeEventEmitter } from '../utils/browserEventEmitter.ts';
+import { templateInitializationService } from './templateInitializationService.ts';
 
 // Default Demo User Accounts with verified Oromia Bank departments
 export const DEMO_USERS: UserSession[] = [
@@ -573,6 +574,10 @@ class SubmissionServiceClass {
     return this.submissions.get(id);
   }
 
+  public getSubmissionById(id: string): ReportSubmission | undefined {
+    return this.submissions.get(id);
+  }
+
   public getByFilter(filter: {
     status?: SubmissionStatus;
     reportKey?: string;
@@ -626,15 +631,8 @@ class SubmissionServiceClass {
     const id = 'sub_' + reportKey.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Date.now();
     const now = new Date().toISOString();
 
-    const initialValues: Record<string, string | number> = {};
-    for (const item of report.ReturnItemsList) {
-      initialValues[item.Code] = item.Value !== undefined ? item.Value : '';
-    }
-
-    const initialDynamicRows: Record<number, DynamicRowRecord[]> = {};
-    for (const area of report.DynamicItemsList) {
-      initialDynamicRows[area.Area] = [];
-    }
+    const { values: initialValues, dynamicRows: initialDynamicRows } =
+      templateInitializationService.initializeDraftFromTemplate(report);
 
     const templateSnapshot = this.createTemplateSnapshot(report);
     const structuralHash = this.generateStructuralHash(report);
@@ -1133,6 +1131,180 @@ class SubmissionServiceClass {
     });
 
     return newSubmission;
+  }
+
+  /**
+   * Phase 33: Resets an unsubmitted report draft to clean template defaults.
+   * Guarantees:
+   * 1. Only authorized Makers can reset drafts.
+   * 2. Only unsubmitted drafts (DRAFT or CORRECTION_REQUIRED) can be reset.
+   * 3. Submitted reports (APPROVED, SENT, PENDING_CHECKER) are permanently sealed.
+   * 4. Does NOT modify the report definition metadata in any way.
+   * 5. Increments draft version, creates audit trail entry, and emits change events.
+   */
+  public resetToTemplateDefaults(id: string, user: UserSession): ReportSubmission {
+    const sub = this.submissions.get(id);
+    if (!sub) {
+      throw new Error(`Submission not found: ${id}`);
+    }
+
+    if (user.role !== 'MAKER') {
+      throw new Error(
+        `Role violation: Only Makers can reset drafts to template defaults. Current role: ${user.role}`
+      );
+    }
+
+    if (sub.status === 'SENT' || sub.status === 'APPROVED' || sub.status === 'SENDING') {
+      throw new Error(
+        `Cannot reset submitted/final report ${id} in status ${sub.status}. Submitted records are permanently sealed.`
+      );
+    }
+
+    if (sub.status === 'PENDING_CHECKER') {
+      throw new Error(
+        `Cannot reset submission ${id} while under Checker review (PENDING_CHECKER). Wait for review completion or return for correction.`
+      );
+    }
+
+    const evalResult = effectiveAccessEngine.evaluateAccess(user, sub.reportKey, 'EDIT_DRAFT', sub);
+    if (!evalResult.allowed) {
+      throw new Error(evalResult.reason);
+    }
+
+    const report = this.getEffectiveTemplate(sub);
+    const defBefore = configService.getReportDefinition(sub.reportKey);
+    const defHashBefore = defBefore ? JSON.stringify(defBefore) : '';
+
+    const { values: resetValues, dynamicRows: resetDynamic } =
+      templateInitializationService.resetDraftToTemplateDefaults(sub, report);
+
+    const nextVersion = sub.version + 1;
+    const now = new Date().toISOString();
+    const clonedValues = JSON.parse(JSON.stringify(resetValues));
+    const clonedDynamic = JSON.parse(JSON.stringify(resetDynamic));
+    const tmplSnapshot = sub.templateSnapshot || this.createTemplateSnapshot(report);
+    const structHash = sub.structuralHash || this.generateStructuralHash(report);
+    const integrityHash = this.computeIntegrityHash({
+      id: sub.id,
+      reportKey: sub.reportKey,
+      version: nextVersion,
+      templateVersion: sub.templateVersion || 1,
+      values: clonedValues,
+      status: sub.status,
+    });
+
+    const newSnapshot: SubmissionSnapshot = {
+      snapshotId: `snap_${sub.id}_v${nextVersion}_${Date.now()}`,
+      version: nextVersion,
+      templateVersion: sub.templateVersion || 1,
+      dataVersion: nextVersion,
+      timestamp: now,
+      status: sub.status,
+      capturedBy: user.name,
+      capturedByRole: user.role,
+      reason: `Reset to template defaults by Maker ${user.name}`,
+      values: clonedValues,
+      dynamicRows: clonedDynamic,
+      templateSnapshot: tmplSnapshot,
+      structuralHash: structHash,
+      integrityHash,
+    };
+
+    const isOnline =
+      typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean'
+        ? navigator.onLine
+        : true;
+
+    const updated: ReportSubmission = {
+      ...sub,
+      version: nextVersion,
+      dataVersion: nextVersion,
+      values: resetValues,
+      dynamicRows: resetDynamic,
+      dataSnapshot: clonedValues,
+      dynamicRowsSnapshot: clonedDynamic,
+      updatedAt: now,
+      templateSnapshot: tmplSnapshot,
+      structuralHash: structHash,
+      integrityHash,
+      historicalSnapshots: [...(sub.historicalSnapshots || []), newSnapshot],
+      revisionHistory: [
+        ...(sub.revisionHistory || []),
+        {
+          version: nextVersion,
+          modifiedAt: now,
+          modifiedBy: user.name,
+          modifiedByRole: user.role,
+          values: resetValues,
+          dynamicRows: resetDynamic,
+          reason: `Draft reset to clean template defaults by Maker ${user.name}`,
+          templateSnapshot: tmplSnapshot,
+          integrityHash,
+        },
+      ],
+      comments: [
+        ...(sub.comments || []),
+        {
+          id: 'comm_' + Math.random().toString(36).substring(2, 9),
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role as any,
+          comment: `Draft reset to clean template defaults. Unsubmitted edits reverted.`,
+          action: 'SAVE_DRAFT',
+          timestamp: now,
+        },
+      ],
+      syncStatus: isOnline ? 'SYNCED' : 'PENDING_SYNC',
+      isOfflineDraft: !isOnline,
+      offlineSavedAt: now,
+    };
+
+    // Verify report definition was NOT modified during reset
+    const defAfter = configService.getReportDefinition(sub.reportKey);
+    if (defBefore && JSON.stringify(defAfter) !== defHashBefore) {
+      throw new Error(`CRITICAL INVARIANT VIOLATION: Report definition for ${sub.reportKey} was mutated during draft reset!`);
+    }
+
+    this.submissions.set(id, updated);
+
+    indexedDbStorage.saveDraft(updated, {
+      syncStatus: updated.syncStatus,
+      isOffline: updated.isOfflineDraft,
+    }).catch(() => {});
+
+    try {
+      this.events.emit('submissionChange', updated);
+      this.events.emit('submissionsUpdated', this.getAll());
+      realtimeSsotEngine.publishEvent({
+        eventType: 'REPORT_CHANGED',
+        action: 'UPDATE_DRAFT',
+        domain: 'REPORT',
+        entityId: updated.id,
+        topic: `REPORT:${updated.reportKey}`,
+        actor: { id: user.id, name: user.name, role: user.role },
+        summary: `Report ${updated.reportKey} reset to template defaults (v${nextVersion}) by ${user.name}`,
+        payload: {
+          submissionId: updated.id,
+          reportKey: updated.reportKey,
+          version: updated.version,
+          updatedAt: updated.updatedAt,
+          status: updated.status,
+        },
+      });
+    } catch (_) {}
+
+    auditService.log({
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      action: 'UPDATE_DRAFT',
+      entityType: 'REPORT_SUBMISSION',
+      entityId: id,
+      correlationId: 'corr_' + id,
+      details: `Maker ${user.name} reset draft ${id} (return ${sub.reportKey}) to clean template defaults (v${nextVersion})`,
+    });
+
+    return updated;
   }
 
   /**

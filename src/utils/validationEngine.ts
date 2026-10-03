@@ -4,6 +4,7 @@
  */
 
 import type { ReportMetadata, DynamicRowRecord } from '../types/regulatory.ts';
+import { templateInitializationService } from '../services/templateInitializationService.ts';
 
 export interface FieldValidationError {
   code: string;
@@ -46,7 +47,7 @@ export class ValidationEngine {
     // 1. Validate Fixed ReturnItemsList
     for (const item of metadata.ReturnItemsList) {
       const val = values[item.Code];
-      const hasValue = val !== undefined && val !== null && val !== '';
+      const hasValue = templateInitializationService.isFieldSupplied(val);
 
       if (item._required && !hasValue) {
         fieldErrors.push({
@@ -181,7 +182,7 @@ export class ValidationEngine {
       rows.forEach((row, index) => {
         for (const col of area.DynamicItems) {
           const colVal = row.values[col.Code];
-          const hasVal = colVal !== undefined && colVal !== null && colVal !== '';
+          const hasVal = templateInitializationService.isFieldSupplied(colVal);
 
           if (col._required && !hasVal) {
             dynamicErrors.push({
@@ -213,7 +214,17 @@ export class ValidationEngine {
 
     // 3. Custom Business Validation Rules
     if (metadata.ValidationRules) {
+      const hasAnyBusinessData = templateInitializationService.hasMakerEnteredBusinessData(
+        metadata,
+        values,
+        dynamicRows
+      );
+
       for (const rule of metadata.ValidationRules) {
+        if (!hasAnyBusinessData) {
+          continue;
+        }
+
         try {
           const dynRowsMapped: Record<number, Record<string, any>[]> = {};
           for (const [aId, rList] of Object.entries(dynamicRows)) {

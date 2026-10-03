@@ -15,6 +15,7 @@ import type {
   FieldValidationError,
   DynamicRowValidationError,
 } from '../utils/validationEngine.ts';
+import { templateInitializationService } from './templateInitializationService.ts';
 
 export type ConstraintType =
   | 'MANDATORY'
@@ -132,8 +133,10 @@ export class ZodValidationService {
 
     if (item._dataType === 'NUMERIC') {
       schema = z.union([z.number(), z.string(), z.null(), z.undefined()]).superRefine((val, ctx) => {
+        const isSupplied = templateInitializationService.isFieldSupplied(val);
+
         // Mandatory check
-        if (item._required && (val === '' || val === null || val === undefined)) {
+        if (item._required && !isSupplied) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: `Field "${item._description}" (${item.Code}) is a mandatory regulatory field and cannot be left blank.`,
@@ -143,7 +146,7 @@ export class ZodValidationService {
         }
 
         // Optional and empty: allowed
-        if (!item._required && (val === '' || val === null || val === undefined)) {
+        if (!item._required && !isSupplied) {
           return;
         }
 
@@ -229,7 +232,9 @@ export class ZodValidationService {
       });
     } else if (item._dataType === 'DATE') {
       schema = z.union([z.string(), z.null(), z.undefined()]).superRefine((val, ctx) => {
-        if (item._required && (!val || String(val).trim() === '')) {
+        const isSupplied = templateInitializationService.isFieldSupplied(val);
+
+        if (item._required && !isSupplied) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: `Mandatory date field "${item._description}" (${item.Code}) cannot be blank.`,
@@ -238,7 +243,11 @@ export class ZodValidationService {
           return;
         }
 
-        if (val && String(val).trim() !== '') {
+        if (!item._required && !isSupplied) {
+          return;
+        }
+
+        if (isSupplied) {
           const dateVal = new Date(String(val));
           if (isNaN(dateVal.getTime())) {
             ctx.addIssue({
@@ -252,13 +261,19 @@ export class ZodValidationService {
     } else {
       // TEXT or other types
       schema = z.union([z.string(), z.number(), z.null(), z.undefined()]).superRefine((val, ctx) => {
-        const strVal = val !== undefined && val !== null ? String(val).trim() : '';
-        if (item._required && strVal === '') {
+        const isSupplied = templateInitializationService.isFieldSupplied(val);
+
+        if (item._required && !isSupplied) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: `Mandatory field "${item._description}" (${item.Code}) cannot be left blank.`,
             params: { constraintType: 'MANDATORY', severity: 'ERROR' },
           });
+          return;
+        }
+
+        if (!item._required && !isSupplied) {
+          return;
         }
       });
     }
@@ -385,7 +400,15 @@ export class ZodValidationService {
 
     // 3. Process Higher-Order Validation Rules (Cross-Item & NBE Compliance Rules)
     if (metadata.ValidationRules && metadata.ValidationRules.length > 0) {
+      const hasAnyBusinessData = Object.values(values).some((v) =>
+        templateInitializationService.isFieldSupplied(v)
+      );
+
       for (const rule of metadata.ValidationRules) {
+        if (!hasAnyBusinessData) {
+          continue;
+        }
+
         try {
           let isPassed = false;
           if (typeof rule.check === 'function') {

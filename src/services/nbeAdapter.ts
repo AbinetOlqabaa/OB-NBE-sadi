@@ -11,6 +11,7 @@ import {
   type ReportIntegrationConfigSSOT,
   MANAGED_AUTH_PROFILES,
 } from './nbeEndpointRegistry.ts';
+import { templateInitializationService } from './templateInitializationService.ts';
 
 export interface DeliveryResult {
   success: boolean;
@@ -32,14 +33,21 @@ export class NBEAdapter {
 
   /**
    * Prepares the canonical NBE JSON report payload from a submission record.
+   * Phase 33: Guarantees placeholder text is never sent to NBE.
    */
   public static buildNBEPayload(submission: ReportSubmission): any {
-    const returnItems = Object.entries(submission.values).map(([code, val]) => ({
+    const { values: sanitizedValues, dynamicRows: sanitizedDynamic } =
+      templateInitializationService.sanitizePayloadForNBE(
+        submission.values || {},
+        submission.dynamicRows || {}
+      );
+
+    const returnItems = Object.entries(sanitizedValues).map(([code, val]) => ({
       Code: code,
       Value: val,
     }));
 
-    const dynamicAreas = Object.entries(submission.dynamicRows || {}).map(([areaId, rows]) => ({
+    const dynamicAreas = Object.entries(sanitizedDynamic || {}).map(([areaId, rows]) => ({
       Area: Number(areaId),
       Rows: rows.map((r) => r.values),
     }));
@@ -53,6 +61,10 @@ export class NBEAdapter {
       ReturnItemsList: returnItems,
       DynamicItemsList: dynamicAreas,
     };
+  }
+
+  public buildNBEPayload(submission: ReportSubmission): any {
+    return NBEAdapter.buildNBEPayload(submission);
   }
 
   /**
