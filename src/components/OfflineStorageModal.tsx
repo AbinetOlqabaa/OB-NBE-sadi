@@ -59,6 +59,18 @@ export const OfflineStorageModal: React.FC<OfflineStorageModalProps> = ({ isOpen
   const [clearing, setClearing] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   // Fetch actual records from IndexedDB
   const loadIndexedDbData = async () => {
     setLoading(true);

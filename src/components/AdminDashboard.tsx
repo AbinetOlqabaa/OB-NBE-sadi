@@ -47,11 +47,17 @@ import {
   ChevronDown,
   Info,
   Upload,
+  BarChart3,
+  TrendingUp,
+  Flame,
+  CalendarDays,
 } from 'lucide-react';
 import { UserAccount, UserRole, UserStatus, userService } from '../services/userService.ts';
 import { ReportMetadata, ReportSubmission, SpecialAccessGrant, UserSession } from '../types/regulatory.ts';
 import { Pagination } from './Pagination.tsx';
 import { ViewTab } from './Sidebar.tsx';
+import { MaximizedViewModal } from './MaximizedViewModal.tsx';
+import { MaximizeButton } from './MaximizeButton.tsx';
 import { submissionService } from '../services/submissionService.ts';
 import { getAllReports, getReportByKey } from '../data/report-registry.ts';
 import {
@@ -66,6 +72,9 @@ import { BulkOperationsModal } from './BulkOperationsModal.tsx';
 import { bulkOperationsEngine, type BulkTargetType } from '../services/bulkOperationsEngine.ts';
 import { ConfigurationGovernanceView } from './ConfigurationGovernanceView.tsx';
 import { BiometricSecurityCenter } from './BiometricSecurityCenter.tsx';
+import { ReportingPerformanceAnalytics } from './ReportingPerformanceAnalytics.tsx';
+import { RegulatoryCalendarCard } from './RegulatoryCalendarCard.tsx';
+import { DataQualityHeatmap } from './DataQualityHeatmap.tsx';
 
 interface AdminDashboardProps {
   currentUser: UserSession;
@@ -73,7 +82,16 @@ interface AdminDashboardProps {
   onUserStatusChanged?: () => void;
 }
 
-type AdminSubTab = 'REPORTS_OVERSIGHT' | 'SPECIAL_ACCESS' | 'PENDING' | 'ALL_USERS' | 'DEPARTMENTS' | 'GOVERNANCE';
+type AdminSubTab =
+  | 'REPORTS_OVERSIGHT'
+  | 'CALENDAR'
+  | 'DATA_QUALITY'
+  | 'ANALYTICS'
+  | 'SPECIAL_ACCESS'
+  | 'PENDING'
+  | 'ALL_USERS'
+  | 'DEPARTMENTS'
+  | 'GOVERNANCE';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   currentUser,
@@ -88,6 +106,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [studioReportKey, setStudioReportKey] = useState<string | undefined>(undefined);
   const [isNbeImportOpen, setIsNbeImportOpen] = useState(false);
+  const [showAnalyticsWidget, setShowAnalyticsWidget] = useState<boolean>(true);
+  const [showCalendarWidget, setShowCalendarWidget] = useState<boolean>(false);
+  const [showHeatmapWidget, setShowHeatmapWidget] = useState<boolean>(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
@@ -130,6 +151,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     auditScope: 'ALL_DEPARTMENTS',
     auditorJustification: '',
   });
+
+  // Maximized View States (Phase 47 Full View & Contained Scrolling)
+  const [isUsersTableMaximized, setIsUsersTableMaximized] = useState(false);
+  const [isDeptTableMaximized, setIsDeptTableMaximized] = useState(false);
 
   // Department Management States
   const [deptSearch, setDeptSearch] = useState('');
@@ -1228,6 +1253,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveSubTab('CALENDAR')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 touch-manipulation touch-press ${
+              activeSubTab === 'CALENDAR'
+                ? 'bg-ob-indigo-600 text-white shadow-2xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+            title="Regulatory Calendar: Upcoming NBE statutory filing deadlines with chronological timeline visualization"
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Regulatory Calendar</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('DATA_QUALITY')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 touch-manipulation touch-press ${
+              activeSubTab === 'DATA_QUALITY'
+                ? 'bg-rose-600 text-white shadow-2xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+            title="Data Quality Heatmap: Recharts visualization highlighting departments with recurring validation errors"
+          >
+            <Flame className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400" />
+            <span>Data Quality Heatmap</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('ANALYTICS')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 touch-manipulation touch-press ${
+              activeSubTab === 'ANALYTICS'
+                ? 'bg-ob-indigo-600 text-white shadow-2xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+            title="Regulatory Performance: Submission Acceptance Rate, Average Turnaround Time, and Pending Review Aging"
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Regulatory Performance</span>
+          </button>
+
+          <button
             onClick={() => setActiveSubTab('SPECIAL_ACCESS')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 touch-manipulation touch-press ${
               activeSubTab === 'SPECIAL_ACCESS'
@@ -1374,8 +1438,106 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <option value="APPROVED">Approved</option>
                 <option value="SENT">Delivered to NBE</option>
               </select>
+
+              <button
+                type="button"
+                onClick={() => setShowCalendarWidget(!showCalendarWidget)}
+                className={`text-xs border rounded-lg px-2.5 py-1 font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+                  showCalendarWidget
+                    ? 'bg-ob-indigo-600 text-white border-ob-indigo-700 shadow-2xs'
+                    : 'bg-ob-indigo-50 dark:bg-ob-indigo-950/70 hover:bg-ob-indigo-100 dark:hover:bg-ob-indigo-900 border-ob-indigo-200 dark:border-ob-indigo-800 text-ob-indigo-700 dark:text-ob-indigo-300'
+                }`}
+                title={showCalendarWidget ? 'Hide Regulatory Calendar' : 'Show Regulatory Calendar Timeline'}
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>{showCalendarWidget ? 'Calendar (On)' : 'Calendar'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowHeatmapWidget(!showHeatmapWidget)}
+                className={`text-xs border rounded-lg px-2.5 py-1 font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+                  showHeatmapWidget
+                    ? 'bg-rose-600 text-white border-rose-700 shadow-2xs'
+                    : 'bg-rose-50 dark:bg-rose-950/70 hover:bg-rose-100 dark:hover:bg-rose-900 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300'
+                }`}
+                title={showHeatmapWidget ? 'Hide Quality Heatmap' : 'Show Data Quality Heatmap'}
+              >
+                <Flame className="w-3.5 h-3.5" />
+                <span>{showHeatmapWidget ? 'Quality Heatmap (On)' : 'Quality Heatmap'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowAnalyticsWidget(!showAnalyticsWidget)}
+                className={`text-xs border rounded-lg px-2.5 py-1 font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+                  showAnalyticsWidget
+                    ? 'bg-ob-indigo-600 text-white border-ob-indigo-700 shadow-2xs'
+                    : 'bg-ob-indigo-50 dark:bg-ob-indigo-950/70 hover:bg-ob-indigo-100 dark:hover:bg-ob-indigo-900 border-ob-indigo-200 dark:border-ob-indigo-800 text-ob-indigo-700 dark:text-ob-indigo-300'
+                }`}
+                title={showAnalyticsWidget ? 'Hide Regulatory Performance Widget' : 'Show Regulatory Performance Widget'}
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span>{showAnalyticsWidget ? 'Performance (On)' : 'Performance'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveSubTab('ANALYTICS')}
+                className="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg px-2.5 py-1 font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                title="Open Full Regulatory Performance Suite & SLA Deep Dive"
+              >
+                <span>Regulatory Suite</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
+
+          {/* Embedded Regulatory Calendar Widget */}
+          {showCalendarWidget && (
+            <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 shrink-0">
+              <RegulatoryCalendarCard
+                currentUser={currentUser}
+                onInspectSubmission={(sub) => setInspectingSub(sub)}
+                onViewAllSubmissions={() => {
+                  setShowCalendarWidget(false);
+                  setReportsPage(1);
+                }}
+                onOpenReport={(rk) => {
+                  setStudioReportKey(rk);
+                  setIsStudioOpen(true);
+                }}
+              />
+            </div>
+          )}
+
+          {/* Embedded Data Quality Heatmap Widget */}
+          {showHeatmapWidget && (
+            <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 shrink-0">
+              <DataQualityHeatmap
+                currentUser={currentUser}
+                onInspectReport={(rk) => {
+                  setStudioReportKey(rk);
+                  setIsStudioOpen(true);
+                }}
+                onNavigateToSubmissions={() => {
+                  setShowHeatmapWidget(false);
+                  setReportsPage(1);
+                }}
+              />
+            </div>
+          )}
+
+          {/* Embedded Regulatory Performance Widget */}
+          {showAnalyticsWidget && (
+            <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 shrink-0">
+              <ReportingPerformanceAnalytics
+                currentUser={currentUser}
+                compact={true}
+                onViewAllSubmissions={() => setActiveSubTab('ANALYTICS')}
+              />
+            </div>
+          )}
 
           <div className="flex-1 min-h-0 overflow-y-auto">
             {paginatedReports.length === 0 ? (
@@ -1458,6 +1620,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               pageSizeOptions={[6, 9, 12, 24]}
             />
           </div>
+        </div>
+      )}
+
+      {/* Tab Content: REGULATORY CALENDAR DASHBOARD CARD & TIMELINE */}
+      {activeSubTab === 'CALENDAR' && (
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <RegulatoryCalendarCard
+            currentUser={currentUser}
+            onInspectSubmission={(sub) => setInspectingSub(sub)}
+            onViewAllSubmissions={() => setActiveSubTab('REPORTS_OVERSIGHT')}
+            onOpenReport={(rk) => {
+              setStudioReportKey(rk);
+              setIsStudioOpen(true);
+            }}
+          />
+        </div>
+      )}
+
+      {/* Tab Content: DATA QUALITY HEATMAP & RECURRING VALIDATION ERRORS */}
+      {activeSubTab === 'DATA_QUALITY' && (
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <DataQualityHeatmap
+            currentUser={currentUser}
+            onInspectReport={(rk) => {
+              setStudioReportKey(rk);
+              setIsStudioOpen(true);
+            }}
+            onNavigateToSubmissions={() => setActiveSubTab('REPORTS_OVERSIGHT')}
+          />
+        </div>
+      )}
+
+      {/* Tab Content: REPORTING PERFORMANCE ANALYTICS WIDGET & CHARTS */}
+      {activeSubTab === 'ANALYTICS' && (
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <ReportingPerformanceAnalytics
+            currentUser={currentUser}
+            onViewAllSubmissions={() => setActiveSubTab('REPORTS_OVERSIGHT')}
+          />
         </div>
       )}
 
@@ -1762,6 +1963,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <UserPlus className="w-3.5 h-3.5" />
                 <span>Create User</span>
               </button>
+
+              <MaximizeButton
+                onClick={() => setIsUsersTableMaximized(true)}
+                title="Maximize User Governance Directory (Esc to restore)"
+              />
             </div>
           </div>
 
@@ -2102,6 +2308,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <Building2 className="w-3.5 h-3.5" />
                 <span>Create Department</span>
               </button>
+
+              <MaximizeButton
+                onClick={() => setIsDeptTableMaximized(true)}
+                title="Maximize Department & Reports Matrix (Esc to restore)"
+              />
             </div>
           </div>
 
@@ -4080,6 +4291,355 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             />
           </div>
         </div>
+      )}
+
+      {/* PHASE 47: FULL VIEW / MAXIMIZED USERS DIRECTORY */}
+      {isUsersTableMaximized && (
+        <MaximizedViewModal
+          isOpen={isUsersTableMaximized}
+          onClose={() => setIsUsersTableMaximized(false)}
+          title="User Governance & Role Directory"
+          badge="Live SSOT"
+          subtitle="Complete bank-wide regulatory officer profiles, dual-control credentials & NBE return authorizations"
+          icon={Users}
+        >
+          <div className="space-y-4">
+            {/* Search & Filter Bar */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                <Search className="w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search officers by name, email, department or employee ID..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setAllUsersPage(1);
+                  }}
+                  className="w-full text-xs bg-transparent border-none text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={roleFilter}
+                  onChange={(e) => {
+                    setRoleFilter(e.target.value as any);
+                    setAllUsersPage(1);
+                  }}
+                  className="text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-slate-700 dark:text-slate-300 font-medium cursor-pointer"
+                >
+                  <option value="ALL">All Roles</option>
+                  <option value="MAKER">Maker</option>
+                  <option value="CHECKER">Checker</option>
+                  <option value="AUDITOR">Auditor</option>
+                  <option value="ADMIN">Administrator</option>
+                </select>
+
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value as any);
+                    setAllUsersPage(1);
+                  }}
+                  className="text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-slate-700 dark:text-slate-300 font-medium cursor-pointer"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="INACTIVE">Inactive</option>
+                  <option value="PENDING_APPROVAL">Pending Approval</option>
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => setIsCreateUserOpen(true)}
+                  className="px-3 py-1.5 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Create User</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Maximized Users Table */}
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto min-w-full touch-scroll-x">
+                <table className="min-w-[800px] w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 font-bold sticky top-0 z-10">
+                      <th className="py-3 px-3 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          checked={paginatedAllUsers.length > 0 && paginatedAllUsers.every((u) => selectedUserIds.has(u.id))}
+                          onChange={() => handleToggleSelectAllVisibleUsers(paginatedAllUsers)}
+                          className="w-3.5 h-3.5 text-ob-indigo-600 rounded cursor-pointer"
+                        />
+                      </th>
+                      <th className="py-3 px-3">Officer & Email</th>
+                      <th className="py-3 px-3">Role & Scope</th>
+                      <th className="py-3 px-3">Account Status</th>
+                      <th className="py-3 px-3">Department & Employee ID</th>
+                      <th className="py-3 px-3">Authorized Returns</th>
+                      <th className="py-3 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {paginatedAllUsers.map((u) => {
+                      const isPending = u.status === 'PENDING_APPROVAL';
+                      const isCurrentUser = u.email === currentUser.email;
+
+                      return (
+                        <tr
+                          key={u.id}
+                          className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors ${
+                            selectedUserIds.has(u.id) ? 'bg-ob-indigo-50/50 dark:bg-ob-indigo-950/40' : ''
+                          }`}
+                        >
+                          <td className="py-2.5 px-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selectedUserIds.has(u.id)}
+                              onChange={() => handleToggleSelectUser(u.id)}
+                              className="w-3.5 h-3.5 text-ob-indigo-600 rounded cursor-pointer"
+                            />
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                              <span>{u.name}</span>
+                              {isCurrentUser && (
+                                <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-1 rounded">You</span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-500 font-mono">{u.email}</div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                u.role === 'ADMIN'
+                                  ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
+                                  : u.role === 'CHECKER'
+                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                                  : u.role === 'AUDITOR'
+                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                                  : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                              }`}
+                            >
+                              {u.role}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                u.status === 'ACTIVE'
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                  : u.status === 'INACTIVE'
+                                  ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                  : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                              }`}
+                            >
+                              {u.status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="font-medium text-slate-800 dark:text-slate-200">{u.department || 'All Departments'}</div>
+                            <div className="text-[10px] font-mono text-slate-400">{u.employeeId || 'EMP-REG'}</div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex flex-wrap gap-1 max-w-[220px]">
+                              {u.allowedReportKeys && u.allowedReportKeys.length > 0 ? (
+                                u.allowedReportKeys.slice(0, 3).map((rk) => (
+                                  <span key={rk} className="px-1.5 py-0.2 rounded font-mono text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                    {rk}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-[10px] text-slate-400">All Returns</span>
+                              )}
+                              {u.allowedReportKeys && u.allowedReportKeys.length > 3 && (
+                                <span className="text-[9px] text-slate-400">+{u.allowedReportKeys.length - 3}</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setEditingUser(u)}
+                                className="p-1.5 text-slate-600 dark:text-slate-300 hover:text-ob-indigo-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                title="Edit User"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setBiometricTargetUser(u)}
+                                className="p-1.5 text-slate-600 dark:text-slate-300 hover:text-purple-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                title="Biometric Security Center"
+                              >
+                                <Fingerprint className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Pagination Controls */}
+            <Pagination
+              currentPage={allUsersPage}
+              pageSize={allUsersPageSize}
+              totalItems={filteredAllUsers.length}
+              onPageChange={(p) => setAllUsersPage(p)}
+              onPageSizeChange={(sz) => {
+                setAllUsersPageSize(sz);
+                setAllUsersPage(1);
+              }}
+              itemName="users"
+            />
+          </div>
+        </MaximizedViewModal>
+      )}
+
+      {/* PHASE 47: FULL VIEW / MAXIMIZED DEPARTMENTS & REPORTS MATRIX */}
+      {isDeptTableMaximized && (
+        <MaximizedViewModal
+          isOpen={isDeptTableMaximized}
+          onClose={() => setIsDeptTableMaximized(false)}
+          title="Departments & Statutory Reports Matrix"
+          badge="Governance Directory"
+          subtitle="Oromia Bank organizational units, division hierarchies, assigned officers, and NBE returns"
+          icon={Building2}
+        >
+          <div className="space-y-4">
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                <Search className="w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search departments by name, code, division..."
+                  value={deptSearch}
+                  onChange={(e) => {
+                    setDeptSearch(e.target.value);
+                    setDeptPage(1);
+                  }}
+                  className="w-full text-xs bg-transparent border-none text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateDeptOpen(true)}
+                  className="px-3 py-1.5 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span>Create Department</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Maximized Departments Table */}
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto min-w-full touch-scroll-x">
+                <table className="min-w-[850px] w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 font-bold sticky top-0 z-10">
+                      <th className="py-3 px-3">Department & Code</th>
+                      <th className="py-3 px-3">Division & Hierarchy Level</th>
+                      <th className="py-3 px-3">Status</th>
+                      <th className="py-3 px-3">Assigned Officers</th>
+                      <th className="py-3 px-3">Statutory Returns</th>
+                      <th className="py-3 px-3">Historical Submissions</th>
+                      <th className="py-3 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {paginatedDepartments.map((dept) => {
+                      const deptOfficers = users.filter((u) => u.department === dept.name);
+                      const deptReturns = getReportsForDepartment(dept.name);
+                      const deptSubs = submissions.filter((s) => s.department === dept.name);
+
+                      return (
+                        <tr key={dept.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                          <td className="py-2.5 px-3">
+                            <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                              <span>{dept.name}</span>
+                              <span className="font-mono text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1 rounded border border-slate-200 dark:border-slate-700">
+                                {dept.shortCode}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
+                              {dept.description}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="font-medium text-slate-800 dark:text-slate-200">{dept.division}</div>
+                            <div className="text-[10px] text-slate-400">{dept.hierarchyLevel}</div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                dept.status === 'ACTIVE'
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                  : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300'
+                              }`}
+                            >
+                              {dept.status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="font-semibold text-slate-900 dark:text-white">{deptOfficers.length} Officers</div>
+                            <div className="text-[10px] text-slate-400">
+                              {deptOfficers.filter((o) => o.role === 'MAKER').length} Makers ·{' '}
+                              {deptOfficers.filter((o) => o.role === 'CHECKER').length} Checkers
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="font-semibold text-ob-indigo-600 dark:text-ob-indigo-400">
+                              {deptReturns.length} Statutory Returns
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="font-semibold text-slate-900 dark:text-white">{deptSubs.length} Filings</div>
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedDeptForEdit(dept);
+                                setIsEditDeptOpen(true);
+                              }}
+                              className="p-1.5 text-slate-600 dark:text-slate-300 hover:text-ob-indigo-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                              title="Edit Department"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <Pagination
+              currentPage={deptPage}
+              pageSize={deptPageSize}
+              totalItems={filteredDepartments.length}
+              onPageChange={(p) => setDeptPage(p)}
+              onPageSizeChange={(sz) => {
+                setDeptPageSize(sz);
+                setDeptPage(1);
+              }}
+              itemName="departments"
+            />
+          </div>
+        </MaximizedViewModal>
       )}
     </div>
   );

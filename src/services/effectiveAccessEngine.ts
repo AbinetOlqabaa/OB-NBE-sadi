@@ -68,6 +68,18 @@ export type AccessReasonCode =
   | 'GRANT_REVOKED'
   | 'INVALID_WORKFLOW_STATE';
 
+export interface EligibleCheckerInfo {
+  id: string;
+  name: string;
+  email: string;
+  department: string;
+  employeeId: string;
+  status: string;
+  isAvailable: boolean;
+  authorizationReason: string;
+  specialAccessGrant?: SpecialAccessGrant;
+}
+
 export interface AccessEvaluationContext {
   role?: string;
   userDept?: string;
@@ -136,10 +148,17 @@ class EffectiveAccessEngineClass {
 
   // User to Report direct assignments (userId -> Set of reportKeys)
   private userReportAssignments: Map<string, Set<string>> = new Map();
-  private userProvider: { getById: (id: string) => any } | null = null;
+  private userProvider: { getById: (id: string) => any; getAll?: () => any[] } | null = null;
 
-  public setUserProvider(provider: { getById: (id: string) => any }): void {
+  public setUserProvider(provider: { getById: (id: string) => any; getAll?: () => any[] }): void {
     this.userProvider = provider;
+  }
+
+  private getAllUsers(): any[] {
+    if (this.userProvider && typeof this.userProvider.getAll === 'function') {
+      return this.userProvider.getAll();
+    }
+    return [];
   }
 
   constructor() {
@@ -214,8 +233,11 @@ class EffectiveAccessEngineClass {
       .map((g) => `${g.id}:${g.revoked ? 1 : 0}:${g.expiresAt || ''}`)
       .join('|');
     const rKey = reportKey || 'GLOBAL';
+    const assignedCheckers = (submission as any)?.assignedCheckerIds
+      ? (submission as any).assignedCheckerIds.join(',')
+      : '';
     const subPart = submission
-      ? `${submission.id || 'new'}:${submission.status || 'DRAFT'}:${submission.makerId || 'none'}`
+      ? `${submission.id || 'new'}:${submission.status || 'DRAFT'}:${submission.makerId || 'none'}:${assignedCheckers}`
       : 'no_sub';
     return `${uId}:${uRole}:${uStatus}:${uDept}:${grantsHash}:${rKey}:${action}:${subPart}`;
   }
@@ -850,11 +872,41 @@ class EffectiveAccessEngineClass {
         return res;
       }
 
-      // Check Submission-Level Workflow State
+      // Phase 36: Check Maker-Selected Reviewer Assignment
+      if (
+        submission &&
+        Array.isArray(submission.assignedCheckerIds) &&
+        submission.assignedCheckerIds.length > 0
+      ) {
+        const isAssigned = submission.assignedCheckerIds.includes(user.id);
+        if (!isAssigned && !isSpecialAccess && (role as string) !== 'ADMIN') {
+          const designatedNames =
+            submission.reviewerAssignments?.map((r) => r.checkerName).join(', ') ||
+            submission.assignedCheckerIds.join(', ');
+          const res: AccessEvaluationResult = {
+            allowed: false,
+            reason: `Reviewer assignment restriction: You are not designated as an assigned reviewer for this return. Designated reviewer(s): ${designatedNames}.`,
+            code: 'ROLE_FORBIDDEN',
+            context: { role, userDept, reportKey, workflowStatus: submission.status },
+          };
+          this.accessCache.set(cacheKey, res);
+          return res;
+        }
+      }
+
+      // Check Submission-Level Workflow State (Requirement 10: duplicate & conflicting review prevention)
       if (submission && submission.status && submission.status !== 'PENDING_CHECKER') {
+        let workflowReason = `Only submissions in PENDING_CHECKER status can be reviewed (current status: ${submission.status}).`;
+        if (submission.status === 'APPROVED') {
+          workflowReason = `Duplicate review prevented: Submission ${submission.id} has already been APPROVED by Checker ${submission.checkerName || 'authorized reviewer'}. Current workflow state is APPROVED.`;
+        } else if (submission.status === 'REJECTED') {
+          workflowReason = `Conflicting review action prevented: Submission ${submission.id} has already been REJECTED.`;
+        } else if (submission.status === 'CORRECTION_REQUIRED') {
+          workflowReason = `Conflicting review action prevented: Submission ${submission.id} was returned for correction and must be resubmitted by Maker before further review.`;
+        }
         const res: AccessEvaluationResult = {
           allowed: false,
-          reason: `Only submissions in PENDING_CHECKER status can be reviewed (current status: ${submission.status}).`,
+          reason: workflowReason,
           code: 'INVALID_WORKFLOW_STATE',
           context: { role, userDept, reportKey, workflowStatus: submission.status },
         };
@@ -1374,6 +1426,164 @@ class EffectiveAccessEngineClass {
       return matrix.map((m) => m.reportKey);
     }
     return [];
+  }
+
+  /**
+   * Phase 36: Server-side query for eligible Checkers for a given report.
+   * Evaluates:
+   * 1. Same department (or active special access covering report or department, or SSOT linked department)
+   * 2. Active account status (excludes DISABLED, PENDING_APPROVAL, SUSPENDED)
+   * 3. Role must be CHECKER
+   * 4. Conflict of interest / Segregation of duties: Maker cannot select self or review own report
+   * 5. Returns safe metadata without private credentials
+   */
+  public getEligibleCheckersForReport(
+    reportKey: string,
+    maker: UserSession,
+    submission?: Partial<ReportSubmission>
+  ): EligibleCheckerInfo[] {
+    const allUsers = this.getAllUsers();
+    const primaryDept = submission?.department || getDepartmentForReport(reportKey);
+    const makerDept = maker.department;
+
+    return allUsers
+      .filter((u) => {
+        // 1. Role must be CHECKER
+        if (u.role !== 'CHECKER') return false;
+
+        // 2. Account status must be ACTIVE
+        if (u.status !== 'ACTIVE') return false;
+
+        // 3. Maker cannot select self
+        if (maker.id && u.id === maker.id) return false;
+        if (maker.email && u.email && u.email.toLowerCase() === maker.email.toLowerCase()) return false;
+        if (submission && submission.makerId && u.id === submission.makerId) return false;
+
+        // 4. Department / Special Access authority
+        const userDept = u.department;
+        const isSameDept = Boolean(
+          (primaryDept && userDept && primaryDept.toLowerCase() === userDept.toLowerCase()) ||
+          (makerDept && userDept && makerDept.toLowerCase() === userDept.toLowerCase())
+        );
+
+        // Check if user has active special access covering this report or department
+        const grants: SpecialAccessGrant[] = u.specialAccessGrants || [];
+        const coveringGrant = this.findActiveGrantCoveringReport(grants, reportKey, primaryDept);
+
+        // Linked departments from SSOT
+        const linkedDepts: string[] = departmentService.getDepartmentsForReport(reportKey);
+        const isLinkedDept = linkedDepts.some(
+          (ld: string) => Boolean(userDept && ld.toLowerCase() === userDept.toLowerCase())
+        );
+
+        // Direct assignment check
+        const directAssignments = this.userReportAssignments.get(u.id);
+        const isDirectAssignment = Boolean(directAssignments && directAssignments.has(reportKey));
+
+        return isSameDept || Boolean(coveringGrant) || isLinkedDept || isDirectAssignment;
+      })
+      .map((u) => {
+        const grants: SpecialAccessGrant[] = u.specialAccessGrants || [];
+        const coveringGrant = this.findActiveGrantCoveringReport(grants, reportKey, primaryDept);
+        let authReason = 'Same-Department Authorized Reviewer';
+        if (coveringGrant) {
+          authReason = `Special Access Grant: ${coveringGrant.reason}`;
+        } else if (u.department) {
+          authReason = `${u.department} Reviewer`;
+        }
+
+        return {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          department: u.department,
+          employeeId: u.employeeId,
+          status: u.status,
+          isAvailable: true,
+          authorizationReason: authReason,
+          specialAccessGrant: coveringGrant || undefined,
+        };
+      });
+  }
+
+  /**
+   * Phase 36: Server-side validation of Maker-selected Checker assignment.
+   * Throws or returns validation failure if:
+   * - No checker selected when required
+   * - Maker selected themselves
+   * - Duplicate Checkers selected
+   * - Forged or unauthorized Checker IDs passed
+   */
+  public validateCheckerSelection(
+    reportKey: string,
+    maker: UserSession,
+    selectedCheckerIds: string[],
+    submission?: Partial<ReportSubmission>
+  ): {
+    valid: boolean;
+    error?: string;
+    eligibleCheckers: EligibleCheckerInfo[];
+    selectedCheckers: EligibleCheckerInfo[];
+  } {
+    if (!Array.isArray(selectedCheckerIds)) {
+      return {
+        valid: false,
+        error: 'Invalid reviewer selection payload: selectedCheckerIds must be an array.',
+        eligibleCheckers: [],
+        selectedCheckers: [],
+      };
+    }
+
+    if (selectedCheckerIds.length === 0) {
+      return {
+        valid: false,
+        error: 'Reviewer selection is mandatory: Maker must select at least one eligible Checker for 4-eyes review.',
+        eligibleCheckers: [],
+        selectedCheckers: [],
+      };
+    }
+
+    // Duplicate check
+    const uniqueIds = new Set(selectedCheckerIds);
+    if (uniqueIds.size !== selectedCheckerIds.length) {
+      return {
+        valid: false,
+        error: 'Duplicate reviewer selection detected: The same Checker cannot be selected more than once.',
+        eligibleCheckers: [],
+        selectedCheckers: [],
+      };
+    }
+
+    // Maker selecting self check
+    if (maker.id && selectedCheckerIds.includes(maker.id)) {
+      return {
+        valid: false,
+        error: 'Segregation of duties violation: Maker cannot select themselves as a Checker.',
+        eligibleCheckers: [],
+        selectedCheckers: [],
+      };
+    }
+
+    const eligible = this.getEligibleCheckersForReport(reportKey, maker, submission);
+    const eligibleMap = new Map(eligible.map((c) => [c.id, c]));
+
+    // Check each selected ID against eligible set
+    for (const cId of selectedCheckerIds) {
+      if (!eligibleMap.has(cId)) {
+        return {
+          valid: false,
+          error: `Unauthorized Checker selection: Reviewer '${cId}' is not an active, authorized Checker for return '${reportKey}'. Forged, inactive, or unauthorized cross-department reviewer selections are strictly rejected under NBE BSD/03/2020 rules.`,
+          eligibleCheckers: eligible,
+          selectedCheckers: [],
+        };
+      }
+    }
+
+    return {
+      valid: true,
+      eligibleCheckers: eligible,
+      selectedCheckers: selectedCheckerIds.map((id) => eligibleMap.get(id)!),
+    };
   }
 }
 

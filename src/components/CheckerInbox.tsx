@@ -32,9 +32,14 @@ import {
   FileCheck,
   Archive,
   Download,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
+import { submissionService } from '../services/submissionService.ts';
 import { ValidationEngine } from '../utils/validationEngine.ts';
 import { Pagination } from './Pagination.tsx';
+import { MaximizedViewModal } from './MaximizedViewModal.tsx';
+import { MaximizeButton } from './MaximizeButton.tsx';
 import { PdfReportGenerator } from '../utils/pdfReportGenerator.ts';
 import { exportRegulatoryReportPDF } from '../utils/regulatoryReportPdfExport.ts';
 import { exportRegulatoryReportXLSX } from '../utils/regulatoryReportXlsxExport.ts';
@@ -72,6 +77,14 @@ export const CheckerInbox: React.FC<CheckerInboxProps> = ({
   const [filterCategory, setFilterCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [archivedSubmissionIds, setArchivedSubmissionIds] = useState<string[]>([]);
+  const [isMaximized, setIsMaximized] = useState(false);
+
+  // Phase 50: Checker Batch Submission to NBE State
+  const [selectedCheckerSubIds, setSelectedCheckerSubIds] = useState<string[]>([]);
+  const [isBatchNbeModalOpen, setIsBatchNbeModalOpen] = useState(false);
+  const [batchNbeComment, setBatchNbeComment] = useState('');
+  const [isBatchSubmittingNbe, setIsBatchSubmittingNbe] = useState(false);
+  const [batchNbeResultBanner, setBatchNbeResultBanner] = useState<string | null>(null);
 
   // Pagination state - 6 items per page
   const [page, setPage] = useState(1);
@@ -143,6 +156,53 @@ export const CheckerInbox: React.FC<CheckerInboxProps> = ({
     setSelectedSubForReview(sub);
     setReviewAction(null);
     setReviewComment('');
+  };
+
+  const toggleSelectCheckerSub = (subId: string) => {
+    vibrate(15);
+    setSelectedCheckerSubIds((prev) =>
+      prev.includes(subId) ? prev.filter((id) => id !== subId) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllCheckerEligible = () => {
+    vibrate(20);
+    if (selectedCheckerSubIds.length === filteredSubmissions.length && filteredSubmissions.length > 0) {
+      setSelectedCheckerSubIds([]);
+    } else {
+      setSelectedCheckerSubIds(filteredSubmissions.map((s) => s.id));
+    }
+  };
+
+  const handleOpenBatchNbeModal = () => {
+    if (selectedCheckerSubIds.length === 0) return;
+    setBatchNbeComment(
+      `Batch verified and authorized for transmission to NBE Gateway by Checker ${currentUser.name} (${currentUser.department})`
+    );
+    setIsBatchNbeModalOpen(true);
+    vibrate(25);
+  };
+
+  const handleExecuteBatchNbeSubmit = async () => {
+    if (selectedCheckerSubIds.length === 0) return;
+    setIsBatchSubmittingNbe(true);
+    try {
+      const res = await submissionService.batchSubmitToNBE(
+        selectedCheckerSubIds,
+        currentUser,
+        batchNbeComment
+      );
+      haptics.success();
+      setBatchNbeResultBanner(
+        `Batch Submission to NBE Complete: ${res.succeededCount} of ${res.totalRequested} return(s) officially delivered to NBE Gateway.`
+      );
+      setSelectedCheckerSubIds([]);
+      setIsBatchNbeModalOpen(false);
+    } catch (err: any) {
+      alert(`Batch submit to NBE failed: ${err.message}`);
+    } finally {
+      setIsBatchSubmittingNbe(false);
+    }
   };
 
   const handleSubmitReview = (action: 'APPROVE' | 'REJECT' | 'REQUEST_CORRECTION') => {
@@ -341,7 +401,69 @@ export const CheckerInbox: React.FC<CheckerInboxProps> = ({
               </option>
             ))}
           </select>
+
+          <MaximizeButton
+            onClick={() => setIsMaximized(true)}
+            title="Maximize 4-Eyes Review Queue (Esc to restore)"
+          />
         </div>
+
+        {/* Phase 50: Checker Batch Action Bar */}
+        <div className="w-full pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 overflow-x-auto touch-scroll-x min-w-0 max-w-full">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={toggleSelectAllCheckerEligible}
+              className="min-h-[36px] px-3 py-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 flex items-center gap-1.5 cursor-pointer"
+            >
+              {selectedCheckerSubIds.length > 0 ? (
+                <CheckSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              ) : (
+                <Square className="w-3.5 h-3.5" />
+              )}
+              <span>
+                {selectedCheckerSubIds.length > 0
+                  ? `Selected (${selectedCheckerSubIds.length})`
+                  : 'Select All in Queue'}
+              </span>
+            </button>
+
+            {selectedCheckerSubIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedCheckerSubIds([])}
+                className="min-h-[36px] px-2.5 py-1 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-semibold cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={selectedCheckerSubIds.length === 0}
+              onClick={handleOpenBatchNbeModal}
+              className="min-h-[38px] px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition-all cursor-pointer disabled:cursor-not-allowed"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Submit to NBE ({selectedCheckerSubIds.length})</span>
+            </button>
+          </div>
+        </div>
+
+        {batchNbeResultBanner && (
+          <div className="w-full p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-200 flex items-center justify-between gap-2">
+            <span className="font-mono font-semibold">{batchNbeResultBanner}</span>
+            <button
+              type="button"
+              onClick={() => setBatchNbeResultBanner(null)}
+              className="text-emerald-600 hover:text-emerald-800 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 4. Submissions Table */}
@@ -432,6 +554,20 @@ export const CheckerInbox: React.FC<CheckerInboxProps> = ({
                 <table className="w-full min-w-[700px] text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-semibold sticky top-0 z-10">
+                    <th className="py-2.5 px-3 w-8">
+                      <button
+                        type="button"
+                        onClick={toggleSelectAllCheckerEligible}
+                        aria-label="Select all returns in review table"
+                        className="p-1 rounded text-slate-400 hover:text-emerald-600 cursor-pointer"
+                      >
+                        {selectedCheckerSubIds.length > 0 ? (
+                          <CheckSquare className="w-3.5 h-3.5 text-emerald-600" />
+                        ) : (
+                          <Square className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </th>
                     <th className="py-2.5 px-3">Return Code</th>
                     <th className="py-2.5 px-3">Report Name</th>
                     <th className="py-2.5 px-3">Department</th>
@@ -451,6 +587,20 @@ export const CheckerInbox: React.FC<CheckerInboxProps> = ({
 
                     return (
                       <tr key={sub.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td className="py-2.5 px-3">
+                          <button
+                            type="button"
+                            onClick={() => toggleSelectCheckerSub(sub.id)}
+                            aria-label={`Select return ${sub.reportKey}`}
+                            className="p-1 rounded text-slate-400 hover:text-emerald-600 cursor-pointer"
+                          >
+                            {selectedCheckerSubIds.includes(sub.id) ? (
+                              <CheckSquare className="w-3.5 h-3.5 text-emerald-600" />
+                            ) : (
+                              <Square className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </td>
                         <td className="py-2.5 px-3 font-mono font-bold text-ob-indigo-700 dark:text-ob-indigo-300">
                           {sub.reportKey}
                         </td>
@@ -696,6 +846,107 @@ export const CheckerInbox: React.FC<CheckerInboxProps> = ({
             )}
           </div>
         </div>
+      )}
+
+      {/* PHASE 47: FULL VIEW / MAXIMIZED REVIEW QUEUE */}
+      {isMaximized && (
+        <MaximizedViewModal
+          isOpen={isMaximized}
+          onClose={() => setIsMaximized(false)}
+          title="Department 4-Eyes Review Queue"
+          badge="Checker Authority"
+          subtitle={`Inspection ledger of ${filteredSubmissions.length} regulatory returns awaiting 4-eyes approval in ${currentUser.department}`}
+          icon={Shield}
+        >
+          <div className="space-y-4">
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto min-w-full touch-scroll-x">
+                <table className="w-full min-w-[750px] text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 font-bold sticky top-0 z-10">
+                      <th className="py-3 px-3">Return Code</th>
+                      <th className="py-3 px-3">Report Name</th>
+                      <th className="py-3 px-3">Department</th>
+                      <th className="py-3 px-3">Status</th>
+                      <th className="py-3 px-3">Maker Details</th>
+                      <th className="py-3 px-3">Submitted At</th>
+                      <th className="py-3 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {paginatedSubmissions.map((sub) => {
+                      const tpl = templates.find((t) => t.ReturnKey === sub.reportKey);
+                      return (
+                        <tr key={sub.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                          <td className="py-2.5 px-3">
+                            <span className="font-mono text-xs font-bold text-ob-indigo-700 dark:text-ob-indigo-400 bg-ob-indigo-50 dark:bg-ob-indigo-950/60 px-1.5 py-0.5 rounded border border-ob-indigo-200 dark:border-ob-indigo-800/60">
+                              {sub.reportKey}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="font-bold text-slate-900 dark:text-white truncate max-w-xs">
+                              {tpl?.Title || sub.reportKey}
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono">v{sub.version || 1}</div>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300">
+                            {sub.department || 'Credit Operations'}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                sub.status === 'APPROVED'
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                  : sub.status === 'PENDING_CHECKER'
+                                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                  : sub.status === 'SENT'
+                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                                  : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                              }`}
+                            >
+                              {sub.status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300">
+                            <div>{sub.makerName}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">{sub.makerEmployeeId || 'EMP-REG'}</div>
+                          </td>
+                          <td className="py-2.5 px-3 font-mono text-slate-500">
+                            {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : 'N/A'}
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsMaximized(false);
+                                setSelectedSubForReview(sub);
+                              }}
+                              className="px-3 py-1 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                            >
+                              {sub.status === 'PENDING_CHECKER' ? '4-Eyes Review' : 'View Details'}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <Pagination
+              currentPage={page}
+              pageSize={pageSize}
+              totalItems={filteredSubmissions.length}
+              onPageChange={(p) => setPage(p)}
+              onPageSizeChange={(sz) => {
+                setPageSize(sz);
+                setPage(1);
+              }}
+              itemName="submissions"
+            />
+          </div>
+        </MaximizedViewModal>
       )}
     </div>
   );

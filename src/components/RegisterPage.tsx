@@ -439,9 +439,6 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
               <span className="text-xs sm:text-base font-bold tracking-tight text-ob-indigo-900 dark:text-white truncate">
                 Oromia Bank
               </span>
-              <span className="px-1.5 py-0.2 rounded text-[9px] sm:text-[10px] font-mono font-bold bg-ob-green-50 dark:bg-ob-green-500/20 text-ob-green-800 dark:text-ob-green-300 border border-ob-green-300 dark:border-ob-green-500/40 shrink-0">
-                0000013
-              </span>
             </div>
             <span className="hidden sm:block text-[11px] text-slate-500 dark:text-slate-400 truncate">
               National Bank of Ethiopia · User Onboarding & Governance

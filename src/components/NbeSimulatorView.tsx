@@ -1124,7 +1124,7 @@ export const NbeSimulatorView: React.FC = () => {
                     )}
                   </div>
 
-                  <pre className="bg-slate-950 text-slate-100 p-3 rounded-xl font-mono text-[11px] max-h-56 overflow-y-auto border border-slate-800">
+                  <pre className="bg-slate-950 text-slate-100 p-3 rounded-xl font-mono text-[11px] max-h-56 overflow-y-auto overflow-x-auto touch-scroll-x border border-slate-800">
                     {selectedLog.requestBody
                       ? JSON.stringify(selectedLog.requestBody, null, 2)
                       : '// No request body'}
@@ -1150,7 +1150,7 @@ export const NbeSimulatorView: React.FC = () => {
                     )}
                   </div>
 
-                  <pre className="bg-slate-950 text-slate-100 p-3 rounded-xl font-mono text-[11px] max-h-56 overflow-y-auto border border-slate-800">
+                  <pre className="bg-slate-950 text-slate-100 p-3 rounded-xl font-mono text-[11px] max-h-56 overflow-y-auto overflow-x-auto touch-scroll-x border border-slate-800">
                     {selectedLog.responseBody
                       ? JSON.stringify(selectedLog.responseBody, null, 2)
                       : '// No response body'}

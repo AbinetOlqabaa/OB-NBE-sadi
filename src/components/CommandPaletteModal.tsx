@@ -76,7 +76,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       icon: FileText,
       shortcut: `${modKey}+M`,
       category: 'Views',
-      allowedRoles: ['ADMIN', 'MAKER'],
+      allowedRoles: ['MAKER'],
     },
     {
       id: 'LIBRARY' as ViewTab,
@@ -85,7 +85,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       icon: BookOpen,
       shortcut: `${modKey}+L`,
       category: 'Views',
-      allowedRoles: ['ADMIN', 'MAKER', 'CHECKER', 'AUDITOR'],
+      allowedRoles: ['MAKER', 'CHECKER', 'AUDITOR'],
     },
     {
       id: 'CHECKER_INBOX' as ViewTab,
@@ -94,7 +94,16 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       icon: Inbox,
       shortcut: `${modKey}+Shift+C`,
       category: 'Views',
-      allowedRoles: ['ADMIN', 'CHECKER'],
+      allowedRoles: ['CHECKER'],
+    },
+    {
+      id: 'AUDITOR_DASHBOARD' as ViewTab,
+      title: 'Auditor Workspace',
+      subtitle: 'Audit work queue, independent findings & evidence inspection',
+      icon: History,
+      shortcut: `${modKey}+Shift+A`,
+      category: 'Views',
+      allowedRoles: ['AUDITOR'],
     },
     {
       id: 'ADMIN_DASHBOARD' as ViewTab,
@@ -121,7 +130,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       icon: Send,
       shortcut: `${modKey}+Shift+N`,
       category: 'Views',
-      allowedRoles: ['ADMIN', 'CHECKER'],
+      allowedRoles: ['ADMIN'],
     },
     {
       id: 'PHASE2_SSOT' as ViewTab,

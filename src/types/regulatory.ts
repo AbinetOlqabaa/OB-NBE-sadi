@@ -140,6 +140,19 @@ export interface SubmissionSnapshot {
   nbeReferenceNumber?: string;
 }
 
+export interface ReviewerAssignment {
+  checkerId: string;
+  checkerName: string;
+  checkerEmail?: string;
+  checkerDepartment?: string;
+  assignedAt: string;
+  isPrimary?: boolean;
+  status?: 'PENDING' | 'ACCEPTED' | 'REVIEWED' | 'SUPERSEDED';
+  openedAt?: string;
+  reviewedAt?: string;
+  notes?: string;
+}
+
 export interface ReportSubmission {
   id: string;
   reportKey: string;
@@ -180,6 +193,9 @@ export interface ReportSubmission {
   checkerName?: string;
   checkerEmail?: string;
   checkerDepartment?: string;
+  assignedCheckerIds?: string[];
+  reviewerAssignments?: ReviewerAssignment[];
+  primaryCheckerId?: string;
   comments: SubmissionComment[];
   deliveryAttempts: DeliveryAttempt[];
   createdAt: string;
@@ -351,9 +367,9 @@ export interface SubmissionComment {
   userName: string;
   userRole: "MAKER" | "CHECKER" | "ADMIN" | "AUDITOR";
   comment: string;
-  action: "SUBMIT" | "APPROVE" | "REJECT" | "REQUEST_CORRECTION" | "SAVE_DRAFT" | "NOTE" | "COMMENT" | "FLAG" | "ARCHIVED" | "VOIDED";
+  action: "SUBMIT" | "APPROVE" | "REJECT" | "REQUEST_CORRECTION" | "SAVE_DRAFT" | "NOTE" | "COMMENT" | "FLAG" | "ARCHIVED" | "VOIDED" | "ASSIGN_CHECKER" | "ACCEPT_REVIEW";
   timestamp: string;
-  category?: 'GENERAL' | 'AUDIT' | 'CHECKER_QUERY' | 'CORRECTION_NOTE';
+  category?: 'GENERAL' | 'AUDIT' | 'CHECKER_QUERY' | 'CORRECTION_NOTE' | 'ASSIGNMENT_NOTE';
 }
 
 export interface DeliveryAttempt {
@@ -515,4 +531,84 @@ export interface AuditWorkQueueItem {
   pendingRemediations: number;
   updatedAt: string;
 }
+
+export interface AuditorPerformanceMetrics {
+  totalSubmissions: number;
+  pendingCorrections: number;
+  approvedToday: number;
+  avgProcessingTimeHours: number;
+  avgProcessingTimeFormatted: string;
+  sentToNbeCount: number;
+  pendingCheckerCount: number;
+  draftCount: number;
+  slaComplianceRate: number;
+}
+
+export type AnomalyPatternType =
+  | 'STATISTICAL_VARIANCE_SPIKE'
+  | 'OFF_HOURS_SUBMISSION'
+  | 'RAPID_VERSION_CHURN'
+  | 'CROSS_SCHEDULE_IMBALANCE'
+  | 'PROVISION_COVERAGE_DROP'
+  | 'SLA_BOTTLENECK';
+
+export type AnomalyStatus = 'ACTIVE' | 'INVESTIGATING' | 'CONVERTED_TO_FINDING' | 'DISMISSED';
+
+export interface RegulatoryAnomalyItem {
+  id: string;
+  submissionId: string;
+  reportKey: string;
+  reportTitle: string;
+  department: string;
+  severity: AuditFindingSeverity;
+  patternType: AnomalyPatternType;
+  patternLabel: string;
+  title: string;
+  description: string;
+  affectedField: string;
+  expectedRange: string;
+  observedValue: string;
+  deviationScore: string;
+  confidencePct: number;
+  detectedAt: string;
+  status: AnomalyStatus;
+  linkedFindingId?: string;
+}
+
+export type AuditorExportFormat = 'CSV' | 'XLSX' | 'PDF' | 'JSON' | 'XML';
+
+export type AuditorExportScope =
+  | 'WORK_QUEUE'
+  | 'FINDINGS'
+  | 'ANOMALY_FEED'
+  | 'PERFORMANCE_KPIS'
+  | 'EVIDENCE_VAULT'
+  | 'REMEDIATIONS'
+  | 'FULL_AUDIT_DOSSIER';
+
+export interface BatchSubmissionItemResult {
+  submissionId: string;
+  reportKey: string;
+  previousStatus: SubmissionStatus;
+  newStatus: SubmissionStatus;
+  success: boolean;
+  nbeReceiptNumber?: string;
+  error?: string;
+}
+
+export interface BatchSubmissionResult {
+  batchId: string;
+  actionType: 'BATCH_SUBMIT_TO_CHECKER' | 'BATCH_SUBMIT_TO_NBE';
+  actorId: string;
+  actorName: string;
+  actorRole: string;
+  bulkComment: string;
+  timestamp: string;
+  totalRequested: number;
+  succeededCount: number;
+  failedCount: number;
+  results: BatchSubmissionItemResult[];
+  updatedSubmissions: ReportSubmission[];
+}
+
 

@@ -4,7 +4,17 @@
  */
 
 import { BrowserSafeEventEmitter } from '../utils/browserEventEmitter.ts';
-import { configService, type ActorInfo, type ReportVersionSSOT, type DepartmentSSOT, type ReportDefinitionSSOT } from './configService.ts';
+import {
+  configService,
+  type ActorInfo,
+  type ReportVersionSSOT,
+  type DepartmentSSOT,
+  type ReportDefinitionSSOT,
+  type ReportFrequency,
+  type ReportSectionSSOT,
+  type ReportFieldSSOT,
+  type ReportColumnSSOT,
+} from './configService.ts';
 import { departmentService } from './departmentService.ts';
 import { userService, type UserAccount } from './userService.ts';
 import { submissionService } from './submissionService.ts';
@@ -12,6 +22,7 @@ import type { ReportSubmission } from '../types/regulatory.ts';
 import { auditService } from './auditService.ts';
 import { realtimeSsotEngine } from './realtimeSsotEngine.ts';
 import { getAllReports, getReportByKey } from '../data/report-registry.ts';
+import { nbeEndpointRegistry, type ReportIntegrationConfigSSOT } from './nbeEndpointRegistry.ts';
 
 // ============================================================================
 // 1. DATA CONTRACTS & GOVERNANCE TYPES (Phase 8 Specification)
@@ -942,6 +953,108 @@ class ConfigurationGovernanceEngine extends BrowserSafeEventEmitter {
     return proposal;
   }
 
+  /**
+   * Phase 34: Administrator Template Governance Workflow
+   * Proposes modifications to report definition, titles, descriptions, line items,
+   * schedules, formulas, validation rules, or endpoints.
+   * Runs automated impact analysis, enforces 4-eyes dual control on high-impact changes,
+   * and upon publication, safely increments version while preserving historical returns.
+   */
+  public proposeReportDefinitionChange(
+    reportKey: string,
+    updates: {
+      title?: string;
+      name?: string;
+      code?: string;
+      description?: string;
+      category?: string;
+      frequency?: ReportFrequency;
+      defaultDepartmentId?: string;
+      departmentIds?: string[];
+      sections?: ReportSectionSSOT[];
+      fields?: ReportFieldSSOT[];
+      columns?: ReportColumnSSOT[];
+      formulas?: any[];
+      validationRules?: any[];
+      nbeMapping?: Record<string, any>;
+      endpointConfig?: Partial<ReportIntegrationConfigSSOT>;
+      reason: string;
+    },
+    proposer: { id: string; name: string; role: string; department?: string }
+  ): GovernanceProposal {
+    if (!proposer || proposer.role !== 'ADMIN') {
+      throw new Error(
+        `ROLE_FORBIDDEN: Only Compliance Administrators can propose modifications to report definitions. User role '${proposer?.role || 'ANONYMOUS'}' is restricted to data entry.`
+      );
+    }
+
+    const normKey = reportKey.trim().toUpperCase();
+    const existing = configService.getReportDefinition(normKey);
+    if (!existing) {
+      throw new Error(`Report definition '${normKey}' not found.`);
+    }
+
+    const currentVersion = existing.currentVersion || 1;
+    const activeVersion = configService.getActiveVersion(normKey) || configService.getReportVersion(normKey, currentVersion);
+
+    const beforeState = {
+      name: existing.name,
+      code: existing.code,
+      description: existing.description,
+      category: existing.category,
+      frequency: existing.frequency,
+      defaultDepartmentId: existing.defaultDepartmentId,
+      departmentIds: existing.departmentIds || [],
+      sections: activeVersion?.sections || [],
+      fields: activeVersion?.fields || [],
+      columns: activeVersion?.columns || [],
+      formulas: activeVersion?.formulas || [],
+      validationRules: activeVersion?.validationRules || [],
+      nbeMapping: existing.nbeMapping || {},
+    };
+
+    const targetName = updates.name || updates.title || existing.name;
+    const afterState = {
+      ...beforeState,
+      name: targetName,
+      code: updates.code ? updates.code.toUpperCase() : existing.code,
+      description: updates.description !== undefined ? updates.description : existing.description,
+      category: updates.category || existing.category,
+      frequency: updates.frequency || existing.frequency,
+      defaultDepartmentId: updates.defaultDepartmentId || existing.defaultDepartmentId,
+      departmentIds: updates.departmentIds || existing.departmentIds,
+      sections: updates.sections || beforeState.sections,
+      fields: updates.fields || beforeState.fields,
+      columns: updates.columns || beforeState.columns,
+      formulas: updates.formulas || beforeState.formulas,
+      validationRules: updates.validationRules || beforeState.validationRules,
+      nbeMapping: updates.nbeMapping || beforeState.nbeMapping,
+    };
+
+    const diff = this.computeDiff(beforeState, afterState);
+    const hasStructuralChanges = Boolean(
+      updates.fields || updates.columns || updates.sections || updates.formulas || updates.validationRules
+    );
+    const actionType: GovernanceActionType = hasStructuralChanges ? 'VERSION_BUMP' : 'UPDATE';
+
+    return this.createProposalDraft(
+      {
+        title: `Governed Update for ${existing.name} (${normKey})`,
+        description: updates.reason || `Administrative template governance change for ${normKey}`,
+        category: 'REPORT_TEMPLATE',
+        entityType: 'REPORT_DEFINITION',
+        entityId: normKey,
+        entityName: targetName,
+        actionType,
+        proposedBeforeState: beforeState,
+        proposedAfterState: afterState,
+        diff,
+        expectedEntityVersion: currentVersion,
+      },
+      proposer
+    );
+  }
+
   // --------------------------------------------------------------------------
   // LIFECYCLE: 2. VALIDATE PROPOSAL
   // --------------------------------------------------------------------------
@@ -1248,22 +1361,72 @@ class ConfigurationGovernanceEngine extends BrowserSafeEventEmitter {
   ): void {
     const after = proposal.proposedChanges.afterState;
 
-    if (proposal.entityType === 'REPORT_DEFINITION' || proposal.entityType === 'REPORT_VERSION') {
+    if (proposal.entityType === 'REPORT_DEFINITION' || proposal.entityType === 'REPORT_VERSION' || proposal.entityType === 'REPORT_TEMPLATE') {
       const returnKey = proposal.entityId;
       const rep = configService.getReportDefinition(returnKey);
       if (rep) {
-        // If version bump
+        // 1. Update metadata if title, name, description, category, frequency, department linkage changed
+        if (
+          after?.name ||
+          after?.title ||
+          after?.description !== undefined ||
+          after?.category ||
+          after?.frequency ||
+          after?.defaultDepartmentId ||
+          after?.departmentIds
+        ) {
+          try {
+            configService.updateReportDefinition(
+              returnKey,
+              {
+                name: after.name || after.title,
+                code: after.code,
+                description: after.description,
+                category: after.category,
+                frequency: after.frequency,
+                defaultDepartmentId: after.defaultDepartmentId,
+                departmentIds: after.departmentIds,
+                nbeMapping: after.nbeMapping,
+              },
+              publisher
+            );
+          } catch (err) {
+            console.warn('[Governance] Warning updating report definition metadata:', err);
+          }
+        }
+
+        // 2. If endpoint configuration changed
+        if (after?.endpointUrl || after?.environmentTarget || after?.endpointConfig) {
+          try {
+            const epInput = after.endpointConfig || {
+              endpointUrl: after.endpointUrl,
+              environmentTarget: after.environmentTarget,
+              httpMethod: after.httpMethod,
+              timeoutMs: after.timeoutMs,
+              authProfileRef: after.authProfileRef,
+            };
+            nbeEndpointRegistry.updateReportEndpoint(returnKey, epInput, publisher);
+          } catch (err) {
+            console.warn('[Governance] Warning updating NBE endpoint:', err);
+          }
+        }
+
+        // 3. If version bump or structural changes
         if (proposal.actionType === 'VERSION_BUMP' || proposal.actionType === 'UPDATE' || proposal.actionType === 'ROLLBACK') {
-          configService.createReportVersion(
-            returnKey,
-            {
-              changelogSummary: `[Governance] ${proposal.title}`,
-              fields: after?.fields,
-              formulas: after?.formulas,
-              validationRules: after?.validationRules,
-            },
-            publisher
-          );
+          if (after?.fields || after?.columns || after?.sections || after?.formulas || after?.validationRules) {
+            configService.createReportVersion(
+              returnKey,
+              {
+                changelogSummary: `[Governance] ${proposal.title}`,
+                sections: after?.sections,
+                fields: after?.fields,
+                columns: after?.columns,
+                formulas: after?.formulas,
+                validationRules: after?.validationRules,
+              },
+              publisher
+            );
+          }
         }
       }
     } else if (proposal.entityType === 'DEPARTMENT') {

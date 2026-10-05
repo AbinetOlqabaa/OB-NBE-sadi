@@ -18,6 +18,9 @@ import type {
   LibraryLifecycleState,
   RemovalImpactAssessment,
   GovernedRemovalResult,
+  ReviewerAssignment,
+  BatchSubmissionResult,
+  BatchSubmissionItemResult,
 } from '../types/regulatory.ts';
 import {
   deriveLibraryLifecycleState,
@@ -34,6 +37,7 @@ import type { NormalizedValidationSummary, ProposedFix } from '../types/remediat
 import { nbeAdapter } from './nbeAdapter.ts';
 import type { DeliveryResult } from './nbeAdapter.ts';
 import { auditService } from './auditService.ts';
+import { notificationService } from './notificationService.ts';
 import { userService } from './userService.ts';
 import { departmentService } from './departmentService.ts';
 import { configService } from './configService.ts';
@@ -63,6 +67,16 @@ export const DEMO_USERS: UserSession[] = [
     institutionCode: '0000013',
     department: 'Credit Operations & Portfolio Management',
     employeeId: 'OB-CHK-055',
+    specialAccessGrants: [],
+  },
+  {
+    id: 'usr_checker_credit_2',
+    name: 'Almaz Bekele',
+    email: 'almaz.bekele@oromiabank.com',
+    role: 'CHECKER',
+    institutionCode: '0000013',
+    department: 'Credit Operations & Portfolio Management',
+    employeeId: 'OB-CHK-056',
     specialAccessGrants: [],
   },
   {
@@ -558,6 +572,338 @@ class SubmissionServiceClass {
       };
       this.submissions.set(sub3.id, sub3);
     }
+
+    // Historical returns across the last 30 days for rich compliance & performance analytics
+    this.seedHistorical30DayAnalyticsData();
+  }
+
+  private seedHistorical30DayAnalyticsData(): void {
+    const historicalSeeds: {
+      id: string;
+      reportKey: string;
+      department: string;
+      daysAgo: number;
+      makerHours: number;
+      checkerReviewHours: number;
+      status: SubmissionStatus;
+      makerName: string;
+      checkerName: string;
+      comments: string;
+      nbeRef?: string;
+    }[] = [
+      {
+        id: 'hist_sub_01',
+        reportKey: 'M_LCPLC001',
+        department: 'Credit Operations & Portfolio Management',
+        daysAgo: 1,
+        makerHours: 28,
+        checkerReviewHours: 2.2,
+        status: 'APPROVED',
+        makerName: 'Abebe Kebede',
+        checkerName: 'Chala Desta',
+        comments: 'Monthly loan classification and portfolio provisioning verified against core banking loan ledger.',
+      },
+      {
+        id: 'hist_sub_02',
+        reportKey: 'BOR_TEN_PER_LB002',
+        department: 'Credit Risk & Prudential Reporting',
+        daysAgo: 2,
+        makerHours: 52,
+        checkerReviewHours: 3.4,
+        status: 'SENT',
+        makerName: 'Dawit Tadesse',
+        checkerName: 'Almaz Bekele',
+        comments: 'Single borrower exposure computation validated under NBE Directive SBB/43/2008.',
+        nbeRef: 'NBE-EXP-2026-0929-8812',
+      },
+      {
+        id: 'hist_sub_03',
+        reportKey: 'POBEPE001',
+        department: 'Trade Services & International Banking',
+        daysAgo: 4,
+        makerHours: 100,
+        checkerReviewHours: 1.8,
+        status: 'SENT',
+        makerName: 'Tigist Alemu',
+        checkerName: 'Meron Worku',
+        comments: 'Letters of credit and standby guarantees provisioning verified with foreign operations division.',
+        nbeRef: 'NBE-TRD-2026-0927-4109',
+      },
+      {
+        id: 'hist_sub_04',
+        reportKey: 'TOP_20_BOR_TB001',
+        department: 'Credit Operations & Portfolio Management',
+        daysAgo: 6,
+        makerHours: 148,
+        checkerReviewHours: 4.1,
+        status: 'APPROVED',
+        makerName: 'Abebe Kebede',
+        checkerName: 'Chala Desta',
+        comments: 'Top 20 aggregate credit exposures reconciled with corporate banking accounts.',
+      },
+      {
+        id: 'hist_sub_05',
+        reportKey: 'ARLAL001',
+        department: 'Specialized Asset Recovery & Workout',
+        daysAgo: 8,
+        makerHours: 196,
+        checkerReviewHours: 2.5,
+        status: 'SENT',
+        makerName: 'Kenenisa Bekele',
+        checkerName: 'Derartu Tulu',
+        comments: 'Restructured loan schedule and collateral valuation verified by recovery committee.',
+        nbeRef: 'NBE-REC-2026-0923-5521',
+      },
+      {
+        id: 'hist_sub_06',
+        reportKey: 'DigitalLendingDL001',
+        department: 'Digital Banking & Fintech Operations',
+        daysAgo: 10,
+        makerHours: 244,
+        checkerReviewHours: 3.6,
+        status: 'APPROVED',
+        makerName: 'Tigist Alemu',
+        checkerName: 'Chala Desta',
+        comments: 'Micro-lending platform transaction volume and default rates verified.',
+      },
+      {
+        id: 'hist_sub_07',
+        reportKey: 'TOP_20_NPLs_TN001',
+        department: 'Credit Risk & Prudential Reporting',
+        daysAgo: 12,
+        makerHours: 292,
+        checkerReviewHours: 1.5,
+        status: 'CORRECTION_REQUIRED',
+        makerName: 'Dawit Tadesse',
+        checkerName: 'Almaz Bekele',
+        comments: 'Re-computation required: specific provision for borrower #4 does not reflect collateral discount.',
+      },
+      {
+        id: 'hist_sub_08',
+        reportKey: 'ANARN001',
+        department: 'Specialized Asset Recovery & Workout',
+        daysAgo: 14,
+        makerHours: 340,
+        checkerReviewHours: 2.8,
+        status: 'SENT',
+        makerName: 'Kenenisa Bekele',
+        checkerName: 'Derartu Tulu',
+        comments: 'Non-accrual re-categorization documented with 6 months continuous performance evidence.',
+        nbeRef: 'NBE-ACR-2026-0917-9034',
+      },
+      {
+        id: 'hist_sub_09',
+        reportKey: 'NPL&PRO_NL001',
+        department: 'Credit Operations & Portfolio Management',
+        daysAgo: 16,
+        makerHours: 388,
+        checkerReviewHours: 5.2,
+        status: 'SENT',
+        makerName: 'Abebe Kebede',
+        checkerName: 'Chala Desta',
+        comments: 'Comprehensive NPL breakdown and general reserve allocation passed checker 4-eyes check.',
+        nbeRef: 'NBE-NPL-2026-0915-7718',
+      },
+      {
+        id: 'hist_sub_10',
+        reportKey: 'M_LCPLC001',
+        department: 'Credit Operations & Portfolio Management',
+        daysAgo: 19,
+        makerHours: 460,
+        checkerReviewHours: 1.9,
+        status: 'SENT',
+        makerName: 'Abebe Kebede',
+        checkerName: 'Chala Desta',
+        comments: 'Prior monthly loan provisioning verified and transmitted to NBE statutory gateway.',
+        nbeRef: 'NBE-LP-2026-0912-3211',
+      },
+      {
+        id: 'hist_sub_11',
+        reportKey: 'POBEPE001',
+        department: 'Trade Services & International Banking',
+        daysAgo: 21,
+        makerHours: 508,
+        checkerReviewHours: 2.1,
+        status: 'SENT',
+        makerName: 'Tigist Alemu',
+        checkerName: 'Meron Worku',
+        comments: 'Foreign exchange commitments and documentary credits reconciliation completed.',
+        nbeRef: 'NBE-TRD-2026-0910-6643',
+      },
+      {
+        id: 'hist_sub_12',
+        reportKey: 'BOR_TEN_PER_LB002',
+        department: 'Credit Risk & Prudential Reporting',
+        daysAgo: 24,
+        makerHours: 580,
+        checkerReviewHours: 3.9,
+        status: 'SENT',
+        makerName: 'Dawit Tadesse',
+        checkerName: 'Almaz Bekele',
+        comments: 'Regulatory single borrower limit compliance verified at 18.2% total capital.',
+        nbeRef: 'NBE-EXP-2026-0907-1192',
+      },
+      {
+        id: 'hist_sub_13',
+        reportKey: 'ARLAL001',
+        department: 'Specialized Asset Recovery & Workout',
+        daysAgo: 26,
+        makerHours: 628,
+        checkerReviewHours: 4.5,
+        status: 'SENT',
+        makerName: 'Kenenisa Bekele',
+        checkerName: 'Derartu Tulu',
+        comments: 'Workout agreements and rescheduled terms ratified by recovery oversight board.',
+        nbeRef: 'NBE-REC-2026-0905-4402',
+      },
+      {
+        id: 'hist_sub_14',
+        reportKey: 'LOA_ADV_OUT_LA001',
+        department: 'Credit Operations & Portfolio Management',
+        daysAgo: 28,
+        makerHours: 676,
+        checkerReviewHours: 2.4,
+        status: 'SENT',
+        makerName: 'Abebe Kebede',
+        checkerName: 'Chala Desta',
+        comments: 'Monthly aggregate loans and advances schedule delivered and acknowledged by NBE portal.',
+        nbeRef: 'NBE-LA-2026-0903-8820',
+      },
+    ];
+
+    const now = Date.now();
+    for (const h of historicalSeeds) {
+      if (this.submissions.has(h.id)) continue;
+      const tpl = getReportByKey(h.reportKey);
+      const snapshot = tpl ? this.createTemplateSnapshot(tpl) : ({} as any);
+
+      const createdTime = new Date(now - h.daysAgo * 24 * 3600000 - h.checkerReviewHours * 3600000).toISOString();
+      const submittedTime = new Date(now - h.daysAgo * 24 * 3600000 - h.checkerReviewHours * 3600000 + 3600000).toISOString();
+      const reviewedTime = new Date(now - h.daysAgo * 24 * 3600000).toISOString();
+
+      const sampleValues: Record<string, any> = {
+        '001_00001': 12500000000,
+        '001_00002': 1850000000,
+        '001_00003': 1420000000,
+        'DL001_01': 38000,
+        'DL001_02': 142000000,
+      };
+
+      const integrity = this.computeIntegrityHash({
+        id: h.id,
+        reportKey: h.reportKey,
+        version: 1,
+        templateVersion: 1,
+        values: sampleValues,
+        status: h.status,
+      });
+
+      const submissionRecord: ReportSubmission = {
+        id: h.id,
+        reportKey: h.reportKey,
+        department: h.department,
+        periodYear: 2026,
+        periodStart: '2026-07-01T00:00:00',
+        periodEnd: '2026-09-30T00:00:00',
+        institutionCode: '0000013',
+        status: h.status,
+        version: 1,
+        templateVersion: 1,
+        dataVersion: 1,
+        templateSnapshot: snapshot,
+        dataSnapshot: sampleValues,
+        dynamicRowsSnapshot: {},
+        structuralHash: tpl ? this.generateStructuralHash(tpl) : 'STRUCT_HASH_HIST',
+        integrityHash: integrity,
+        historicalSnapshots: [
+          {
+            snapshotId: `snap_${h.id}_v1`,
+            version: 1,
+            templateVersion: 1,
+            dataVersion: 1,
+            timestamp: reviewedTime,
+            status: h.status,
+            capturedBy: h.checkerName,
+            capturedByRole: 'CHECKER',
+            reason: h.comments,
+            values: sampleValues,
+            dynamicRows: {},
+            templateSnapshot: snapshot,
+            structuralHash: tpl ? this.generateStructuralHash(tpl) : 'STRUCT_HASH_HIST',
+            integrityHash: integrity,
+          },
+        ],
+        revisionHistory: [
+          {
+            version: 1,
+            modifiedAt: createdTime,
+            modifiedBy: h.makerName,
+            modifiedByRole: 'MAKER',
+            values: sampleValues,
+            dynamicRows: {},
+            reason: 'Statutory periodic computation and reconciliation',
+            templateSnapshot: snapshot,
+            integrityHash: integrity,
+          },
+        ],
+        values: sampleValues,
+        dynamicRows: {},
+        makerId: 'usr_maker_1',
+        makerName: h.makerName,
+        makerEmail: `${h.makerName.toLowerCase().replace(/\s+/g, '.')}@oromiabank.com`,
+        makerDepartment: h.department,
+        checkerId: 'usr_checker_1',
+        checkerName: h.checkerName,
+        checkerEmail: `${h.checkerName.toLowerCase().replace(/\s+/g, '.')}@oromiabank.com`,
+        checkerDepartment: h.department,
+        comments: [
+          {
+            id: `comm_${h.id}_1`,
+            userId: 'usr_maker_1',
+            userName: h.makerName,
+            userRole: 'MAKER',
+            comment: 'Statutory figures computed from verified bank sub-ledgers.',
+            action: 'SUBMIT',
+            timestamp: submittedTime,
+          },
+          {
+            id: `comm_${h.id}_2`,
+            userId: 'usr_checker_1',
+            userName: h.checkerName,
+            userRole: 'CHECKER',
+            comment: h.comments,
+            action: h.status === 'CORRECTION_REQUIRED' ? 'REQUEST_CORRECTION' : 'APPROVE',
+            timestamp: reviewedTime,
+          },
+        ],
+        deliveryAttempts: h.nbeRef
+          ? [
+              {
+                id: `del_${h.id}`,
+                attemptNumber: 1,
+                timestamp: reviewedTime,
+                endpointUrl: 'https://gateway.nbe.gov.et/api/v1/returns/submit',
+                status: 'SUCCESS',
+                statusCode: 200,
+                correlationId: `corr_${h.id}`,
+                idempotencyKey: `idem_${h.id}`,
+                requestPayload: sampleValues,
+                responsePayload: { receipt: h.nbeRef, status: 'ACCEPTED' },
+              },
+            ]
+          : [],
+        createdAt: createdTime,
+        updatedAt: reviewedTime,
+        submittedAt: submittedTime,
+        reviewedAt: reviewedTime,
+        approvedAt: h.status === 'APPROVED' || h.status === 'SENT' ? reviewedTime : undefined,
+        finalSubmittedAt: h.status === 'SENT' ? reviewedTime : undefined,
+        finalSubmittedBy: h.status === 'SENT' ? h.makerName : undefined,
+        nbeReferenceNumber: h.nbeRef,
+      };
+
+      this.submissions.set(h.id, submissionRecord);
+    }
   }
 
   public getAll(): ReportSubmission[] {
@@ -851,6 +1197,58 @@ class SubmissionServiceClass {
 
     const report = this.getEffectiveTemplate(sub);
     let finalValues = { ...values };
+
+    // Phase 34: Maker Template Governance & Field Code Immutability Enforcement
+    // Makers enter and edit report values only.
+    // Maker cannot change report title, subtitle, section title, row title, column title,
+    // field code, formula definition, NBE mapping, API endpoint or validation rule.
+    if (user.role === 'MAKER') {
+      const allowedCodes = new Set<string>();
+      if (report.ReturnItemsList) {
+        report.ReturnItemsList.forEach((item) => allowedCodes.add(item.Code.trim().toUpperCase()));
+      }
+      if (report.Formulas) {
+        report.Formulas.forEach((f) => {
+          const t = (f.targetCode || (f as any).code || '').trim().toUpperCase();
+          if (t) allowedCodes.add(t);
+        });
+      }
+
+      for (const rawCode of Object.keys(values)) {
+        const codeUpper = rawCode.trim().toUpperCase();
+        if (!allowedCodes.has(codeUpper)) {
+          throw new Error(
+            `REPORT_DEFINITION_IMMUTABLE: Unknown or unauthorized field code '${rawCode}'. Makers cannot alter report schema or create new field codes. Only Compliance Administrators can govern report definitions.`
+          );
+        }
+      }
+
+      if (dynamicRows && report.DynamicItemsList && report.DynamicItemsList.length > 0) {
+        const allowedColsByArea = new Map<number, Set<string>>();
+        report.DynamicItemsList.forEach((area) => {
+          const colSet = new Set<string>();
+          area.DynamicItems.forEach((col) => colSet.add(col.Code.trim().toUpperCase()));
+          allowedColsByArea.set(area.Area, colSet);
+        });
+
+        for (const [rawAreaId, rowList] of Object.entries(dynamicRows)) {
+          const areaNum = Number(rawAreaId);
+          const allowedCols = allowedColsByArea.get(areaNum);
+          if (Array.isArray(rowList) && allowedCols) {
+            for (const row of rowList) {
+              const cellKeys = Object.keys(row.values || {});
+              for (const colKey of cellKeys) {
+                if (!allowedCols.has(colKey.trim().toUpperCase())) {
+                  throw new Error(
+                    `REPORT_DEFINITION_IMMUTABLE: Unknown or unauthorized schedule column code '${colKey}' in area ${areaNum}. Makers cannot alter schedule column schema.`
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+    }
 
     // Auto-calculate formulas
     if (report && report.Formulas.length > 0) {
@@ -1394,12 +1792,15 @@ class SubmissionServiceClass {
 
   /**
    * Maker submits report to Checker.
+   * Phase 36: Supports Maker-selected Checker assignment with server-side validation
+   * and authoritative smart notifications dispatched to all assigned reviewers.
    */
   public submitToChecker(
     id: string,
     user: UserSession,
     commentText?: string,
-    expectedVersion?: number
+    expectedVersion?: number,
+    selectedCheckerIds?: string[]
   ): ReportSubmission {
     const sub = this.submissions.get(id);
     if (!sub) throw new Error(`Submission not found: ${id}`);
@@ -1425,6 +1826,33 @@ class SubmissionServiceClass {
       throw new Error(
         `Validation failed with ${valSummary.errorsCount} errors. Please correct all validation issues before submitting to Checker.`
       );
+    }
+
+    // Phase 36: Server-side Checker assignment & validation
+    let assignedCheckers: Array<{ id: string; name: string; email?: string; department?: string }> = [];
+    let reviewerAssignments: ReviewerAssignment[] | undefined = undefined;
+    let primaryChecker: { id: string; name: string; email?: string; department?: string } | undefined = undefined;
+    let primaryCheckerId: string | undefined = undefined;
+    let assignedCheckerIds: string[] | undefined = undefined;
+
+    if (selectedCheckerIds && selectedCheckerIds.length > 0) {
+      const val = effectiveAccessEngine.validateCheckerSelection(sub.reportKey, user, selectedCheckerIds, sub);
+      if (!val.valid) {
+        throw new Error(val.error);
+      }
+      assignedCheckers = val.selectedCheckers;
+      reviewerAssignments = assignedCheckers.map((c, idx) => ({
+        checkerId: c.id,
+        checkerName: c.name,
+        checkerEmail: c.email,
+        checkerDepartment: c.department,
+        assignedAt: new Date().toISOString(),
+        isPrimary: idx === 0,
+        status: 'PENDING',
+      }));
+      primaryChecker = assignedCheckers[0];
+      primaryCheckerId = primaryChecker?.id;
+      assignedCheckerIds = assignedCheckers.map((c) => c.id);
     }
 
     const isResubmission = sub.status === 'CORRECTION_REQUIRED' || sub.status === 'REJECTED';
@@ -1466,12 +1894,42 @@ class SubmissionServiceClass {
       dynamicRowsSnapshot: dynamicSnapshot,
       integrityHash,
       historicalSnapshots: [...(updatedSubmission.historicalSnapshots || []), submitSnapshot],
+      assignedCheckerIds,
+      reviewerAssignments,
+      primaryCheckerId,
+      checkerId: primaryChecker?.id || updatedSubmission.checkerId,
+      checkerName: primaryChecker?.name || updatedSubmission.checkerName,
+      checkerEmail: primaryChecker?.email || updatedSubmission.checkerEmail,
+      checkerDepartment: primaryChecker?.department || updatedSubmission.checkerDepartment,
     };
 
     this.submissions.set(id, finalSubWithSnapshot);
 
     // Save to IndexedDB
     indexedDbStorage.saveDraft(finalSubWithSnapshot).catch(() => {});
+
+    // Phase 36: Emit Authoritative Smart Notifications to all assigned Checkers
+    for (const c of assignedCheckers) {
+      notificationService.addNotification({
+        recipientUserId: c.id,
+        recipientRole: 'CHECKER',
+        recipientDepartment: c.department,
+        targetReportKey: sub.reportKey,
+        title: `New Review Assignment: Return ${sub.reportKey}`,
+        message: `Maker ${user.name} (${user.department}) assigned you to review return ${sub.reportKey} (4-eyes dual control). Remarks: "${commentText || 'Ready for 4-eyes review'}"`,
+        category: 'WORKFLOW',
+        priority: 'HIGH',
+        actionTab: 'CHECKER_INBOX',
+        metadata: {
+          submissionId: id,
+          reportKey: sub.reportKey,
+          makerId: user.id,
+          makerName: user.name,
+          isPrimary: c.id === primaryCheckerId,
+          assignedCheckersCount: assignedCheckers.length,
+        },
+      });
+    }
 
     try {
       realtimeSsotEngine.publishEvent({
@@ -1488,6 +1946,8 @@ class SubmissionServiceClass {
           status: 'PENDING_CHECKER',
           version: finalSubWithSnapshot.version,
           isResubmission,
+          assignedCheckerIds,
+          primaryCheckerId,
         },
       });
     } catch (_) {}
@@ -1501,11 +1961,87 @@ class SubmissionServiceClass {
       entityId: id,
       correlationId: 'corr_' + id,
       details: isResubmission
-        ? `Submission resubmitted for 4-eyes review by Maker ${user.name} (${user.department}) after addressing correction requests.`
-        : `Submission submitted for 4-eyes review by Maker ${user.name} (${user.department})`,
+        ? `Submission resubmitted for 4-eyes review by Maker ${user.name} (${user.department}) after addressing correction requests. Assigned Checkers: ${assignedCheckers.map(c => `${c.name} (${c.id})`).join(', ')}`
+        : `Submission submitted for 4-eyes review by Maker ${user.name} (${user.department}). Assigned Checkers: ${assignedCheckers.map(c => `${c.name} (${c.id})`).join(', ')}. Primary: ${primaryChecker?.name || 'N/A'}.`,
     });
 
+    if (assignedCheckers.length > 0) {
+      auditService.log({
+        actorId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        action: 'CHECKER_ASSIGNED',
+        entityType: 'REPORT_SUBMISSION',
+        entityId: id,
+        correlationId: 'corr_assign_' + id,
+        details: `Assigned ${assignedCheckers.length} reviewer(s) to return ${sub.reportKey}: ${assignedCheckers.map(c => `${c.name} (${c.id})`).join(', ')}. Notifications dispatched to all assigned reviewers.`,
+      });
+    }
+
     return finalSubWithSnapshot;
+  }
+
+  /**
+   * Phase 36: Checker accepts/opens review. Emits authoritative notification to Maker.
+   */
+  public acceptReview(id: string, user: UserSession): ReportSubmission {
+    const sub = this.submissions.get(id);
+    if (!sub) throw new Error(`Submission not found: ${id}`);
+
+    const evalResult = effectiveAccessEngine.evaluateAccess(user, sub.reportKey, 'REVIEW', sub);
+    if (!evalResult.allowed) {
+      throw new Error(`Cannot accept review: ${evalResult.reason}`);
+    }
+
+    const assignments = (sub.reviewerAssignments || []).map((ra) => {
+      if (ra.checkerId === user.id) {
+        return {
+          ...ra,
+          status: 'ACCEPTED' as const,
+          openedAt: new Date().toISOString(),
+        };
+      }
+      return ra;
+    });
+
+    const updatedSub: ReportSubmission = {
+      ...sub,
+      reviewerAssignments: assignments,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.submissions.set(id, updatedSub);
+
+    notificationService.addNotification({
+      recipientUserId: sub.makerId,
+      recipientRole: 'MAKER',
+      recipientDepartment: sub.makerDepartment || user.department,
+      targetReportKey: sub.reportKey,
+      title: `Review In Progress: Return ${sub.reportKey}`,
+      message: `Checker ${user.name} has accepted and opened review on return ${sub.reportKey}.`,
+      category: 'WORKFLOW',
+      priority: 'MEDIUM',
+      actionTab: 'MAKER_WORKSPACE',
+      metadata: {
+        submissionId: id,
+        reportKey: sub.reportKey,
+        checkerId: user.id,
+        action: 'ACCEPT_REVIEW',
+      },
+    });
+
+    auditService.log({
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      action: 'CHECKER_REVIEW_ACCEPTED',
+      entityType: 'REPORT_SUBMISSION',
+      entityId: id,
+      correlationId: 'corr_' + id,
+      details: `Checker ${user.name} (${user.department}) accepted and opened 4-eyes review on return ${sub.reportKey}.`,
+    });
+
+    return updatedSub;
   }
 
   /**
@@ -1513,6 +2049,9 @@ class SubmissionServiceClass {
    * Enforces:
    * 1. Only CHECKERS can review. (Makers cannot approve; Admins are read-only).
    * 2. Checker must be from the same department, OR have Admin-granted special access.
+   * 3. Phase 36: If reviewers were specifically assigned, Checker must be an assigned reviewer.
+   * 4. Phase 36: Single authoritative decision transitions workflow state; duplicate/conflicting actions prevented.
+   * 5. Phase 36: Emits authoritative notification to Maker upon review completion.
    */
   public approveSubmission(
     id: string,
@@ -1547,6 +2086,22 @@ class SubmissionServiceClass {
         : 'CORRECTION_REQUIRED';
 
     const { updatedSubmission } = WorkflowEngine.applyTransition(sub, targetStatus, user, commentText);
+
+    // Phase 36: Update Reviewer Assignment record
+    const updatedAssignments = (sub.reviewerAssignments || []).map((ra) => {
+      if (ra.checkerId === user.id) {
+        return {
+          ...ra,
+          status: 'REVIEWED' as const,
+          reviewedAt: new Date().toISOString(),
+          notes: commentText,
+        };
+      }
+      return {
+        ...ra,
+        status: 'SUPERSEDED' as const,
+      };
+    });
 
     // Capture snapshot at Checker decision point
     const valuesSnapshot = JSON.parse(JSON.stringify(updatedSubmission.values));
@@ -1584,12 +2139,48 @@ class SubmissionServiceClass {
       dynamicRowsSnapshot: dynamicSnapshot,
       integrityHash,
       historicalSnapshots: [...(updatedSubmission.historicalSnapshots || []), reviewSnapshot],
+      reviewerAssignments: updatedAssignments.length > 0 ? updatedAssignments : undefined,
+      checkerId: user.id,
+      checkerName: user.name,
+      checkerEmail: user.email,
+      checkerDepartment: user.department,
     };
 
     this.submissions.set(id, finalSubWithSnapshot);
 
     // Save to IndexedDB
     indexedDbStorage.saveDraft(finalSubWithSnapshot).catch(() => {});
+
+    // Phase 36: Authoritative Smart Notification to Maker upon review outcome
+    let notifTitle = `Review Complete: Return ${sub.reportKey} Approved`;
+    let notifMsg = `Your return ${sub.reportKey} has been verified and approved by Checker ${user.name}. Ready for final NBE delivery.`;
+    if (action === 'REJECT') {
+      notifTitle = `Review Decision: Return ${sub.reportKey} Rejected`;
+      notifMsg = `Checker ${user.name} rejected return ${sub.reportKey}. Reason: "${commentText || 'No reason provided'}"`;
+    } else if (action === 'REQUEST_CORRECTION') {
+      notifTitle = `Correction Requested: Return ${sub.reportKey}`;
+      notifMsg = `Checker ${user.name} requested corrections on return ${sub.reportKey}. Notes: "${commentText || 'Please verify figures'}"`;
+    }
+
+    notificationService.addNotification({
+      recipientUserId: sub.makerId,
+      recipientRole: 'MAKER',
+      recipientDepartment: sub.makerDepartment || user.department,
+      targetReportKey: sub.reportKey,
+      title: notifTitle,
+      message: notifMsg,
+      category: 'WORKFLOW',
+      priority: 'HIGH',
+      actionTab: 'MAKER_WORKSPACE',
+      metadata: {
+        submissionId: id,
+        reportKey: sub.reportKey,
+        checkerId: user.id,
+        checkerName: user.name,
+        action,
+        decision: targetStatus,
+      },
+    });
 
     try {
       realtimeSsotEngine.publishEvent({
@@ -1605,6 +2196,8 @@ class SubmissionServiceClass {
           reportKey: sub.reportKey,
           status: targetStatus,
           version: finalSubWithSnapshot.version,
+          checkerId: user.id,
+          checkerName: user.name,
         },
       });
     } catch (_) {}
@@ -1618,6 +2211,17 @@ class SubmissionServiceClass {
       entityId: id,
       correlationId: 'corr_' + id,
       details: `Checker ${user.name} (${user.department}) reviewed submission with decision: ${targetStatus}. Notes: ${commentText || 'N/A'}`,
+    });
+
+    auditService.log({
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      action: 'NOTIFICATION_DISPATCHED',
+      entityType: 'NOTIFICATION',
+      entityId: id,
+      correlationId: 'corr_notif_' + id,
+      details: `Dispatched review outcome notification to Maker ${sub.makerName} (${sub.makerId}) for return ${sub.reportKey}: ${targetStatus}.`,
     });
 
     return finalSubWithSnapshot;
@@ -1771,6 +2375,300 @@ class SubmissionServiceClass {
     });
 
     return result;
+  }
+
+  /**
+   * Phase 50: Batch Submit to Checker for Makers.
+   * Allows selecting multiple draft/editable returns and triggering a single batch submission with a bulk comment.
+   */
+  public batchSubmitToChecker(
+    submissionIds: string[],
+    user: UserSession,
+    bulkComment: string,
+    selectedCheckerIds?: string[]
+  ): BatchSubmissionResult {
+    const batchId = `BATCH_CHK_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const timestamp = new Date().toISOString();
+    const results: BatchSubmissionItemResult[] = [];
+    const updatedSubmissions: ReportSubmission[] = [];
+
+    submissionIds.forEach((id) => {
+      const sub = this.submissions.get(id);
+      if (!sub) {
+        results.push({
+          submissionId: id,
+          reportKey: 'UNKNOWN',
+          previousStatus: 'DRAFT',
+          newStatus: 'DRAFT',
+          success: false,
+          error: `Submission not found: ${id}`,
+        });
+        return;
+      }
+
+      const prevStatus = sub.status;
+      try {
+        const updated = this.submitToChecker(
+          id,
+          user,
+          bulkComment || 'Batch submitted to Checker for 4-eyes review',
+          sub.version,
+          selectedCheckerIds
+        );
+        results.push({
+          submissionId: id,
+          reportKey: sub.reportKey,
+          previousStatus: prevStatus,
+          newStatus: updated.status,
+          success: true,
+        });
+        updatedSubmissions.push(updated);
+      } catch (err: any) {
+        results.push({
+          submissionId: id,
+          reportKey: sub.reportKey,
+          previousStatus: prevStatus,
+          newStatus: prevStatus,
+          success: false,
+          error: err.message || 'Batch submit to checker failed',
+        });
+      }
+    });
+
+    const succeededCount = results.filter((r) => r.success).length;
+    const failedCount = results.length - succeededCount;
+
+    auditService.log({
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      action: 'BATCH_SUBMIT_TO_CHECKER',
+      entityType: 'REPORT_SUBMISSION_BATCH',
+      entityId: batchId,
+      correlationId: `corr_${batchId}`,
+      details: `Maker ${user.name} batch submitted ${succeededCount} of ${submissionIds.length} return(s) to Checker queue. Notes: "${bulkComment || 'Batch submission'}"`,
+    });
+
+    try {
+      realtimeSsotEngine.publishEvent({
+        eventType: 'WORKFLOW_STATUS_CHANGED',
+        action: 'BATCH_SUBMIT_TO_CHECKER',
+        domain: 'WORKFLOW',
+        entityId: batchId,
+        topic: 'WORKFLOWS',
+        actor: { id: user.id, name: user.name, role: user.role },
+        summary: `Batch submitted ${succeededCount} return(s) to Checker queue`,
+        payload: {
+          batchId,
+          total: submissionIds.length,
+          succeededCount,
+          failedCount,
+        },
+      });
+    } catch (_) {}
+
+    return {
+      batchId,
+      actionType: 'BATCH_SUBMIT_TO_CHECKER',
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      bulkComment,
+      timestamp,
+      totalRequested: submissionIds.length,
+      succeededCount,
+      failedCount,
+      results,
+      updatedSubmissions,
+    };
+  }
+
+  /**
+   * Phase 50: Batch Submit to NBE for Checkers (and Makers for approved returns).
+   * Allows selecting multiple submissions and triggering a single batch transmission to the NBE Gateway.
+   */
+  public async batchSubmitToNBE(
+    submissionIds: string[],
+    user: UserSession,
+    bulkComment: string
+  ): Promise<BatchSubmissionResult> {
+    const batchId = `BATCH_NBE_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const timestamp = new Date().toISOString();
+    const results: BatchSubmissionItemResult[] = [];
+    const updatedSubmissions: ReportSubmission[] = [];
+
+    for (const id of submissionIds) {
+      const sub = this.submissions.get(id);
+      if (!sub) {
+        results.push({
+          submissionId: id,
+          reportKey: 'UNKNOWN',
+          previousStatus: 'DRAFT',
+          newStatus: 'DRAFT',
+          success: false,
+          error: `Submission not found: ${id}`,
+        });
+        continue;
+      }
+
+      const prevStatus = sub.status;
+
+      try {
+        if (user.role === 'MAKER' && sub.status !== 'APPROVED') {
+          throw new Error(
+            `SEGREGATION_OF_DUTIES_VIOLATION: Makers cannot directly submit unapproved reports to NBE. Return must be reviewed and endorsed by a verified Checker first.`
+          );
+        }
+
+        let activeSub = sub;
+        // If Checker is submitting a return that is in PENDING_CHECKER or DRAFT/CORRECTION_REQUIRED in their department, sign it off first
+        if (user.role === 'CHECKER') {
+          if (sub.status === 'PENDING_CHECKER' || sub.status === 'DRAFT' || sub.status === 'CORRECTION_REQUIRED') {
+            activeSub = this.reviewSubmission(
+              id,
+              'APPROVE',
+              user,
+              bulkComment || `Batch approved and authorized for NBE delivery by Checker ${user.name}`
+            );
+          }
+        }
+
+        // Deliver to NBE Gateway using the adapter
+        const deliveryResult = await nbeAdapter.deliverReport(activeSub);
+        const finalStatus: SubmissionStatus = deliveryResult.success ? 'SENT' : 'FAILED';
+        const receiptNum =
+          deliveryResult.response?.receiptNumber ||
+          deliveryResult.response?.submissionReceiptNumber ||
+          `NBE-REC-${Date.now().toString().slice(-6)}`;
+
+        const finalValuesSnapshot = JSON.parse(JSON.stringify(activeSub.values));
+        const finalDynamicSnapshot = JSON.parse(JSON.stringify(activeSub.dynamicRows));
+        const tmpl = activeSub.templateSnapshot || this.createTemplateSnapshot(this.getEffectiveTemplate(activeSub));
+        const integrityHash = this.computeIntegrityHash({
+          id: activeSub.id,
+          reportKey: activeSub.reportKey,
+          version: activeSub.version,
+          templateVersion: activeSub.templateVersion || 1,
+          values: finalValuesSnapshot,
+          status: finalStatus,
+        });
+
+        const deliverySnapshot: SubmissionSnapshot = {
+          snapshotId: `snap_${activeSub.id}_v${activeSub.version}_batch_nbe_${Date.now()}`,
+          version: activeSub.version,
+          templateVersion: activeSub.templateVersion || 1,
+          dataVersion: activeSub.dataVersion || activeSub.version,
+          timestamp: new Date().toISOString(),
+          status: finalStatus,
+          capturedBy: user.name,
+          capturedByRole: user.role,
+          reason: bulkComment || `Batch submitted to NBE (Receipt: ${receiptNum})`,
+          values: finalValuesSnapshot,
+          dynamicRows: finalDynamicSnapshot,
+          templateSnapshot: tmpl,
+          structuralHash: activeSub.structuralHash,
+          integrityHash,
+          nbeReferenceNumber: receiptNum,
+        };
+
+        const finalizedSub: ReportSubmission = {
+          ...activeSub,
+          status: finalStatus,
+          submittedVersion: activeSub.version,
+          dataSnapshot: finalValuesSnapshot,
+          dynamicRowsSnapshot: finalDynamicSnapshot,
+          integrityHash,
+          nbeReferenceNumber: receiptNum,
+          updatedAt: new Date().toISOString(),
+          deliveryAttempts: [...activeSub.deliveryAttempts, deliveryResult.attempt],
+          historicalSnapshots: [...(activeSub.historicalSnapshots || []), deliverySnapshot],
+          comments: [
+            ...activeSub.comments,
+            {
+              id: 'comm_' + Math.random().toString(36).substring(2, 9),
+              userId: user.id,
+              userName: user.name,
+              userRole: user.role as any,
+              comment: deliveryResult.success
+                ? `Batch transmission to NBE Gateway confirmed. Receipt: ${receiptNum}. Notes: ${bulkComment || 'N/A'}`
+                : `Batch NBE Gateway delivery failed: ${deliveryResult.error}`,
+              action: deliveryResult.success ? 'APPROVE' : 'NOTE',
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        };
+
+        this.submissions.set(id, finalizedSub);
+        indexedDbStorage.saveDraft(finalizedSub).catch(() => {});
+        updatedSubmissions.push(finalizedSub);
+
+        results.push({
+          submissionId: id,
+          reportKey: activeSub.reportKey,
+          previousStatus: prevStatus,
+          newStatus: finalStatus,
+          success: deliveryResult.success,
+          nbeReceiptNumber: receiptNum,
+          error: deliveryResult.error,
+        });
+      } catch (err: any) {
+        results.push({
+          submissionId: id,
+          reportKey: sub.reportKey,
+          previousStatus: prevStatus,
+          newStatus: prevStatus,
+          success: false,
+          error: err.message || 'Batch submit to NBE failed',
+        });
+      }
+    }
+
+    const succeededCount = results.filter((r) => r.success).length;
+    const failedCount = results.length - succeededCount;
+
+    auditService.log({
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      action: 'BATCH_SUBMIT_TO_NBE',
+      entityType: 'REPORT_SUBMISSION_BATCH',
+      entityId: batchId,
+      correlationId: `corr_${batchId}`,
+      details: `${user.role} ${user.name} batch submitted ${succeededCount} of ${submissionIds.length} return(s) to NBE Gateway. Notes: "${bulkComment || 'Batch NBE transmission'}"`,
+    });
+
+    try {
+      realtimeSsotEngine.publishEvent({
+        eventType: 'WORKFLOW_STATUS_CHANGED',
+        action: 'BATCH_SUBMIT_TO_NBE',
+        domain: 'WORKFLOW',
+        entityId: batchId,
+        topic: 'WORKFLOWS',
+        actor: { id: user.id, name: user.name, role: user.role },
+        summary: `Batch submitted ${succeededCount} return(s) to NBE Gateway`,
+        payload: {
+          batchId,
+          total: submissionIds.length,
+          succeededCount,
+          failedCount,
+        },
+      });
+    } catch (_) {}
+
+    return {
+      batchId,
+      actionType: 'BATCH_SUBMIT_TO_NBE',
+      actorId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      bulkComment,
+      timestamp,
+      totalRequested: submissionIds.length,
+      succeededCount,
+      failedCount,
+      results,
+      updatedSubmissions,
+    };
   }
 
   /**

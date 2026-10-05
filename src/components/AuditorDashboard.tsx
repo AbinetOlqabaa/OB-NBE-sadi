@@ -35,6 +35,11 @@ import {
   AlertOctagon,
   Sparkles,
   ExternalLink,
+  TrendingUp,
+  Activity,
+  BarChart3,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import type {
   UserSession,
@@ -47,6 +52,8 @@ import type {
   AuditReportPackage,
   AuditWorkQueueItem,
   SubmissionStatus,
+  AuditorExportFormat,
+  AuditorExportScope,
 } from '../types/regulatory.ts';
 import { auditorService } from '../services/auditorService.ts';
 import { submissionService } from '../services/submissionService.ts';
@@ -54,10 +61,17 @@ import { DEPARTMENTS } from '../data/organizationHierarchy.ts';
 import { getAllReports, getReportDefinition } from '../data/report-registry.ts';
 import { vibrate, haptics } from '../utils/haptics.ts';
 import { Pagination } from './Pagination.tsx';
+import { MaximizedViewModal } from './MaximizedViewModal.tsx';
+import { MaximizeButton } from './MaximizeButton.tsx';
+import { HistoricalSubmissionTrendChart } from './HistoricalSubmissionTrendChart.tsx';
+import { AnomalyDetectionFeed } from './AnomalyDetectionFeed.tsx';
+import { AuditorSupervisoryAnalytics } from './AuditorSupervisoryAnalytics.tsx';
+import { triggerAuditorMultiFormatExport } from '../utils/auditorMultiFormatExport.ts';
 
 type AuditorTab =
   | 'WORK_QUEUE'
   | 'REPORT_AUDIT'
+  | 'HISTORICAL_TRENDS'
   | 'TIMELINE'
   | 'FINDINGS'
   | 'EVIDENCE'
@@ -104,6 +118,8 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
 
   // Timeline filter state
   const [timelineFilter, setTimelineFilter] = useState<'ALL' | 'MAKER' | 'CHECKER' | 'NBE'>('ALL');
+  const [isQueueMaximized, setIsQueueMaximized] = useState<boolean>(false);
+  const [isFindingsMaximized, setIsFindingsMaximized] = useState<boolean>(false);
 
   // Findings state
   const [findingSeverityFilter, setFindingSeverityFilter] = useState<string>('');
@@ -138,11 +154,23 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
   // Trigger re-render on data change
   const [version, setVersion] = useState(0);
 
+  // Phase 49: Multi-format Single & Bulk Export state
+  const [selectedQueueKeys, setSelectedQueueKeys] = useState<string[]>([]);
+  const [bulkExportFormat, setBulkExportFormat] = useState<AuditorExportFormat>('XLSX');
+  const [bulkExportScope, setBulkExportScope] = useState<AuditorExportScope>('FULL_AUDIT_DOSSIER');
+  const [exportStatusBanner, setExportStatusBanner] = useState<string | null>(null);
+
   useEffect(() => {
     const unsub = auditorService.subscribe(() => {
       setVersion((v) => v + 1);
     });
-    return unsub;
+    const unsubSub = submissionService.onSubmissionsUpdated(() => {
+      setVersion((v) => v + 1);
+    });
+    return () => {
+      unsub();
+      unsubSub();
+    };
   }, []);
 
   // Data queries
@@ -156,6 +184,10 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
 
   const kpis = useMemo(() => {
     return auditorService.getKpiSummary();
+  }, [version]);
+
+  const perfMetrics = useMemo(() => {
+    return auditorService.getPerformanceOverviewMetrics();
   }, [version]);
 
   const findings = useMemo(() => {
@@ -335,6 +367,41 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
     haptics.success();
   };
 
+  const toggleSelectQueueItem = (reportKey: string) => {
+    vibrate(15);
+    setSelectedQueueKeys((prev) =>
+      prev.includes(reportKey) ? prev.filter((k) => k !== reportKey) : [...prev, reportKey]
+    );
+  };
+
+  const toggleSelectAllQueue = () => {
+    vibrate(20);
+    if (selectedQueueKeys.length === workQueue.length && workQueue.length > 0) {
+      setSelectedQueueKeys([]);
+    } else {
+      setSelectedQueueKeys(workQueue.map((q) => q.reportKey));
+    }
+  };
+
+  const handleTriggerExport = (
+    format: AuditorExportFormat,
+    scope: AuditorExportScope,
+    mode: 'SINGLE' | 'BULK',
+    selectedIds?: string[]
+  ) => {
+    const res = triggerAuditorMultiFormatExport({
+      format,
+      scope,
+      mode,
+      selectedIds,
+      actorName: currentUser.name,
+    });
+    haptics.success();
+    setExportStatusBanner(
+      `${mode} Export Complete: ${res.fileName} (${res.recordCount} records, Seal: ${res.tamperSeal})`
+    );
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-200">
       {/* Top Banner: Supervisory Status & Clearance */}
@@ -347,7 +414,7 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
                 <span>FIRST-CLASS AUDITOR DESK</span>
               </span>
               <span className="px-2.5 py-1 text-xs font-medium rounded-lg bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700 font-mono">
-                INSTCODE: 0000013 (OROMIA BANK S.C.)
+                OROMIA BANK S.C.
               </span>
               <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1">
                 <Lock className="w-3 h-3" />
@@ -378,8 +445,158 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
           </div>
         </div>
 
+        {/* Phase 48: Performance Overview Summary Metric Cards Row */}
+        <div
+          id="auditor-performance-summary-cards"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800"
+        >
+          <div className="p-3.5 bg-gradient-to-br from-slate-50 to-white dark:from-slate-800/90 dark:to-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700/80 shadow-2xs flex items-center justify-between">
+            <div>
+              <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Total Submissions
+              </div>
+              <div className="text-2xl font-black text-slate-900 dark:text-white mt-0.5 font-mono">
+                {perfMetrics.totalSubmissions}
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                {perfMetrics.sentToNbeCount} Delivered to NBE • {perfMetrics.pendingCheckerCount} in 4-Eyes
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-ob-indigo-50 dark:bg-ob-indigo-950/60 text-ob-indigo-600 dark:text-ob-indigo-400 border border-ob-indigo-200 dark:border-ob-indigo-800 flex items-center justify-center shrink-0">
+              <FileText className="w-5 h-5" />
+            </div>
+          </div>
+
+          <div className="p-3.5 bg-gradient-to-br from-amber-50/70 to-white dark:from-amber-950/30 dark:to-slate-900 rounded-2xl border border-amber-200/80 dark:border-amber-800/60 shadow-2xs flex items-center justify-between">
+            <div>
+              <div className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                Pending Corrections
+              </div>
+              <div className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-0.5 font-mono">
+                {perfMetrics.pendingCorrections}
+              </div>
+              <div className="text-[11px] text-amber-600/80 dark:text-amber-400/80 mt-0.5">
+                Active Rectifications & Remediations
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-amber-100/80 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-800 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+          </div>
+
+          <div className="p-3.5 bg-gradient-to-br from-emerald-50/70 to-white dark:from-emerald-950/30 dark:to-slate-900 rounded-2xl border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs flex items-center justify-between">
+            <div>
+              <div className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                Approved Today
+              </div>
+              <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5 font-mono">
+                {perfMetrics.approvedToday}
+              </div>
+              <div className="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 mt-0.5">
+                4-Eyes Verified & Authorized Returns
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-emerald-100/80 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </div>
+
+          <div className="p-3.5 bg-gradient-to-br from-blue-50/70 to-white dark:from-blue-950/30 dark:to-slate-900 rounded-2xl border border-blue-200/80 dark:border-blue-800/60 shadow-2xs flex items-center justify-between">
+            <div>
+              <div className="text-[11px] font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider">
+                Avg. Processing Time
+              </div>
+              <div className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-0.5 font-mono">
+                {perfMetrics.avgProcessingTimeFormatted}
+              </div>
+              <div className="text-[11px] text-blue-600/80 dark:text-blue-400/80 mt-0.5">
+                {perfMetrics.slaComplianceRate}% Within NBE Turnaround SLA
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-blue-100/80 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-800 flex items-center justify-center shrink-0">
+              <Clock className="w-5 h-5" />
+            </div>
+          </div>
+        </div>
+
+        {/* Phase 49: Multi-Format Single & Bulk Export Command Ribbon */}
+        <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-800/70 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="px-2 py-0.5 rounded bg-ob-indigo-100 text-ob-indigo-800 dark:bg-ob-indigo-950 dark:text-ob-indigo-300 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+              <Download className="w-3 h-3" />
+              <span>MULTI-FORMAT AUDIT EXPORT HUB</span>
+            </span>
+            <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+              Export Single or Bulk Audit Datasets (CSV, XLSX, PDF, JSON, XML) with Cryptographic Tamper Seals
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={bulkExportScope}
+              onChange={(e) => setBulkExportScope(e.target.value as AuditorExportScope)}
+              aria-label="Select Audit Export Scope"
+              className="min-h-[38px] px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-semibold cursor-pointer"
+            >
+              <option value="FULL_AUDIT_DOSSIER">Complete Audit Dossier Bundle (Bulk)</option>
+              <option value="WORK_QUEUE">
+                Audit Work Queue ({selectedQueueKeys.length > 0 ? `${selectedQueueKeys.length} Selected` : 'All'})
+              </option>
+              <option value="ANOMALY_FEED">Anomaly Detection Feed</option>
+              <option value="FINDINGS">Audit Findings & Exceptions</option>
+              <option value="PERFORMANCE_KPIS">Performance Metrics & Dept SLA</option>
+              <option value="EVIDENCE_VAULT">Cryptographic Evidence Vault</option>
+              <option value="REMEDIATIONS">Remediation Action Tracker</option>
+            </select>
+
+            <select
+              value={bulkExportFormat}
+              onChange={(e) => setBulkExportFormat(e.target.value as AuditorExportFormat)}
+              aria-label="Select Audit Export Format"
+              className="min-h-[38px] px-2.5 py-1.5 text-xs font-mono font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 cursor-pointer"
+            >
+              <option value="XLSX">XLSX (Excel Workbook)</option>
+              <option value="PDF">PDF (Signed Dossier)</option>
+              <option value="CSV">CSV (Regulatory Flat-File)</option>
+              <option value="JSON">JSON (Cryptographic Bundle)</option>
+              <option value="XML">XML (NBE Supervisory XSD)</option>
+            </select>
+
+            <button
+              type="button"
+              onClick={() =>
+                handleTriggerExport(
+                  bulkExportFormat,
+                  bulkExportScope,
+                  selectedQueueKeys.length === 1 && bulkExportScope === 'WORK_QUEUE' ? 'SINGLE' : 'BULK',
+                  bulkExportScope === 'WORK_QUEUE' && selectedQueueKeys.length > 0
+                    ? selectedQueueKeys
+                    : undefined
+                )
+              }
+              className="min-h-[38px] px-3.5 py-1.5 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download {bulkExportFormat}</span>
+            </button>
+          </div>
+        </div>
+
+        {exportStatusBanner && (
+          <div className="mt-2 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-200 flex items-center justify-between gap-2">
+            <span className="font-mono font-semibold">{exportStatusBanner}</span>
+            <button
+              type="button"
+              onClick={() => setExportStatusBanner(null)}
+              className="text-emerald-600 hover:text-emerald-800 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Auditor KPI Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
           <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-800">
             <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Reports in Queue</div>
             <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-0.5">
@@ -470,6 +687,7 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
           {[
             { id: 'WORK_QUEUE', label: 'Audit Work Queue', count: workQueue.length, icon: ClipboardCheck },
             { id: 'REPORT_AUDIT', label: 'Report Inspection', count: null, icon: Eye },
+            { id: 'HISTORICAL_TRENDS', label: '12M Historical Trends', count: null, icon: TrendingUp },
             { id: 'TIMELINE', label: 'Workflow Timeline', count: null, icon: History },
             { id: 'FINDINGS', label: 'Audit Findings', count: findings.length, icon: AlertTriangle },
             { id: 'EVIDENCE', label: 'Evidence Vault', count: evidences.length, icon: Upload },
@@ -580,15 +798,34 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
                     Reset
                   </button>
                 )}
+
+                <MaximizeButton
+                  onClick={() => setIsQueueMaximized(true)}
+                  title="Maximize Audit Work Queue (Esc to restore)"
+                />
               </div>
             </div>
 
             {/* Queue Table */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto touch-scroll-x">
-                <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800 text-left text-xs">
+              <div className="overflow-x-auto min-w-full touch-scroll-x">
+                <table className="min-w-[750px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-left text-xs">
                   <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider text-[10px]">
                     <tr>
+                      <th className="py-3 px-3 w-9">
+                        <button
+                          type="button"
+                          onClick={toggleSelectAllQueue}
+                          aria-label="Select all returns in queue"
+                          className="p-1 rounded text-slate-500 hover:text-ob-indigo-600 cursor-pointer"
+                        >
+                          {selectedQueueKeys.length === workQueue.length && workQueue.length > 0 ? (
+                            <CheckSquare className="w-4 h-4 text-ob-indigo-600" />
+                          ) : (
+                            <Square className="w-4 h-4" />
+                          )}
+                        </button>
+                      </th>
                       <th className="py-3 px-4">Statutory Return</th>
                       <th className="py-3 px-4">Department & Maker</th>
                       <th className="py-3 px-4">Workflow Status</th>
@@ -596,13 +833,13 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
                       <th className="py-3 px-4 text-center">Findings</th>
                       <th className="py-3 px-4 text-center">Evidence</th>
                       <th className="py-3 px-4 text-center">Remediations</th>
-                      <th className="py-3 px-4 text-right">Actions</th>
+                      <th className="py-3 px-4 text-right">Actions & Single Export</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {workQueue.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-12 text-center text-slate-400">
+                        <td colSpan={9} className="py-12 text-center text-slate-400">
                           No regulatory returns match your filter criteria.
                         </td>
                       </tr>
@@ -612,6 +849,20 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
                           key={item.reportKey}
                           className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
                         >
+                          <td className="py-3 px-3">
+                            <button
+                              type="button"
+                              onClick={() => toggleSelectQueueItem(item.reportKey)}
+                              aria-label={`Select return ${item.reportKey}`}
+                              className="p-1 rounded text-slate-400 hover:text-ob-indigo-600 cursor-pointer"
+                            >
+                              {selectedQueueKeys.includes(item.reportKey) ? (
+                                <CheckSquare className="w-4 h-4 text-ob-indigo-600" />
+                              ) : (
+                                <Square className="w-4 h-4" />
+                              )}
+                            </button>
+                          </td>
                           <td className="py-3 px-4">
                             <div className="font-mono font-bold text-slate-900 dark:text-white">
                               {item.reportKey}
@@ -705,14 +956,36 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
                           </td>
 
                           <td className="py-3 px-4 text-right">
-                            <button
-                              type="button"
-                              onClick={() => handleSelectReportForAudit(item.reportKey, item.submissionId)}
-                              className="min-h-[38px] px-3 py-1.5 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white text-xs font-bold rounded-lg inline-flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>Inspect</span>
-                            </button>
+                            <div className="inline-flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleTriggerExport('PDF', 'WORK_QUEUE', 'SINGLE', [item.reportKey])
+                                }
+                                className="min-h-[34px] px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-mono font-bold rounded-lg cursor-pointer"
+                                title={`Single PDF export for ${item.reportKey}`}
+                              >
+                                PDF
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleTriggerExport('XLSX', 'WORK_QUEUE', 'SINGLE', [item.reportKey])
+                                }
+                                className="min-h-[34px] px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[10px] font-mono font-bold rounded-lg cursor-pointer"
+                                title={`Single XLSX export for ${item.reportKey}`}
+                              >
+                                XLSX
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSelectReportForAudit(item.reportKey, item.submissionId)}
+                                className="min-h-[38px] px-3 py-1.5 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white text-xs font-bold rounded-lg inline-flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Inspect</span>
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -732,6 +1005,14 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
                 itemName="statutory returns"
               />
             </div>
+
+            {/* Phase 48: Supervisory Visualizations & Anomaly Detection Feed below Queue & Charts */}
+            <AuditorSupervisoryAnalytics currentUser={currentUser} />
+            <AnomalyDetectionFeed
+              currentUser={currentUser}
+              onInspectReturn={(rk, subId) => handleSelectReportForAudit(rk, subId)}
+              onAnomalyConverted={() => setVersion((v) => v + 1)}
+            />
           </div>
         )}
 
@@ -844,6 +1125,39 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
                 </div>
               )}
             </div>
+
+            {/* 12-Month Historical Value Trend Line Chart (Embedded in Inspection) */}
+            <HistoricalSubmissionTrendChart
+              currentUser={currentUser}
+              initialReportKey={selectedReportKey}
+              onSelectReportKey={(rk) => setSelectedReportKey(rk)}
+            />
+
+            {/* Phase 48: Anomaly Detection Feed below the charts */}
+            <AnomalyDetectionFeed
+              currentUser={currentUser}
+              reportKeyFilter={selectedReportKey}
+              onInspectReturn={(rk, subId) => handleSelectReportForAudit(rk, subId)}
+              onAnomalyConverted={() => setVersion((v) => v + 1)}
+            />
+          </div>
+        )}
+
+        {/* SUB-VIEW: 12-MONTH HISTORICAL VALUE TRENDS */}
+        {activeSubTab === 'HISTORICAL_TRENDS' && (
+          <div className="space-y-4">
+            <HistoricalSubmissionTrendChart
+              currentUser={currentUser}
+              initialReportKey={selectedReportKey}
+              onSelectReportKey={(rk) => setSelectedReportKey(rk)}
+            />
+            <AuditorSupervisoryAnalytics currentUser={currentUser} />
+            <AnomalyDetectionFeed
+              currentUser={currentUser}
+              reportKeyFilter={selectedReportKey}
+              onInspectReturn={(rk, subId) => handleSelectReportForAudit(rk, subId)}
+              onAnomalyConverted={() => setVersion((v) => v + 1)}
+            />
           </div>
         )}
 
@@ -1145,14 +1459,21 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
                 </select>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setIsFindingModalOpen(true)}
-                className="min-h-[44px] px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>File New Finding</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFindingModalOpen(true)}
+                  className="min-h-[44px] px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>File New Finding</span>
+                </button>
+
+                <MaximizeButton
+                  onClick={() => setIsFindingsMaximized(true)}
+                  title="Maximize Audit Findings (Esc to restore)"
+                />
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -2001,6 +2322,187 @@ export const AuditorDashboard: React.FC<AuditorDashboardProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* PHASE 47: FULL VIEW / MAXIMIZED AUDIT WORK QUEUE */}
+      {isQueueMaximized && (
+        <MaximizedViewModal
+          isOpen={isQueueMaximized}
+          onClose={() => setIsQueueMaximized(false)}
+          title="Regulatory Audit Ledger & Work Queue"
+          badge="Auditor Full View"
+          subtitle={`Full inspection ledger of ${workQueue.length} returns across all Oromia Bank departments`}
+          icon={ClipboardCheck}
+        >
+          <div className="space-y-4">
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto min-w-full touch-scroll-x">
+                <table className="min-w-[800px] w-full divide-y divide-slate-200 dark:divide-slate-800 text-left text-xs">
+                  <thead className="bg-slate-50/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 font-bold uppercase tracking-wider text-[10px] sticky top-0 z-10">
+                    <tr>
+                      <th className="py-3 px-4">Statutory Return</th>
+                      <th className="py-3 px-4">Department & Maker</th>
+                      <th className="py-3 px-4">Workflow Status</th>
+                      <th className="py-3 px-4">Audit Assessment</th>
+                      <th className="py-3 px-4 text-center">Findings</th>
+                      <th className="py-3 px-4 text-center">Evidence</th>
+                      <th className="py-3 px-4 text-center">Remediations</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {paginatedWorkQueue.map((item) => (
+                      <tr key={item.reportKey} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                        <td className="py-3 px-4">
+                          <span className="font-mono text-xs font-bold text-ob-indigo-700 dark:text-ob-indigo-400 bg-ob-indigo-50 dark:bg-ob-indigo-950/60 px-2 py-0.5 rounded border border-ob-indigo-200 dark:border-ob-indigo-800">
+                            {item.reportKey}
+                          </span>
+                          <div className="font-semibold text-slate-900 dark:text-white mt-1">
+                            {getReportDefinition(item.reportKey)?.Title || 'Regulatory Return'}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono">v{item.version}</div>
+                        </td>
+                        <td className="py-3 px-4 text-slate-600 dark:text-slate-300">
+                          <div className="font-medium text-slate-900 dark:text-white">{item.department}</div>
+                          <div className="text-[10px] text-slate-500">Maker: {item.makerName}</div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              item.submissionStatus === 'APPROVED'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                : item.submissionStatus === 'SENT'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                                : item.submissionStatus === 'PENDING_CHECKER'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                            }`}
+                          >
+                            {item.submissionStatus}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              item.auditStatus === 'FLAGGED_HIGH_RISK'
+                                ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                : item.auditStatus === 'FINDINGS_OPEN'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                            }`}
+                          >
+                            {item.auditStatus}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center font-bold text-rose-600">{item.totalFindings}</td>
+                        <td className="py-3 px-4 text-center font-mono">{item.evidenceCount}</td>
+                        <td className="py-3 px-4 text-center font-mono">{item.pendingRemediations}</td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsQueueMaximized(false);
+                              handleSelectReportForAudit(item.reportKey, item.submissionId);
+                            }}
+                            className="px-3 py-1 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            Inspect Dossier
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <Pagination
+              currentPage={workQueuePage}
+              pageSize={workQueuePageSize}
+              totalItems={workQueue.length}
+              onPageChange={(p) => setWorkQueuePage(p)}
+              onPageSizeChange={(sz) => {
+                setWorkQueuePageSize(sz);
+                setWorkQueuePage(1);
+              }}
+              itemName="returns"
+            />
+          </div>
+        </MaximizedViewModal>
+      )}
+
+      {/* PHASE 47: FULL VIEW / MAXIMIZED FINDINGS */}
+      {isFindingsMaximized && (
+        <MaximizedViewModal
+          isOpen={isFindingsMaximized}
+          onClose={() => setIsFindingsMaximized(false)}
+          title="Statutory Audit Findings & Exception Matrix"
+          badge="Audit Observations"
+          subtitle={`Independent supervisory exceptions catalog (${findings.length} findings recorded)`}
+          icon={AlertTriangle}
+        >
+          <div className="space-y-4">
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto min-w-full touch-scroll-x">
+                <table className="min-w-[800px] w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 font-bold sticky top-0 z-10">
+                      <th className="py-3 px-3">Finding Ref & Title</th>
+                      <th className="py-3 px-3">Severity</th>
+                      <th className="py-3 px-3">Status</th>
+                      <th className="py-3 px-3">Statutory Return</th>
+                      <th className="py-3 px-3">Circular / Directive</th>
+                      <th className="py-3 px-3">Logged Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {paginatedFindings.map((f) => (
+                      <tr key={f.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                        <td className="py-2.5 px-3">
+                          <div className="font-bold text-slate-900 dark:text-white">{f.title}</div>
+                          <div className="text-[10px] text-slate-500 font-mono">{f.id}</div>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              f.severity === 'CRITICAL'
+                                ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                : f.severity === 'HIGH'
+                                ? 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300'
+                                : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                            }`}
+                          >
+                            {f.severity}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                            {f.status}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-ob-indigo-600 dark:text-ob-indigo-400">{f.reportKey}</td>
+                        <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300">{f.regulatoryReference || 'NBE BSD/03/2020'}</td>
+                        <td className="py-2.5 px-3 font-mono text-slate-500">{new Date(f.createdAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <Pagination
+              currentPage={findingPage}
+              pageSize={findingPageSize}
+              totalItems={findings.length}
+              onPageChange={(p) => setFindingPage(p)}
+              onPageSizeChange={(sz) => {
+                setFindingPageSize(sz);
+                setFindingPage(1);
+              }}
+              itemName="findings"
+            />
+          </div>
+        </MaximizedViewModal>
       )}
     </div>
   );

@@ -1436,6 +1436,10 @@ class ConfigurationEngine {
     },
     actor: ActorInfo
   ): { report: ReportDefinitionSSOT; version: ReportVersionSSOT } {
+    if (!actor || actor.role !== 'ADMIN') {
+      throw new Error(`Forbidden: Only Compliance Administrators can create report definitions. User role '${actor?.role || 'ANONYMOUS'}' is restricted to data entry.`);
+    }
+
     const normKey = input.returnKey.trim().toUpperCase();
     if (this.reports.has(normKey)) {
       throw new Error(`Report definition with ReturnKey '${normKey}' already exists.`);
@@ -1622,6 +1626,10 @@ class ConfigurationEngine {
     },
     actor: ActorInfo
   ): ReportDefinitionSSOT {
+    if (!actor || actor.role !== 'ADMIN') {
+      throw new Error(`Forbidden: Only Compliance Administrators can modify report definitions, titles, or template metadata. User role '${actor?.role || 'ANONYMOUS'}' is restricted to data entry.`);
+    }
+
     const report = this.reports.get(returnKey);
     if (!report) throw new Error(`Report definition '${returnKey}' not found.`);
 
@@ -1727,6 +1735,10 @@ class ConfigurationEngine {
     },
     actor: ActorInfo
   ): ReportVersionSSOT {
+    if (!actor || actor.role !== 'ADMIN') {
+      throw new Error(`Forbidden: Only Compliance Administrators can create draft versions. User role '${actor?.role || 'ANONYMOUS'}' is restricted to data entry.`);
+    }
+
     const report = this.reports.get(returnKey);
     if (!report) throw new Error(`Report with ReturnKey '${returnKey}' not found.`);
 
@@ -1818,11 +1830,17 @@ class ConfigurationEngine {
     },
     actor: ActorInfo
   ): ReportVersionSSOT {
+    if (!actor || actor.role !== 'ADMIN') {
+      throw new Error(`Forbidden: Only Compliance Administrators can modify draft versions. User role '${actor?.role || 'ANONYMOUS'}' is restricted to data entry.`);
+    }
+
     const version = this.getReportVersion(returnKey, versionNumber);
     if (!version) throw new Error(`Version ${versionNumber} for report '${returnKey}' not found.`);
 
-    if (version.status === 'SUPERSEDED' || version.status === 'RETIRED') {
-      throw new Error(`Cannot modify version in '${version.status}' status (immutable historical record).`);
+    if (version.status === 'ACTIVE' || version.status === 'SUPERSEDED' || version.status === 'RETIRED') {
+      throw new Error(
+        `Cannot modify published version ${versionNumber} for report '${returnKey}'. Published versions are immutable after publication. Structural changes must create a new draft version.`
+      );
     }
 
     if (updates.changelogSummary !== undefined) version.changelogSummary = updates.changelogSummary;
@@ -2024,6 +2042,10 @@ class ConfigurationEngine {
     actor: ActorInfo,
     changelogSummary?: string
   ): ReportVersionSSOT {
+    if (!actor || actor.role !== 'ADMIN') {
+      throw new Error(`Forbidden: Only Compliance Administrators can publish report versions. User role '${actor?.role || 'ANONYMOUS'}' is restricted to data entry.`);
+    }
+
     const report = this.reports.get(returnKey);
     if (!report) throw new Error(`Report with ReturnKey '${returnKey}' not found.`);
 
@@ -2090,6 +2112,10 @@ class ConfigurationEngine {
   }
 
   public retireReport(returnKey: string, actor: ActorInfo, reason?: string): ReportDefinitionSSOT {
+    if (!actor || actor.role !== 'ADMIN') {
+      throw new Error(`Forbidden: Only Compliance Administrators can retire report definitions. User role '${actor?.role || 'ANONYMOUS'}' is restricted to data entry.`);
+    }
+
     const report = this.reports.get(returnKey);
     if (!report) throw new Error(`Report with ReturnKey '${returnKey}' not found.`);
 
@@ -2361,12 +2387,17 @@ class ConfigurationEngine {
       changelogSummary: string;
       fields?: ReportFieldSSOT[];
       columns?: ReportColumnSSOT[];
+      sections?: ReportSectionSSOT[];
       formulas?: any[];
       validationRules?: any[];
       effectiveFrom?: string;
     },
     actor: ActorInfo
   ): ReportVersionSSOT {
+    if (!actor || actor.role !== 'ADMIN') {
+      throw new Error(`Forbidden: Only Compliance Administrators can create report versions. User role '${actor?.role || 'ANONYMOUS'}' is restricted to data entry.`);
+    }
+
     const report = this.reports.get(returnKey);
     if (!report) throw new Error(`Report with ReturnKey '${returnKey}' not found.`);
 
@@ -2381,6 +2412,7 @@ class ConfigurationEngine {
       currentActive.effectiveTo = now;
     }
 
+    const newSections = input.sections || (currentActive ? [...currentActive.sections] : []);
     const newFields = input.fields || (currentActive ? [...currentActive.fields] : []);
     const newColumns = input.columns || (currentActive ? [...currentActive.columns] : []);
     const newFormulas = input.formulas || (currentActive ? [...currentActive.formulas] : []);
@@ -2401,7 +2433,7 @@ class ConfigurationEngine {
       createdBy: actor.name,
       createdAt: now,
       publishedAt: now,
-      sections: currentActive?.sections || [],
+      sections: newSections,
       fields: newFields,
       columns: newColumns,
       rows: currentActive?.rows || [],

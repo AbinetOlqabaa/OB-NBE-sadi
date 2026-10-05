@@ -467,7 +467,7 @@ export class NbeReportPackageServiceClass {
       format = 'MODERN_ENVELOPE';
       packageVersion = String(parsed.packageVersion).trim();
       reportPayload = parsed.report;
-      integrationPayload = parsed.integration;
+      integrationPayload = parsed.integration || (parsed.report as any)?.integrationConfig || (parsed.report as any)?.integration;
 
       if (!SUPPORTED_PACKAGE_VERSIONS.has(packageVersion)) {
         errors.push({

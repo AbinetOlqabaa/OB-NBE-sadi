@@ -61,8 +61,12 @@ import {
   AlertTriangle,
   RefreshCw,
   RotateCcw,
+  ShieldCheck,
+  Lock,
 } from 'lucide-react';
 import { templateInitializationService } from '../services/templateInitializationService.ts';
+import { CheckerSelector } from './CheckerSelector.tsx';
+import { effectiveAccessEngine } from '../services/effectiveAccessEngine.ts';
 
 export interface NavigationGuardHandler {
   hasUnsavedChanges: () => boolean;
@@ -82,7 +86,7 @@ interface DynamicReportFormProps {
     dynamicRows: Record<number, DynamicRowRecord[]>,
     expectedVersion?: number
   ) => Promise<ReportSubmission> | ReportSubmission;
-  onSubmitToChecker: (comment: string, expectedVersion?: number) => void;
+  onSubmitToChecker: (comment: string, expectedVersion?: number, selectedCheckerIds?: string[]) => void;
   onReuseSubmission?: (submissionId: string) => void;
   onRegisterNavigationGuard?: (guard: NavigationGuardHandler | null) => void;
 }
@@ -111,6 +115,7 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [submitModalOpen, setSubmitModalOpen] = useState<boolean>(false);
+  const [selectedCheckerIds, setSelectedCheckerIds] = useState<string[]>([]);
   const [submitComment, setSubmitComment] = useState<string>('');
   const [filterQuery, setFilterQuery] = useState<string>('');
   const [itemTypeFilter, setItemTypeFilter] = useState<string>('ALL');
@@ -936,6 +941,14 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
               <h1 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white tracking-tight leading-tight truncate max-w-md sm:max-w-xl">
                 {metadata.Title}
               </h1>
+              {/* Phase 34: Visible Version & Governance Immutability Indicator */}
+              <div
+                className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-md border border-ob-indigo-200 dark:border-ob-indigo-800 bg-ob-indigo-50/80 dark:bg-ob-indigo-950/60 text-ob-indigo-800 dark:text-ob-indigo-300 font-semibold shrink-0"
+                title="Report definition (title, sections, fields, formulas, and NBE mapping) is governed by Compliance Administration. Maker enters report values only."
+              >
+                <ShieldCheck className="w-3 h-3 text-ob-indigo-600 dark:text-ob-indigo-400 shrink-0" />
+                <span>Template v{submission.templateVersion || 1} • Governed</span>
+              </div>
               <div
                 className={`inline-flex items-center gap-1.5 text-[10px] font-mono px-2.5 py-0.5 rounded-full border shrink-0 transition-all ${
                   saveStatus === 'SAVED'
@@ -1042,11 +1055,10 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
                 ? 'bg-amber-50 dark:bg-amber-950/80 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-200 hover:bg-amber-100'
                 : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100'
             }`}
-            title="Open Unified Validation & Remediation Assistant (NBE BSD/03/2020)"
+            title="Open Help & Validation Guidance (NBE BSD/03/2020)"
           >
             <Wand2 className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-ob-indigo-600 dark:text-ob-indigo-400" />
-            <span className="hidden sm:inline">Remediation Assistant</span>
-            <span className="sm:hidden">Assistant</span>
+            <span>Help</span>
             {remediationSummary && (
               <span
                 className={`px-1.5 py-0.2 text-[10px] font-bold rounded-full font-mono ${
@@ -1208,7 +1220,17 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <span className="font-mono text-slate-500">Return: <strong>{metadata.Code}</strong></span>
-          <span className="font-mono text-slate-500">v{currentVersion}</span>
+          <span
+            className="inline-flex items-center gap-1 font-mono text-[10px] text-slate-700 dark:text-slate-300 bg-slate-200/80 dark:bg-slate-700/80 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 font-bold"
+            title={submission.templateSnapshot ? 'Historically frozen template snapshot sealed at draft initiation' : 'Active authoritative report definition template'}
+          >
+            <Layers className="w-3 h-3 text-ob-indigo-500" />
+            <span>Tmpl v{submission.templateVersion || 1}</span>
+            {submission.templateSnapshot && (
+              <span className="text-[9px] text-ob-indigo-600 dark:text-ob-indigo-400 font-medium">(Snapshot)</span>
+            )}
+          </span>
+          <span className="font-mono text-slate-500 text-[10px]">Data v{currentVersion}</span>
         </div>
       </div>
 
@@ -1283,7 +1305,7 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
         <div className="flex items-center gap-4 text-[11px] text-slate-600 dark:text-slate-300">
           <span className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1">
             <Building className="w-3 h-3 text-slate-400" />
-            Oromia Bank (0000013)
+            Oromia Bank
           </span>
           <span>•</span>
           <span className="flex items-center gap-1">
@@ -1340,7 +1362,7 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
                 className="px-3 py-1 bg-rose-700 hover:bg-rose-800 text-white font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
               >
                 <Wand2 className="w-3.5 h-3.5" />
-                <span>Open Remediation Assistant</span>
+                <span>Help</span>
               </button>
               <button
                 type="button"
@@ -1758,15 +1780,24 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
       {/* 6. Maker Submit to Checker Modal */}
       {submitModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 transition-colors">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 transition-colors max-h-[90vh] overflow-y-auto">
             <div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Submit Report to Checker
+                Submit Report to Checker Queue
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                 You are submitting <span className="font-semibold text-slate-900 dark:text-white">{metadata.Title}</span> for formal 4-eyes Checker review and authorization.
               </p>
             </div>
+
+            {/* Phase 36: Server-side Checker selector */}
+            <CheckerSelector
+              reportKey={submission.reportKey || metadata.ReturnKey || metadata.Code}
+              currentUser={currentUser}
+              selectedCheckerIds={selectedCheckerIds}
+              onChangeSelectedCheckers={setSelectedCheckerIds}
+              submission={submission}
+            />
 
             <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
@@ -1794,7 +1825,7 @@ export const DynamicReportForm: React.FC<DynamicReportFormProps> = ({
                 onClick={() => {
                   vibrate([30, 45, 40]);
                   handleManualSave();
-                  onSubmitToChecker(submitComment);
+                  onSubmitToChecker(submitComment, submission?.version, selectedCheckerIds);
                   setSubmitModalOpen(false);
                 }}
                 className="px-4 py-1.5 text-xs font-bold text-white bg-ob-indigo-600 hover:bg-ob-indigo-700 rounded-lg transition-colors shadow-2xs cursor-pointer"

@@ -49,14 +49,9 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     if (currentUser.role === 'ADMIN') {
       return [
         { id: 'ADMIN_DASHBOARD' as ViewTab, label: 'Admin', icon: Users },
-        { id: 'LIBRARY' as ViewTab, label: 'Library', icon: BookOpen },
-        {
-          id: 'CHECKER_INBOX' as ViewTab,
-          label: 'Checker',
-          icon: Inbox,
-          badge: pendingCheckerCount > 0 ? pendingCheckerCount : null,
-        },
-        { id: 'MAKER_WORKSPACE' as ViewTab, label: 'Maker', icon: FileText },
+        { id: 'DEPT_REPORT_MANAGEMENT' as ViewTab, label: 'Reports', icon: Database },
+        { id: 'NBE_SIMULATOR' as ViewTab, label: 'Simulator', icon: Send },
+        { id: 'PHASE2_SSOT' as ViewTab, label: 'SSOT', icon: Database },
       ];
     }
 
@@ -69,8 +64,8 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           badge: pendingCheckerCount > 0 ? pendingCheckerCount : null,
         },
         { id: 'LIBRARY' as ViewTab, label: 'Library', icon: BookOpen },
-        { id: 'NBE_SIMULATOR' as ViewTab, label: 'NBE Probe', icon: Send },
         { id: 'AUDIT_TRAIL' as ViewTab, label: 'Audit', icon: History },
+        { id: 'DOCUMENTATION' as ViewTab, label: 'Docs', icon: HelpCircle },
       ];
     }
 

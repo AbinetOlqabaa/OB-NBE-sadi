@@ -42,6 +42,8 @@ import {
   XCircle,
   FileWarning,
   Shield,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import {
   ReportMetadata,
@@ -61,6 +63,9 @@ import { effectiveAccessEngine } from '../services/effectiveAccessEngine.ts';
 import { getReportByKey } from '../data/report-registry.ts';
 import { userService } from '../services/userService.ts';
 import { triggerHaptic, vibrate } from '../utils/haptics.ts';
+import { CheckerSelector } from './CheckerSelector.tsx';
+import { MaximizedViewModal } from './MaximizedViewModal.tsx';
+import { MaximizeButton } from './MaximizeButton.tsx';
 
 interface MakerLibraryViewProps {
   currentUser: UserSession;
@@ -68,7 +73,7 @@ interface MakerLibraryViewProps {
   submissions: ReportSubmission[];
   onSelectSubmission: (submission: ReportSubmission) => void;
   onCreateDraft?: (reportKey: string) => void;
-  onSubmitToChecker: (submissionId: string, comment?: string) => void;
+  onSubmitToChecker: (submissionId: string, comment?: string, selectedCheckerIds?: string[]) => void;
   onDeleteSubmission: (submissionId: string) => void;
   onReuseSubmission: (submissionId: string) => void;
   onRefresh?: () => void;
@@ -107,14 +112,39 @@ export const MakerLibraryView: React.FC<MakerLibraryViewProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [submitTargetSub, setSubmitTargetSub] = useState<ReportSubmission | null>(null);
+  const [selectedCheckerIds, setSelectedCheckerIds] = useState<string[]>([]);
   const [submitComment, setSubmitComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (submitTargetSub) {
+      const eligible = effectiveAccessEngine.getEligibleCheckersForReport(
+        submitTargetSub.reportKey,
+        currentUser,
+        submitTargetSub
+      );
+      if (eligible.length > 0) {
+        setSelectedCheckerIds([eligible[0].id]);
+      } else {
+        setSelectedCheckerIds([]);
+      }
+    }
+  }, [submitTargetSub, currentUser]);
 
   const [validateTargetSub, setValidateTargetSub] = useState<ReportSubmission | null>(null);
   const [validationResult, setValidationResult] = useState<any | null>(null);
   const [isValidating, setIsValidating] = useState(false);
 
   const [isNewReturnModalOpen, setIsNewReturnModalOpen] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
+
+  // Phase 50: Batch Submission State for Maker & Checker Library Views
+  const [selectedSubIds, setSelectedSubIds] = useState<string[]>([]);
+  const [isBatchSubmitModalOpen, setIsBatchSubmitModalOpen] = useState(false);
+  const [batchSubmitComment, setBatchSubmitComment] = useState('');
+  const [batchCheckerIds, setBatchCheckerIds] = useState<string[]>([]);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [batchResultBanner, setBatchResultBanner] = useState<string | null>(null);
 
   // Phase 26 Modals State
   // Checker 4-Eyes Review Modal
@@ -245,7 +275,7 @@ export const MakerLibraryView: React.FC<MakerLibraryViewProps> = ({
     setIsSubmitting(true);
     try {
       vibrate([30, 45]);
-      onSubmitToChecker(submitTargetSub.id, submitComment);
+      onSubmitToChecker(submitTargetSub.id, submitComment, selectedCheckerIds);
       setSubmitTargetSub(null);
       setSubmitComment('');
     } catch (err: any) {
@@ -408,6 +438,91 @@ export const MakerLibraryView: React.FC<MakerLibraryViewProps> = ({
       alert(`Governed removal failed: ${err.message}`);
     } finally {
       setIsRemoving(false);
+    }
+  };
+
+  // Phase 50 Batch Selection & Execution Handlers
+  const toggleSelectSub = (subId: string) => {
+    vibrate(15);
+    setSelectedSubIds((prev) =>
+      prev.includes(subId) ? prev.filter((id) => id !== subId) : [...prev, subId]
+    );
+  };
+
+  const selectedSubmissions = useMemo(() => {
+    return queryResult.items.filter((s) => selectedSubIds.includes(s.id));
+  }, [queryResult.items, selectedSubIds]);
+
+  const toggleSelectAllEligible = () => {
+    vibrate(20);
+    const eligibleIds =
+      currentUser.role === 'MAKER'
+        ? queryResult.items.filter((s) => isEditable(s)).map((s) => s.id)
+        : queryResult.items.map((s) => s.id);
+
+    if (selectedSubIds.length === eligibleIds.length && eligibleIds.length > 0) {
+      setSelectedSubIds([]);
+    } else {
+      setSelectedSubIds(eligibleIds);
+    }
+  };
+
+  const handleOpenBatchModal = () => {
+    if (selectedSubIds.length === 0) return;
+    setBatchSubmitComment(
+      currentUser.role === 'MAKER'
+        ? 'Batch submission of verified statutory returns to Checker 4-eyes review.'
+        : 'Batch verified and authorized for transmission to NBE Gateway.'
+    );
+    // Pre-populate eligible checkers from the first selected submission
+    if (currentUser.role === 'MAKER' && selectedSubmissions.length > 0) {
+      const eligible = effectiveAccessEngine.getEligibleCheckersForReport(
+        selectedSubmissions[0].reportKey,
+        currentUser,
+        selectedSubmissions[0]
+      );
+      if (eligible.length > 0) {
+        setBatchCheckerIds([eligible[0].id]);
+      }
+    }
+    setIsBatchSubmitModalOpen(true);
+    vibrate(25);
+  };
+
+  const handleExecuteBatchSubmission = async () => {
+    if (selectedSubIds.length === 0) return;
+    setIsBatchProcessing(true);
+    try {
+      if (currentUser.role === 'MAKER') {
+        const res = submissionService.batchSubmitToChecker(
+          selectedSubIds,
+          currentUser,
+          batchSubmitComment,
+          batchCheckerIds
+        );
+        vibrate(25);
+        setBatchResultBanner(
+          `Batch Submit to Checker Complete: ${res.succeededCount} of ${res.totalRequested} return(s) dispatched to 4-eyes review.`
+        );
+      } else {
+        // Checker or Admin role: Batch Submit to NBE
+        const res = await submissionService.batchSubmitToNBE(
+          selectedSubIds,
+          currentUser,
+          batchSubmitComment
+        );
+        vibrate(25);
+        setBatchResultBanner(
+          `Batch Submit to NBE Complete: ${res.succeededCount} of ${res.totalRequested} return(s) officially delivered to NBE Gateway.`
+        );
+      }
+      setSelectedSubIds([]);
+      setIsBatchSubmitModalOpen(false);
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      alert(`Batch operation error: ${err.message}`);
+    } finally {
+      setIsBatchProcessing(false);
     }
   };
 
@@ -798,6 +913,11 @@ export const MakerLibraryView: React.FC<MakerLibraryViewProps> = ({
                 <ListIcon className="w-3.5 h-3.5" />
               </button>
             </div>
+
+            <MaximizeButton
+              onClick={() => setIsMaximized(true)}
+              title="Maximize Regulatory Dossier Archive (Esc to restore)"
+            />
           </div>
         </div>
 
@@ -856,6 +976,77 @@ export const MakerLibraryView: React.FC<MakerLibraryViewProps> = ({
             )}
           </div>
         </div>
+
+        {/* Phase 50: Batch Action Bar (Boundary-Safe, Responsive & Scrollable) */}
+        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 overflow-x-auto touch-scroll-x min-w-0 max-w-full">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={toggleSelectAllEligible}
+              className="min-h-[38px] px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 flex items-center gap-1.5 cursor-pointer"
+            >
+              {selectedSubIds.length > 0 ? (
+                <CheckSquare className="w-3.5 h-3.5 text-ob-blue-600 dark:text-ob-blue-400" />
+              ) : (
+                <Square className="w-3.5 h-3.5" />
+              )}
+              <span>
+                {selectedSubIds.length > 0
+                  ? `Selected (${selectedSubIds.length})`
+                  : currentUser.role === 'MAKER'
+                  ? 'Select Drafts'
+                  : 'Select All Eligible'}
+              </span>
+            </button>
+
+            {selectedSubIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedSubIds([])}
+                className="min-h-[38px] px-2.5 py-1 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-semibold cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {currentUser.role === 'MAKER' ? (
+              <button
+                type="button"
+                disabled={selectedSubIds.length === 0}
+                onClick={handleOpenBatchModal}
+                className="min-h-[40px] px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition-all cursor-pointer disabled:cursor-not-allowed"
+              >
+                <Send className="w-4 h-4" />
+                <span>Submit to Checker ({selectedSubIds.length})</span>
+              </button>
+            ) : currentUser.role === 'CHECKER' ? (
+              <button
+                type="button"
+                disabled={selectedSubIds.length === 0}
+                onClick={handleOpenBatchModal}
+                className="min-h-[40px] px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white font-bold text-xs flex items-center gap-2 shadow-sm transition-all cursor-pointer disabled:cursor-not-allowed"
+              >
+                <Send className="w-4 h-4" />
+                <span>Submit to NBE ({selectedSubIds.length})</span>
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {batchResultBanner && (
+          <div className="mt-2 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-200 flex items-center justify-between gap-2">
+            <span className="font-mono font-semibold">{batchResultBanner}</span>
+            <button
+              type="button"
+              onClick={() => setBatchResultBanner(null)}
+              className="text-emerald-600 hover:text-emerald-800 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 4. Main Body: Cards Grid or Table */}
@@ -919,27 +1110,41 @@ export const MakerLibraryView: React.FC<MakerLibraryViewProps> = ({
                 {/* Card Header */}
                 <div className="space-y-2">
                   <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-xs font-bold text-ob-blue-600 dark:text-ob-blue-400">
-                          {sub.reportKey}
-                        </span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                          v{sub.version}
-                        </span>
-                        {sub.reusedFromSubmissionId && (
-                          <span
-                            title={`Reused from Return (v${sub.reusedFromVersion || 1})`}
-                            className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800 flex items-center gap-0.5"
-                          >
-                            <Copy className="w-2.5 h-2.5" />
-                            REUSED
-                          </span>
+                    <div className="flex items-start gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleSelectSub(sub.id)}
+                        aria-label={`Select return ${sub.reportKey}`}
+                        className="mt-0.5 p-1 rounded-lg text-slate-400 hover:text-ob-blue-600 cursor-pointer"
+                      >
+                        {selectedSubIds.includes(sub.id) ? (
+                          <CheckSquare className="w-4 h-4 text-ob-blue-600 dark:text-ob-blue-400" />
+                        ) : (
+                          <Square className="w-4 h-4" />
                         )}
+                      </button>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-xs font-bold text-ob-blue-600 dark:text-ob-blue-400">
+                            {sub.reportKey}
+                          </span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                            v{sub.version}
+                          </span>
+                          {sub.reusedFromSubmissionId && (
+                            <span
+                              title={`Reused from Return (v${sub.reusedFromVersion || 1})`}
+                              className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800 flex items-center gap-0.5"
+                            >
+                              <Copy className="w-2.5 h-2.5" />
+                              REUSED
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white line-clamp-1 mt-0.5">
+                          {title}
+                        </h4>
                       </div>
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-white line-clamp-1 mt-0.5">
-                        {title}
-                      </h4>
                     </div>
                     {renderLifecycleBadge(lState)}
                   </div>
@@ -1131,10 +1336,24 @@ export const MakerLibraryView: React.FC<MakerLibraryViewProps> = ({
       ) : (
         /* Table View (Compact) */
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="overflow-x-auto min-w-full touch-scroll-x">
+            <table className="min-w-[700px] w-full text-left text-xs">
               <thead className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 uppercase font-mono text-[10px]">
                 <tr>
+                  <th className="py-3 px-3 w-8">
+                    <button
+                      type="button"
+                      onClick={toggleSelectAllEligible}
+                      aria-label="Select all eligible returns"
+                      className="p-1 rounded text-slate-400 hover:text-ob-blue-600 cursor-pointer"
+                    >
+                      {selectedSubIds.length > 0 ? (
+                        <CheckSquare className="w-3.5 h-3.5 text-ob-blue-600" />
+                      ) : (
+                        <Square className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </th>
                   <th className="py-3 px-4">Code & Title</th>
                   <th className="py-3 px-3">Lifecycle State</th>
                   <th className="py-3 px-3">Department</th>
@@ -1157,6 +1376,20 @@ export const MakerLibraryView: React.FC<MakerLibraryViewProps> = ({
                       key={sub.id}
                       className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors"
                     >
+                      <td className="py-3 px-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleSelectSub(sub.id)}
+                          aria-label={`Select row ${sub.reportKey}`}
+                          className="p-1 rounded text-slate-400 hover:text-ob-blue-600 cursor-pointer"
+                        >
+                          {selectedSubIds.includes(sub.id) ? (
+                            <CheckSquare className="w-3.5 h-3.5 text-ob-blue-600" />
+                          ) : (
+                            <Square className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-1.5">
                           <span className="font-mono font-bold text-ob-blue-600 dark:text-ob-blue-400">
@@ -1440,7 +1673,7 @@ export const MakerLibraryView: React.FC<MakerLibraryViewProps> = ({
           aria-modal="true"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
         >
-          <div className="max-w-md w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4">
+          <div className="max-w-lg w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-200 dark:border-emerald-800">
                 <Send className="w-5 h-5" />
@@ -1454,6 +1687,15 @@ export const MakerLibraryView: React.FC<MakerLibraryViewProps> = ({
                 </p>
               </div>
             </div>
+
+            {/* Phase 36: Server-side Checker selector */}
+            <CheckerSelector
+              reportKey={submitTargetSub.reportKey}
+              currentUser={currentUser}
+              selectedCheckerIds={selectedCheckerIds}
+              onChangeSelectedCheckers={setSelectedCheckerIds}
+              submission={submitTargetSub}
+            />
 
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
@@ -1484,6 +1726,113 @@ export const MakerLibraryView: React.FC<MakerLibraryViewProps> = ({
                 className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
               >
                 {isSubmitting ? 'Submitting...' : 'Confirm Submission'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Phase 50: Batch Submission Confirmation Modal (Boundary-safe & Responsive) */}
+      {isBatchSubmitModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+        >
+          <div className="max-w-lg w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-200 dark:border-emerald-800">
+                <Send className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  {currentUser.role === 'MAKER'
+                    ? `Batch Submit ${selectedSubIds.length} Return(s) to Checker`
+                    : `Batch Submit ${selectedSubIds.length} Return(s) to NBE Gateway`}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {currentUser.role === 'MAKER'
+                    ? 'Trigger a single governed batch submission to the department Checker 4-eyes review queue.'
+                    : 'Trigger a single authorized batch transmission directly to the National Bank of Ethiopia Gateway.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Selected Returns Summary List (Strict max-h boundary with internal vertical scroll) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                <span>Selected Returns ({selectedSubmissions.length})</span>
+                <span className="text-[10px] text-slate-400">Scroll to view all</span>
+              </label>
+              <div className="max-h-40 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 p-2 space-y-1.5 divide-y divide-slate-200/60 dark:divide-slate-700/60">
+                {selectedSubmissions.map((s) => (
+                  <div key={s.id} className="pt-1 first:pt-0 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-mono font-bold text-ob-blue-600 dark:text-ob-blue-400 mr-2">
+                        {s.reportKey}
+                      </span>
+                      <span className="text-slate-700 dark:text-slate-300 font-medium truncate max-w-[200px]">
+                        {getReportByKey(s.reportKey)?.Title || s.reportKey}
+                      </span>
+                    </div>
+                    <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold">
+                      {s.status} (v{s.version})
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* For Makers: Checker Selector */}
+            {currentUser.role === 'MAKER' && selectedSubmissions.length > 0 && (
+              <CheckerSelector
+                reportKey={selectedSubmissions[0].reportKey}
+                currentUser={currentUser}
+                selectedCheckerIds={batchCheckerIds}
+                onChangeSelectedCheckers={setBatchCheckerIds}
+                submission={selectedSubmissions[0]}
+              />
+            )}
+
+            {/* Shared Bulk Comment */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Shared Bulk Comment / Verification Notes *
+              </label>
+              <textarea
+                value={batchSubmitComment}
+                onChange={(e) => setBatchSubmitComment(e.target.value)}
+                placeholder="Enter verification notes applied to all returns in this batch..."
+                rows={3}
+                className="w-full p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-ob-blue-500 font-medium"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsBatchSubmitModalOpen(false)}
+                disabled={isBatchProcessing}
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteBatchSubmission}
+                disabled={isBatchProcessing || selectedSubIds.length === 0}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isBatchProcessing ? (
+                  <span>Processing Batch...</span>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>
+                      {currentUser.role === 'MAKER' ? 'Confirm Submit to Checker' : 'Confirm Submit to NBE'}
+                    </span>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -2181,6 +2530,121 @@ export const MakerLibraryView: React.FC<MakerLibraryViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* PHASE 47: FULL VIEW / MAXIMIZED LIBRARY DOSSIER */}
+      {isMaximized && (
+        <MaximizedViewModal
+          isOpen={isMaximized}
+          onClose={() => setIsMaximized(false)}
+          title="Regulatory Dossier Archive & Library"
+          badge="Audit Archive"
+          subtitle={`Complete lifecycle archive of ${queryResult.total} filings, unsubmitted drafts, and signed statutory returns`}
+          icon={BookOpen}
+        >
+          <div className="space-y-4">
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto min-w-full touch-scroll-x">
+                <table className="min-w-[800px] w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 font-bold uppercase font-mono text-[10px] sticky top-0 z-10">
+                      <th className="py-3 px-4">Code & Title</th>
+                      <th className="py-3 px-3">Lifecycle State</th>
+                      <th className="py-3 px-3">Department</th>
+                      <th className="py-3 px-3">Ver</th>
+                      <th className="py-3 px-3">Prepared By</th>
+                      <th className="py-3 px-3">Last Modified</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {queryResult.items.map((sub) => {
+                      const report = getReportByKey(sub.reportKey);
+                      const title = report?.Title || sub.reportKey;
+                      const lState = deriveLibraryLifecycleState(sub);
+                      const editable = isEditable(sub);
+
+                      return (
+                        <tr key={sub.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                          <td className="py-2.5 px-4">
+                            <span className="font-mono text-xs font-bold text-ob-indigo-700 dark:text-ob-indigo-400 bg-ob-indigo-50 dark:bg-ob-indigo-950/60 px-1.5 py-0.5 rounded border border-ob-indigo-200 dark:border-ob-indigo-800/60">
+                              {sub.reportKey}
+                            </span>
+                            <div className="font-bold text-slate-900 dark:text-white mt-1 truncate max-w-sm">{title}</div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                lState === 'SUBMITTED'
+                                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                                  : lState === 'RETURNED'
+                                  ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                  : lState === 'IN_PROGRESS'
+                                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                  : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                              }`}
+                            >
+                              {lState}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300">
+                            {sub.department || 'Credit Operations'}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono font-bold text-slate-700 dark:text-slate-300">
+                            v{sub.version || 1}
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300">
+                            {sub.makerName}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono text-slate-500">
+                            {new Date(sub.updatedAt).toLocaleDateString()}
+                          </td>
+                          <td className="py-2.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsMaximized(false);
+                                  onSelectSubmission(sub);
+                                }}
+                                className="px-2.5 py-1 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                              >
+                                {editable && currentUser.role === 'MAKER' ? 'Edit' : 'View'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span>Showing {queryResult.items.length} of {queryResult.total} filings</span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => p - 1)}
+                  className="px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-40"
+                >
+                  Previous
+                </button>
+                <span className="px-2 font-mono">Page {currentPage} of {queryResult.totalPages || 1}</span>
+                <button
+                  type="button"
+                  disabled={currentPage >= (queryResult.totalPages || 1)}
+                  onClick={() => setCurrentPage((p) => p + 1)}
+                  className="px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        </MaximizedViewModal>
       )}
     </div>
   );

@@ -155,11 +155,11 @@ export async function runPhase5FinalVerificationTests() {
 
   const updatedDraft = submissionService.updateDraft(
     draftSub.id,
-    { '153_00010': 500000000, '153_00016': 5000000 },
+    { '34_00001': 500000000, '34_00003': 5000000 },
     {},
     makerSession
   );
-  assert(updatedDraft.values['153_00010'] === 500000000, 'Maker edits draft values');
+  assert(updatedDraft.values['34_00001'] === 500000000, 'Maker edits draft values');
 
   const submittedSub = submissionService.submitToChecker(
     draftSub.id,
@@ -188,11 +188,11 @@ export async function runPhase5FinalVerificationTests() {
   // Maker updates figures
   const correctedSub = submissionService.updateDraft(
     draftSub.id,
-    { '153_00010': 520000000, '153_00016': 5200000 },
+    { '34_00001': 520000000, '34_00003': 5200000 },
     {},
     makerSession
   );
-  assert(correctedSub.values['153_00010'] === 520000000, 'Maker corrects figures under CORRECTION_REQUIRED');
+  assert(correctedSub.values['34_00001'] === 520000000, 'Maker corrects figures under CORRECTION_REQUIRED');
 
   // Maker resubmits
   submissionService.submitToChecker(draftSub.id, makerSession, 'Collateral allocation schedule revised.');

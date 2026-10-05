@@ -7,6 +7,8 @@ import React, { useState, useEffect } from 'react';
 import { DynamicAreaDefinition, DynamicRowRecord } from '../types/regulatory.ts';
 import { Plus, Trash2, Table as TableIcon, LayoutGrid, List, AlertCircle } from 'lucide-react';
 import { Pagination } from './Pagination.tsx';
+import { MaximizedViewModal } from './MaximizedViewModal.tsx';
+import { MaximizeButton } from './MaximizeButton.tsx';
 import { ValidationEngine, ValidationSummary } from '../utils/validationEngine.ts';
 import type { FormValidationState } from '../services/zodValidationService.ts';
 
@@ -32,6 +34,7 @@ export const DynamicAreaTable: React.FC<DynamicAreaTableProps> = ({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
   const [mobileViewMode, setMobileViewMode] = useState<'TABLE' | 'CARDS'>('CARDS');
+  const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
     // If rows deleted and page is now out of range
@@ -98,6 +101,11 @@ export const DynamicAreaTable: React.FC<DynamicAreaTableProps> = ({
               <span>Add Row</span>
             </button>
           )}
+
+          <MaximizeButton
+            onClick={() => setIsMaximized(true)}
+            title="Maximize Schedule Table (Esc to restore)"
+          />
         </div>
       </div>
 
@@ -317,6 +325,108 @@ export const DynamicAreaTable: React.FC<DynamicAreaTableProps> = ({
             itemName="schedule rows"
           />
         </div>
+      )}
+
+      {/* PHASE 47: FULL VIEW / MAXIMIZED DYNAMIC SCHEDULE TABLE */}
+      {isMaximized && (
+        <MaximizedViewModal
+          isOpen={isMaximized}
+          onClose={() => setIsMaximized(false)}
+          title={`Schedule: ${area._areaName || `Area ${area.Area}`}`}
+          badge="Dynamic Repeatable Schedule"
+          subtitle={`${rows.length} rows recorded · ${area.DynamicItems.length} columns defined`}
+          icon={TableIcon}
+          actions={
+            !readOnly && (
+              <button
+                type="button"
+                onClick={onAddRow}
+                className="min-h-[44px] sm:min-h-[34px] flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-ob-indigo-600 hover:bg-ob-indigo-700 rounded-xl transition-colors cursor-pointer shadow-2xs"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Row</span>
+              </button>
+            )
+          }
+        >
+          <div className="space-y-4">
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto min-w-full touch-scroll-x">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead className="bg-slate-100/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 font-bold sticky top-0 border-b border-slate-200 dark:border-slate-800 z-10">
+                    <tr>
+                      <th className="py-3 px-3 w-10 text-center text-slate-400 dark:text-slate-500">#</th>
+                      {area.DynamicItems.map((col) => (
+                        <th key={col.Code} className="py-3 px-3 whitespace-nowrap min-w-[150px]">
+                          <div>
+                            <span className="text-slate-900 dark:text-slate-100">{col._description}</span>
+                            <span className="ml-1 text-[10px] text-slate-400 dark:text-slate-500 font-mono">({col.Code})</span>
+                            {col._required && <span className="text-rose-500 ml-0.5">*</span>}
+                          </div>
+                        </th>
+                      ))}
+                      {!readOnly && (
+                        <th className="py-3 px-3 w-12 text-center text-slate-400 dark:text-slate-500">Action</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {rows.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={area.DynamicItems.length + (readOnly ? 1 : 2)}
+                          className="py-12 text-center text-slate-400 dark:text-slate-500"
+                        >
+                          No items added to this schedule yet. Click &quot;Add Row&quot; to begin.
+                        </td>
+                      </tr>
+                    ) : (
+                      rows.map((row, idx) => (
+                        <tr key={row._rowId} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                          <td className="py-2.5 px-3 text-center text-slate-400 dark:text-slate-500 font-mono">
+                            {idx + 1}
+                          </td>
+                          {area.DynamicItems.map((col) => {
+                            const val = row[col.Code] !== undefined ? row[col.Code] : '';
+                            return (
+                              <td key={col.Code} className="py-2.5 px-3">
+                                {readOnly ? (
+                                  <span className="font-mono text-slate-800 dark:text-slate-200">
+                                    {val || '—'}
+                                  </span>
+                                ) : (
+                                  <input
+                                    type={col.Type === 'Numeric' ? 'number' : 'text'}
+                                    value={val}
+                                    onChange={(e) => onUpdateCell(row._rowId, col.Code, e.target.value)}
+                                    placeholder={col._description}
+                                    className="w-full text-xs p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-ob-indigo-500"
+                                  />
+                                )}
+                              </td>
+                            );
+                          })}
+                          {!readOnly && (
+                            <td className="py-2.5 px-3 text-center">
+                              <button
+                                type="button"
+                                onClick={() => onDeleteRow(row._rowId)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
+                                title="Delete Row"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </MaximizedViewModal>
       )}
     </div>
   );

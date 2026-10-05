@@ -38,6 +38,7 @@
 | **GATE-22** | Lossless SheetJS .xlsx Import & Export | `phase22-xlsx-sheetjs-export.test.ts` | **PASSED** | Multi-sheet regulatory workbook generation, currency precision formatting, audit signatures. |
 | **GATE-23** | Responsive Layout & Viewport Scaling (8 Viewports)| `responsive-ui-and-layout.test.ts` | **PASSED** | Validated 1920×1080, 1440×900, 1366×768, 1024×768, 768×1024, 430×932, 390×844, 320×568. |
 | **GATE-24** | Accessibility & Touch Target Standards | `phase30-full-integration-security-regression-acceptance.test.ts` | **PASSED** | WCAG 2.1 AA >=44×44px touch targets, ARIA dialog roles, keyboard shortcuts (`Ctrl+M`, `Ctrl+L`, `Ctrl+K`). |
+| **GATE-47** | Complete Dashboard Component Visibility, Responsive Layout & Full-Page Viewing Audit | `phase47-dashboard-component-visibility-responsive-viewing-audit.test.ts` | **PASSED** | Top navbar microsecond indicator and NBE text removed; Maker "Help" button verified; Reusable Maximize / Full View modal implemented across tables/charts; contained horizontal and vertical scrolling verified; 9 viewports tested; zero page-level overflow. |
 
 ---
 

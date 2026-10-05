@@ -82,23 +82,24 @@ export const isTabAuthorizedForRole = (tab: ViewTab, role?: string): boolean => 
     case 'DEPT_REPORT_MANAGEMENT':
       return role === 'ADMIN';
     case 'MAKER_WORKSPACE':
-      return role === 'ADMIN' || role === 'MAKER';
+      return role === 'MAKER';
     case 'LIBRARY':
-      return true;
+      return role === 'MAKER' || role === 'CHECKER' || role === 'AUDITOR';
     case 'CHECKER_INBOX':
-      return role === 'ADMIN' || role === 'CHECKER';
+      return role === 'CHECKER';
     case 'AUDITOR_DASHBOARD':
-      return role === 'ADMIN' || role === 'AUDITOR';
+      return role === 'AUDITOR';
     case 'NBE_SIMULATOR':
       return role === 'ADMIN';
     case 'PHASE2_SSOT':
     case 'SYSTEM_HEALTH':
       return role === 'ADMIN';
     case 'AUDIT_TRAIL':
+      return role === 'ADMIN' || role === 'CHECKER' || role === 'AUDITOR' || role === 'MAKER';
     case 'DOCUMENTATION':
       return true;
     default:
-      return true;
+      return false;
   }
 };
 export const isTabAuthorized = isTabAuthorizedForRole;
@@ -128,11 +129,53 @@ export default function App() {
 
   const getInitialTabForRole = getDefaultTabForRole;
 
-  const [activeTab, setActiveTab] = useState<ViewTab>(() =>
-    currentUser ? getInitialTabForRole(currentUser.role) : 'MAKER_WORKSPACE'
-  );
+  const [activeTab, setActiveTab] = useState<ViewTab>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlTab = (params.get('tab') || window.location.hash.replace('#', '')) as ViewTab;
+      if (urlTab && currentUser && isTabAuthorizedForRole(urlTab, currentUser.role)) {
+        return urlTab;
+      }
+    }
+    return currentUser ? getInitialTabForRole(currentUser.role) : 'MAKER_WORKSPACE';
+  });
 
-  // Security: audit unauthorized view access attempts
+  // Security & Phase 35: Intercept direct URL, hash, and browser history popstate navigation
+  useEffect(() => {
+    const handleUrlAndHistoryNavigation = () => {
+      if (typeof window === 'undefined' || !currentUser) return;
+      const params = new URLSearchParams(window.location.search);
+      const urlTab = (params.get('tab') || window.location.hash.replace('#', '')) as ViewTab;
+      if (urlTab && urlTab !== activeTab) {
+        if (!isTabAuthorizedForRole(urlTab, currentUser.role)) {
+          // Cross-dashboard direct URL/history access strictly rejected and redirected
+          const correctTab = getInitialTabForRole(currentUser.role);
+          setActiveTab(correctTab);
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.set('tab', correctTab);
+          window.history.replaceState({ tab: correctTab }, '', newUrl.toString());
+          auditService.log({
+            actorId: currentUser.id,
+            actorName: currentUser.name,
+            actorRole: currentUser.role,
+            action: 'UNAUTHORIZED_ACCESS_ATTEMPT',
+            entityType: 'SECURITY_RBAC',
+            entityId: urlTab,
+            correlationId: `corr_sec_url_${Date.now()}`,
+            details: `Direct URL/browser history access to unauthorized view ${urlTab} rejected for ${currentUser.role} under NBE BSD/03/2020 segregation rules.`,
+          });
+        } else {
+          setActiveTab(urlTab);
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handleUrlAndHistoryNavigation);
+    handleUrlAndHistoryNavigation();
+    return () => window.removeEventListener('popstate', handleUrlAndHistoryNavigation);
+  }, [currentUser, activeTab]);
+
+  // Security: audit unauthorized view access attempts & immediately redirect to role's authoritative dashboard!
   useEffect(() => {
     if (currentUser && !isTabAuthorizedForRole(activeTab, currentUser.role)) {
       auditService.log({
@@ -145,6 +188,8 @@ export default function App() {
         correlationId: `corr_sec_${Date.now()}`,
         details: `Access denied to protected view ${activeTab} for role ${currentUser.role} under NBE BSD/03/2020 segregation rules.`,
       });
+      const correctTab = getInitialTabForRole(currentUser.role);
+      setActiveTab(correctTab);
     }
   }, [activeTab, currentUser]);
 
@@ -350,11 +395,11 @@ export default function App() {
       // 4. Ctrl+M or Cmd+M: Jump to Maker Workspace
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'm') {
         e.preventDefault();
-        if (currentUser.role === 'MAKER' || currentUser.role === 'ADMIN') {
+        if (currentUser.role === 'MAKER') {
           handleSafeTabChange('MAKER_WORKSPACE');
           showToast('Navigated to Maker Workspace (Ctrl+M)');
         } else {
-          showToast('Access restricted: Maker Workspace requires MAKER or ADMIN role.');
+          showToast(`Access restricted: Maker Workspace is locked to MAKER role (current: ${currentUser.role}).`);
         }
         return;
       }
@@ -362,32 +407,41 @@ export default function App() {
       // 4b. Ctrl+L or Cmd+L: Jump to Maker Library & Dossiers
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'l') {
         e.preventDefault();
-        handleSafeTabChange('LIBRARY');
-        showToast('Navigated to Maker Library & Dossiers (Ctrl+L)');
+        if (currentUser.role === 'MAKER' || currentUser.role === 'CHECKER' || currentUser.role === 'AUDITOR') {
+          handleSafeTabChange('LIBRARY');
+          showToast('Navigated to Library & Dossiers (Ctrl+L)');
+        }
         return;
       }
 
       // 5. Ctrl+Shift+C / Cmd+Shift+C: Jump to Checker Inbox
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
         e.preventDefault();
-        if (currentUser.role === 'CHECKER' || currentUser.role === 'ADMIN') {
+        if (currentUser.role === 'CHECKER') {
           handleSafeTabChange('CHECKER_INBOX');
           showToast('Navigated to Checker Inbox (Ctrl+Shift+C)');
+        } else {
+          showToast(`Access restricted: Checker Inbox is locked to CHECKER role (current: ${currentUser.role}).`);
         }
         return;
       }
 
-      // 6. Ctrl+Shift+A / Cmd+Shift+A: Jump to Admin Dashboard
+      // 6. Ctrl+Shift+A / Cmd+Shift+A: Jump to Role-Locked Dashboard (Admin or Auditor)
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
         e.preventDefault();
         if (currentUser.role === 'ADMIN') {
           handleSafeTabChange('ADMIN_DASHBOARD');
           showToast('Navigated to Admin Governance (Ctrl+Shift+A)');
+        } else if (currentUser.role === 'AUDITOR') {
+          handleSafeTabChange('AUDITOR_DASHBOARD');
+          showToast('Navigated to Auditor Workspace (Ctrl+Shift+A)');
+        } else {
+          showToast(`Access restricted: Admin/Auditor workspace locked (current: ${currentUser.role}).`);
         }
         return;
       }
 
-      // 6b. Ctrl+Shift+M / Cmd+Shift+M: Jump to Departments & Reports Management
+      // 6b. Ctrl+Shift+M / Cmd+Shift+M: Jump to Departments & Reports Management (Admin Only)
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'm') {
         e.preventDefault();
         if (currentUser.role === 'ADMIN') {
@@ -397,14 +451,14 @@ export default function App() {
         return;
       }
 
-      // 7. Ctrl+Shift+N / Cmd+Shift+N: Jump to NBE Simulator
+      // 7. Ctrl+Shift+N / Cmd+Shift+N: Jump to NBE Simulator (Admin Only)
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'n') {
         e.preventDefault();
-        if (currentUser.role === 'CHECKER' || currentUser.role === 'ADMIN') {
+        if (currentUser.role === 'ADMIN') {
           handleSafeTabChange('NBE_SIMULATOR');
           showToast('Navigated to NBE API Gateway Simulator (Ctrl+Shift+N)');
         } else {
-          showToast('Access restricted: NBE Simulator requires CHECKER or ADMIN role.');
+          showToast(`Access restricted: NBE Simulator is strictly reserved for Administrators (current: ${currentUser.role}).`);
         }
         return;
       }
@@ -718,21 +772,24 @@ export default function App() {
     }
   };
 
-  // Submit to Checker for approval
-  const handleSubmitToChecker = (subId: string, comment?: string) => {
+  // Submit to Checker for approval (Phase 36: supports selectedCheckerIds)
+  const handleSubmitToChecker = (subId: string, comment?: string, selectedCheckerIds?: string[]) => {
     if (!currentUser) return;
     try {
       vibrate([25, 40, 35]);
       const updated = submissionService.submitToChecker(
         subId,
         currentUser,
-        comment || 'Prepared and submitted for Checker review.'
+        comment || 'Prepared and submitted for Checker review.',
+        undefined,
+        selectedCheckerIds
       );
       setSubmissions(submissionService.getAll());
       if (editingSubmission?.id === subId) {
         setEditingSubmission(updated);
       }
-      showToast(`Return ${updated.reportKey} submitted to Checker queue for 4-eyes sign-off.`);
+      const count = updated.assignedCheckerIds?.length || 1;
+      showToast(`Return ${updated.reportKey} submitted to ${count} assigned Checker(s) [${updated.checkerName || 'Checker'}] for 4-eyes sign-off.`);
     } catch (err: any) {
       alert(`Submission error: ${err.message}`);
     }
@@ -856,6 +913,9 @@ export default function App() {
         onNavigateToSimulator={() => {
           handleSafeTabChange('NBE_SIMULATOR');
         }}
+        onSelectTab={(tab) => {
+          handleSafeTabChange(tab as ViewTab);
+        }}
       />
 
       {/* 2. Main Window Container (Equal Full Length between Sidebar and Viewport) */}
@@ -920,8 +980,8 @@ export default function App() {
               }
               onBack={handleCloseEditingSubmission}
               onSave={handleSaveDraft}
-              onSubmitToChecker={(comment, expectedVer) => {
-                handleSubmitToChecker(editingSubmission.id, comment);
+              onSubmitToChecker={(comment, expectedVer, selectedCheckerIds) => {
+                handleSubmitToChecker(editingSubmission.id, comment, selectedCheckerIds);
               }}
               onReuseSubmission={handleReuseSubmission}
               onRegisterNavigationGuard={(guard) => {
@@ -1029,7 +1089,7 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'NBE_SIMULATOR' && <NbeSimulatorView />}
+              {activeTab === 'NBE_SIMULATOR' && currentUser?.role === 'ADMIN' && <NbeSimulatorView />}
 
               {activeTab === 'PHASE2_SSOT' && currentUser?.role === 'ADMIN' && (
                 <Phase2SSOTView

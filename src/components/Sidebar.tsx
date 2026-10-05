@@ -205,7 +205,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       description: 'Report catalog & dynamic forms',
       badge: null,
       shortcut: `${modKey}+M`,
-      roles: ['ADMIN', 'MAKER'],
+      roles: ['MAKER'],
     },
     {
       id: 'LIBRARY' as ViewTab,
@@ -215,7 +215,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       description: 'Authoritative drafts, in-progress & submissions',
       badge: null,
       shortcut: `${modKey}+L`,
-      roles: ['ADMIN', 'MAKER', 'CHECKER', 'AUDITOR'],
+      roles: ['MAKER', 'CHECKER', 'AUDITOR'],
     },
     {
       id: 'CHECKER_INBOX' as ViewTab,
@@ -225,7 +225,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       description: 'Review & approval workflows',
       badge: pendingCheckerCount > 0 ? pendingCheckerCount : null,
       shortcut: `${modKey}+⇧+C`,
-      roles: ['ADMIN', 'CHECKER'],
+      roles: ['CHECKER'],
     },
     {
       id: 'AUDITOR_DASHBOARD' as ViewTab,
@@ -235,7 +235,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       description: 'Audit work queue, findings & evidence',
       badge: null,
       shortcut: `${modKey}+⇧+A`,
-      roles: ['ADMIN', 'AUDITOR'],
+      roles: ['AUDITOR'],
     },
     {
       id: 'NBE_SIMULATOR' as ViewTab,
@@ -742,8 +742,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div className="text-xs font-bold text-white truncate">{currentUser.name}</div>
                 <div className="text-[10px] text-ob-green-300 font-mono flex items-center gap-1">
                   <span>{currentUser.role}</span>
-                  <span className="text-white/40">•</span>
-                  <span className="text-white/80 truncate">{currentUser.institutionCode}</span>
                 </div>
               </div>
             </div>

@@ -26,6 +26,8 @@ import {
 } from 'lucide-react';
 import { AuditLogEntry } from '../types/regulatory';
 import { Pagination } from './Pagination';
+import { MaximizedViewModal } from './MaximizedViewModal';
+import { MaximizeButton } from './MaximizeButton';
 import { exportGeneralAuditTrailPDF } from '../utils/regulatoryReportPdfExport';
 import { indexedDbStorage } from '../services/indexedDbStorage';
 
@@ -127,6 +129,7 @@ export const AuditTrailView: React.FC = () => {
   // Pagination state - 8 items per page keeps window strictly fixed
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(8);
+  const [isMaximized, setIsMaximized] = useState(false);
 
   const fetchLogs = async () => {
     try {
@@ -555,6 +558,11 @@ export const AuditTrailView: React.FC = () => {
               </select>
             </div>
           )}
+
+          <MaximizeButton
+            onClick={() => setIsMaximized(true)}
+            title="Maximize Audit Trail (Esc to restore)"
+          />
         </div>
       </div>
 
@@ -654,6 +662,125 @@ export const AuditTrailView: React.FC = () => {
           />
         </div>
       </div>
+
+      {/* PHASE 47: FULL VIEW / MAXIMIZED AUDIT TRAIL */}
+      {isMaximized && (
+        <MaximizedViewModal
+          isOpen={isMaximized}
+          onClose={() => setIsMaximized(false)}
+          title="Immutable Regulatory Compliance Audit Trail"
+          badge="Audit Ledger"
+          subtitle={`Cryptographically timestamped audit logging (${filteredLogs.length} matching events)`}
+          icon={History}
+          actions={
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={exportPDF}
+                className="px-3 py-1.5 bg-ob-green-600 hover:bg-ob-green-700 text-white text-xs font-bold rounded-lg transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
+              >
+                <FileCheck className="w-3.5 h-3.5" />
+                <span>PDF</span>
+              </button>
+              <button
+                type="button"
+                onClick={exportCSV}
+                className="px-3 py-1.5 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white text-xs font-bold rounded-lg transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>CSV</span>
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto min-w-full touch-scroll-x">
+                <table className="min-w-[850px] w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 font-bold sticky top-0 z-10">
+                      <th className="py-3 px-3">Timestamp (UTC/Local)</th>
+                      <th className="py-3 px-3">Actor & Role</th>
+                      <th className="py-3 px-3">Action</th>
+                      <th className="py-3 px-3">Entity Type</th>
+                      <th className="py-3 px-3">Entity ID</th>
+                      <th className="py-3 px-3">Audit Details</th>
+                      <th className="py-3 px-3">Correlation / Idempotency ID</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {paginatedLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                        <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap text-[11px]">
+                          <div className="font-semibold text-slate-900 dark:text-slate-100">
+                            {new Date(log.timestamp).toLocaleTimeString()}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            {new Date(log.timestamp).toISOString().slice(0, 10)}
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <div className="font-bold text-slate-900 dark:text-slate-100">{log.actorName}</div>
+                          <span
+                            className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                              log.actorRole === 'ADMIN'
+                                ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
+                                : log.actorRole === 'CHECKER'
+                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                                : log.actorRole === 'AUDITOR'
+                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                                : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                            }`}
+                          >
+                            {log.actorRole}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono border ${
+                              log.action.includes('BIOMETRIC')
+                                ? 'bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border-purple-200'
+                                : log.action.includes('NBE')
+                                ? 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200'
+                            }`}
+                          >
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                            {log.entityType}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-mono font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap text-[11px]">
+                          {log.entityId}
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300 max-w-sm truncate" title={log.details}>
+                          {log.details}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-[10px] text-slate-400 dark:text-slate-500 whitespace-nowrap">
+                          {log.correlationId}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <Pagination
+              currentPage={page}
+              totalItems={filteredLogs.length}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              pageSizeOptions={[8, 15, 30]}
+              itemName="audit logs"
+            />
+          </div>
+        </MaximizedViewModal>
+      )}
     </div>
   );
 };

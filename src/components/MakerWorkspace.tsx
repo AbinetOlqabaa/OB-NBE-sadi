@@ -40,6 +40,8 @@ import {
 } from 'lucide-react';
 import { ExcelService } from '../utils/excelService.ts';
 import { Pagination } from './Pagination.tsx';
+import { MaximizedViewModal } from './MaximizedViewModal.tsx';
+import { MaximizeButton } from './MaximizeButton.tsx';
 import { userService } from '../services/userService.ts';
 import { getDepartmentForReport } from '../data/organizationHierarchy.ts';
 import { departmentService } from '../services/departmentService.ts';
@@ -76,6 +78,7 @@ export const MakerWorkspace: React.FC<MakerWorkspaceProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedFrequency, setSelectedFrequency] = useState<string>('ALL');
+  const [isMaximized, setIsMaximized] = useState(false);
 
   // Quick New Return Modal
   const [isNewReturnModalOpen, setIsNewReturnModalOpen] = useState(false);
@@ -499,6 +502,11 @@ export const MakerWorkspace: React.FC<MakerWorkspaceProps> = ({
                 </select>
               </div>
             )}
+
+            <MaximizeButton
+              onClick={() => setIsMaximized(true)}
+              title={activeTab === 'TEMPLATES' ? 'Maximize Returns Catalogue (Esc)' : 'Maximize Submissions Ledger (Esc)'}
+            />
           </div>
         </div>
       </div>
@@ -1136,6 +1144,195 @@ export const MakerWorkspace: React.FC<MakerWorkspaceProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Delete Confirmation Dialog (Requirement 9) */}
+      {/* PHASE 47: FULL VIEW / MAXIMIZED WORKSPACE */}
+      {isMaximized && (
+        <MaximizedViewModal
+          isOpen={isMaximized}
+          onClose={() => setIsMaximized(false)}
+          title={activeTab === 'TEMPLATES' ? 'Authorized Regulatory Returns Catalogue' : 'Department Submissions Ledger'}
+          badge="Maker Full View"
+          subtitle={
+            activeTab === 'TEMPLATES'
+              ? `Inspection view of ${filteredTemplates.length} statutory templates authorized for ${currentUser.department || 'All Departments'}`
+              : `Comprehensive ledger of ${filteredSubmissions.length} active drafts, approvals & submissions`
+          }
+          icon={activeTab === 'TEMPLATES' ? FileSpreadsheet : FileText}
+        >
+          {activeTab === 'TEMPLATES' ? (
+            <div className="space-y-4">
+              <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs">
+                <div className="overflow-x-auto min-w-full touch-scroll-x">
+                  <table className="min-w-[700px] w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 font-bold sticky top-0 z-10">
+                        <th className="py-3 px-3">Return Code</th>
+                        <th className="py-3 px-3">Report Name</th>
+                        <th className="py-3 px-3">Frequency</th>
+                        <th className="py-3 px-3">Responsible Department</th>
+                        <th className="py-3 px-3">Category</th>
+                        <th className="py-3 px-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {paginatedTemplates.map((tpl) => {
+                        const existingSubmissions = submissions.filter((s) => s.reportKey === tpl.ReturnKey);
+                        return (
+                          <tr key={tpl.ReturnKey} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                            <td className="py-2.5 px-3">
+                              <span className="font-mono text-xs font-bold text-ob-indigo-700 dark:text-ob-indigo-400 bg-ob-indigo-50 dark:bg-ob-indigo-950/60 px-1.5 py-0.5 rounded border border-ob-indigo-200 dark:border-ob-indigo-800/60">
+                                {tpl.Code}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <div className="font-bold text-slate-900 dark:text-white">{tpl.Title}</div>
+                              <div className="text-[10px] text-slate-500 font-mono">{tpl.ReturnKey}</div>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono">
+                                {tpl.ReportingFrequency}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300">
+                              {getDepartmentForReport(tpl.ReturnKey)?.name || 'Credit Operations'}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span className="text-slate-500 dark:text-slate-400">{tpl.Category || 'Prudential'}</span>
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsMaximized(false);
+                                  onCreateDraft(tpl.ReturnKey);
+                                }}
+                                className="px-3 py-1 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                              >
+                                {existingSubmissions.length > 0 ? 'New Filing' : 'Start Return'}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <Pagination
+                currentPage={templatesPage}
+                pageSize={templatesPageSize}
+                totalItems={filteredTemplates.length}
+                onPageChange={(p) => setTemplatesPage(p)}
+                onPageSizeChange={(sz) => {
+                  setTemplatesPageSize(sz);
+                  setTemplatesPage(1);
+                }}
+                itemName="returns"
+              />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-xs">
+                <div className="overflow-x-auto min-w-full touch-scroll-x">
+                  <table className="w-full min-w-[750px] text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 font-bold sticky top-0 z-10">
+                        <th className="py-3 px-3">Return Code</th>
+                        <th className="py-3 px-3">Report Name</th>
+                        <th className="py-3 px-3">Department</th>
+                        <th className="py-3 px-3">Status</th>
+                        <th className="py-3 px-3">Period</th>
+                        <th className="py-3 px-3">Maker</th>
+                        <th className="py-3 px-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {paginatedSubmissions.map((sub) => {
+                        const tpl = templates.find((t) => t.ReturnKey === sub.reportKey);
+                        return (
+                          <tr key={sub.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                            <td className="py-2.5 px-3">
+                              <span className="font-mono text-xs font-bold text-ob-indigo-700 dark:text-ob-indigo-400 bg-ob-indigo-50 dark:bg-ob-indigo-950/60 px-1.5 py-0.5 rounded border border-ob-indigo-200 dark:border-ob-indigo-800/60">
+                                {sub.reportKey}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <div className="font-bold text-slate-900 dark:text-white truncate max-w-xs">
+                                {tpl?.Title || sub.reportKey}
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono">v{sub.version || 1}</div>
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300">
+                              {sub.department || 'Credit Operations'}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  sub.status === 'APPROVED'
+                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                    : sub.status === 'PENDING_CHECKER'
+                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                    : sub.status === 'SENT'
+                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                                    : sub.status === 'CORRECTION_REQUIRED'
+                                    ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                                }`}
+                              >
+                                {sub.status}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-slate-500">{sub.reportingPeriod || 'Current'}</td>
+                            <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300">{sub.makerName}</td>
+                            <td className="py-2.5 px-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsMaximized(false);
+                                    onSelectSubmission(sub);
+                                  }}
+                                  className="px-2.5 py-1 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                                >
+                                  {sub.status === 'DRAFT' || sub.status === 'CORRECTION_REQUIRED' ? 'Edit' : 'View'}
+                                </button>
+                                {sub.status === 'DRAFT' && onDeleteSubmission && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeleteConfirmSub(sub)}
+                                    className="p-1 text-slate-400 hover:text-red-600 rounded cursor-pointer"
+                                    title="Delete Draft"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <Pagination
+                currentPage={submissionsPage}
+                pageSize={submissionsPageSize}
+                totalItems={filteredSubmissions.length}
+                onPageChange={(p) => setSubmissionsPage(p)}
+                onPageSizeChange={(sz) => {
+                  setSubmissionsPageSize(sz);
+                  setSubmissionsPage(1);
+                }}
+                itemName="submissions"
+              />
+            </div>
+          )}
+        </MaximizedViewModal>
       )}
 
       {/* Delete Confirmation Dialog (Requirement 9) */}

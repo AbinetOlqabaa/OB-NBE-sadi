@@ -131,13 +131,11 @@ export async function runPhase33EmptyTemplateInitializationAndMakerDataEntryTest
       {
         Area: 99,
         _areaName: 'Large Restructured Exposures',
-        _minRows: 0,
-        _maxRows: 100,
         DynamicItems: [
           { Code: 'BORROWER_NAME', Value: '', _description: 'Borrower Name', _dataType: 'TEXT', _required: true },
           { Code: 'OUTSTANDING_BAL', Value: '', _description: 'Outstanding Balance', _dataType: 'NUMERIC', _required: true },
         ],
-      },
+      } as any,
     ],
   };
 
@@ -194,7 +192,7 @@ export async function runPhase33EmptyTemplateInitializationAndMakerDataEntryTest
   assert(!templateInitializationService.isFieldSupplied(undefined), 'Undefined is not supplied');
 
   // Test payload sanitization: placeholders MUST NEVER enter NBE payload
-  const submissionWithPlaceholders: ReportSubmission = {
+  const submissionWithPlaceholders: any = {
     id: 'sub_test_placeholders',
     reportKey: sampleReport.ReturnKey,
     version: 1,

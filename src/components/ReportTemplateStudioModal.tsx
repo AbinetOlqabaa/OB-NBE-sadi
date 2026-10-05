@@ -36,6 +36,7 @@ import {
   Calculator,
   Binary,
   Upload,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   configService,
@@ -48,6 +49,7 @@ import {
   FieldDataType,
   ReportFrequency,
 } from '../services/configService.ts';
+import { configurationGovernanceService } from '../services/configurationGovernanceService.ts';
 import { DepartmentDefinition } from '../data/organizationHierarchy.ts';
 import { departmentService } from '../services/departmentService.ts';
 import { UserSession, ReportMetadata } from '../types/regulatory.ts';
@@ -896,6 +898,71 @@ export const ReportTemplateStudioModal: React.FC<ReportTemplateStudioModalProps>
       alert(`Publish Failed: ${err.message}`);
     } finally {
       setIsPublishing(false);
+    }
+  };
+
+  const [isProposingGovernance, setIsProposingGovernance] = useState(false);
+
+  const handleProposeGovernedChange = () => {
+    const valid = handleRunValidation();
+    if (!valid) {
+      alert('Cannot propose changes: Please resolve structural validation errors first.');
+      setActiveTab('VALIDATION');
+      return;
+    }
+
+    if (!changelogSummary.trim()) {
+      alert('A changelog/business justification summary is mandatory for governed template changes.');
+      setActiveTab('PUBLISH');
+      return;
+    }
+
+    setIsProposingGovernance(true);
+    try {
+      const proposer = {
+        id: currentUser.id,
+        name: currentUser.name,
+        role: currentUser.role,
+        department: currentUser.department,
+      };
+
+      const proposal = configurationGovernanceService.proposeReportDefinitionChange(
+        report?.returnKey || metaForm.returnKey,
+        {
+          title: metaForm.name,
+          name: metaForm.name,
+          code: metaForm.code,
+          description: metaForm.description,
+          category: metaForm.category,
+          frequency: metaForm.frequency,
+          defaultDepartmentId: metaForm.defaultDepartmentId,
+          departmentIds: metaForm.selectedDepartmentIds,
+          sections,
+          fields,
+          columns,
+          formulas,
+          endpointConfig: {
+            endpointUrl: metaForm.endpointUrl,
+            environmentTarget: (metaForm.environmentTarget as any) || 'LOCAL/SIMULATOR',
+            httpMethod: (metaForm.httpMethod as any) || 'POST',
+            timeoutMs: Number(metaForm.timeoutMs) || 30000,
+            authProfileRef: metaForm.authProfileRef,
+            idempotencyStrategy: (metaForm.idempotencyStrategy as any) || 'HEADER_UUID',
+          },
+          reason: changelogSummary,
+        },
+        proposer
+      );
+
+      onSuccess(
+        `Governed change proposal '${proposal.title}' created (ID: ${proposal.id}, Risk: ${proposal.riskLevel}). Dual approval ${proposal.impactAnalysis.requiresDualApproval ? 'is strictly required' : 'is optional'}.`
+      );
+      vibrate([20, 20, 20]);
+      onClose();
+    } catch (err: any) {
+      alert(`Governance Proposal Failed: ${err.message}`);
+    } finally {
+      setIsProposingGovernance(false);
     }
   };
 
@@ -1950,15 +2017,29 @@ export const ReportTemplateStudioModal: React.FC<ReportTemplateStudioModalProps>
                 </div>
               </div>
 
-              <button
-                type="button"
-                disabled={isPublishing}
-                onClick={handlePublishVersion}
-                className="w-full min-h-[44px] px-4 py-2.5 bg-ob-green-600 hover:bg-ob-green-700 disabled:opacity-50 text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer touch-press"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>{isPublishing ? 'Publishing Version...' : 'Confirm & Publish Statutory Version'}</span>
-              </button>
+              <div className="space-y-2 pt-2">
+                <button
+                  type="button"
+                  disabled={isProposingGovernance || isPublishing}
+                  onClick={handleProposeGovernedChange}
+                  className="w-full min-h-[44px] px-4 py-2.5 bg-ob-indigo-600 hover:bg-ob-indigo-700 disabled:opacity-50 text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer touch-press"
+                  title="Submit structural/metadata changes for automated impact analysis and formal 4-eyes dual control approval"
+                >
+                  <ShieldCheck className="w-4 h-4 text-ob-indigo-200" />
+                  <span>{isProposingGovernance ? 'Submitting Proposal…' : 'Submit for Governed 4-Eyes Review (Recommended)'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isPublishing || isProposingGovernance}
+                  onClick={handlePublishVersion}
+                  className="w-full min-h-[40px] px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 disabled:opacity-50 text-slate-800 dark:text-slate-200 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer touch-press"
+                  title="Direct administrative publication bypassing 4-eyes review (audit logged)"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-ob-green-500" />
+                  <span>{isPublishing ? 'Publishing Version…' : 'Direct Publish Statutory Version (Instant)'}</span>
+                </button>
+              </div>
             </div>
           )}
         </div>

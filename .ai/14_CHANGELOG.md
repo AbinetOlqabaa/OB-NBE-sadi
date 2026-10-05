@@ -4,6 +4,148 @@ All notable changes and engineering enhancements for the Oromia Bank NBE Regulat
 
 ---
 
+## [47.0.0-phase47-dashboard-component-visibility-responsive-viewing-audit] - 2026-10-05
+
+### Added & Enhanced
+- **Phase 47: Complete Dashboard Component Visibility, Responsive Layout & Full-Page Viewing Audit (`47_DASHBOARD_COMPONENT_VISIBILITY_RESPONSIVE_FULL_VIEW_AUDIT.md`, `OB_Phase_47_Dashboard_Component_Visibility_Responsive_Viewing_Audit/47_DASHBOARD_COMPONENT_VISIBILITY_RESPONSIVE_FULL_VIEW_AUDIT_REPORT.md`, `src/tests/phase47-dashboard-component-visibility-responsive-viewing-audit.test.ts`)**:
+  - **Top Navbar Telemetry & Banner Cleanup**:
+    - Checked and verified complete absence of network indicator and microsecond latency indicators (`µs`, `microsecond`, latency telemetry) across Administrator, Maker, Checker, and Auditor dashboards.
+    - Checked and verified complete removal of `"Regulation.... National Bank Of Ethiopia"` banner text from the top navbar, ensuring prominent display of the authentic Oromia Bank logo without visual clutter.
+  - **Maker Report Creation "Help" Button Label**:
+    - Replaced the obsolete `"Remediation Assistant"` button label with `"Help"` on the Maker report form creation/editing page (`DynamicReportForm.tsx`).
+    - Retained all underlying 4-part NBE validation guidance, blocking error badges, warning counters, and click-to-locate auto-fix capabilities.
+  - **Reusable Maximize / Full View Capability**:
+    - Implemented `MaximizedViewModal` (`src/components/MaximizedViewModal.tsx`): Accessible dialog with `role="dialog"`, `aria-modal="true"`, mobile safe-area insets, backdrop blur, component identification (title, badge, subtitle, icon), action slot, prominent Restore button with `Esc` indicator, and contained scrollable body.
+    - Implemented `MaximizeButton` (`src/components/MaximizeButton.tsx`): Universal >=44px touch-friendly trigger button with `Maximize2` icon and accessible ARIA label.
+    - Integrated full-view capability into 9 critical dense views: User Directory (`AdminDashboard.tsx`), Statutory Returns (`MakerWorkspace.tsx`), 4-Eyes Review Queue (`CheckerInbox.tsx`), Supervisory Queue & Inspection (`AuditorDashboard.tsx`), Template & Return Catalog (`MakerLibraryView.tsx`), Immutable Audit Trail (`AuditTrailView.tsx`), Multi-Record Dynamic Area (`DynamicAreaTable.tsx`), 12-Month Historical Trend Chart (`HistoricalSubmissionTrendChart.tsx`), and Regulatory SLA Analytics (`ReportingPerformanceAnalytics.tsx`).
+  - **Modal Keyboard Accessibility & Escape Handling**:
+    - Added global `Escape` key listeners with `e.stopPropagation()` in `NotificationCenter.tsx`, `KeyboardShortcutsModal.tsx`, `OfflineStorageModal.tsx`, and `MaximizedViewModal.tsx`.
+  - **Page-Boundary Contract & Contained Scrolling**:
+    - Enforced `overflow-x-hidden` at the root layout container in `App.tsx` to eliminate document-level horizontal scroll.
+    - Added contained horizontal touch scrolling (`overflow-x-auto touch-scroll-x`) with regulatory minimum column widths (`min-w-[650px]` to `min-w-[850px]`) across tables in Admin, Maker, Checker, Auditor, Library, and Area subtables.
+    - Added `overflow-x-auto touch-scroll-x` to JSON payload `<pre>` tags in `NbeSimulatorView.tsx` to prevent modal boundary clipping on mobile.
+    - Guaranteed minimum 44×44px touch target dimensions for interactive controls.
+  - **9-Viewport Responsive Matrix Verification**:
+    - Validated all 9 required viewports: 320×568 (iPhone SE), 390×844 (iPhone 14/15), 430×932 (iPhone Pro Max), 844×390 (Mobile Landscape), 768×1024 (iPad Portrait), 1024×768 (iPad Landscape), 1366×768 (HD Laptop), 1440×900 (Desktop Baseline), and 1920×1080 (FHD Large Desktop).
+  - **Full Automated Test & Regression Suite**:
+    - Created `src/tests/phase47-dashboard-component-visibility-responsive-viewing-audit.test.ts` and registered in `src/tests/run-all-tests.ts`.
+    - Executed full test runner: 100% of test suites passed cleanly with zero regressions.
+
+---
+
+### Added & Enhanced
+- **Phase 37: Cross-Phase Integration, Security, Regression & Acceptance (`37_CROSS_PHASE_INTEGRATION_SECURITY_REGRESSION_AND_ACCEPTANCE.md`, `src/tests/phase37-cross-phase-integration-security-regression-and-acceptance.test.ts`)**:
+  - **End-to-End Scenario 1: Import to Usable Report (Complete Admin → Maker Lifecycle)**:
+    - Admin successfully imports NBE JSON report package; schema normalizer strips sample values and formats definitions into ReportDefinitionSSOT/ReportVersionSSOT.
+    - Title, sections, columns, formulas, and NBE API endpoints validated and registered.
+    - Published Version 1 to ACTIVE; appears in Admin NBE Simulator.
+    - Department-authorized Maker creates a clean instance with unique submission ID, no sample data leakage, edits and saves draft, validates cleanly, and submits to designated Checker with ReviewerAssignment.
+  - **End-to-End Scenario 2: Maker Cannot Alter Report Definition**:
+    - Direct attempts by Maker to modify report title, code, formula, or API endpoint are strictly rejected by the server and UI (403 Forbidden / SECURITY_VIOLATION), preserving report definition integrity.
+  - **End-to-End Scenario 3: Checker Assignment & Notification Workflow**:
+    - Same-department active Checkers verified as eligible; cross-department and inactive Checkers excluded; Maker self-selection blocked under Segregation of Duties.
+    - Assigned Checkers receive targeted smart notifications; cross-department users receive zero notifications.
+  - **End-to-End Scenario 4: Dashboard Isolation & Role Segregation**:
+    - Verified strict single-role dashboard isolation: Admin → Admin Dashboard only; Maker → Maker Workspace only; Checker → Checker Inbox only; Auditor → Auditor Dashboard only.
+    - URL query, hash, popstate, sidebar, and command palette tampering strictly redirected.
+  - **End-to-End Scenario 5: Empty-Template Behavior & Neutral Sanitization**:
+    - Fresh reports initialize with empty strings and clean zero states without storing placeholder literals.
+    - Mandatory fields missing input yield BLOCKING_ERROR with structured 4-part explanations (What is wrong, Why it matters, How to fix it, Expected format).
+  - **End-to-End Scenario 6: Historical Safety & Template Version Evolution**:
+    - Historical submissions preserve frozen template snapshots and exact original titles upon new version publication.
+    - New submissions cleanly adopt active Version 2 definitions.
+  - **Security Regression Matrix (Attack Surface Verification)**:
+    - Cross-role route tampering, cross-department draft creation, forged submission IDs, non-admin endpoint/template tampering, cross-department notification leakage, duplicate reviewer assignment, optimistic concurrency conflicts (HTTP 409), duplicate review on settled returns, and self-approval strictly blocked and logged.
+  - **Performance Benchmarks & Resilience Latency**:
+    - JSON Import & Validation: ~1.0ms (< 50ms threshold).
+    - Schema Normalization & Preview: ~2.0ms (< 30ms threshold).
+    - Report Draft Initialization: ~0.3ms (< 25ms threshold).
+    - Validation Evaluation: ~0.03ms (< 30ms threshold).
+    - Notification Dispatch: ~0.05ms (< 15ms threshold).
+    - Simulator Discovery: ~0.1ms (< 10ms threshold).
+    - Library Query & Search: ~3.1ms (< 25ms threshold).
+    - Dashboard Route Authorization: ~0.002ms (< 5ms threshold).
+  - **Master Regression Harness Verification**:
+    - All test suites (Phases 1 through 37) passing cleanly with 100% success rate.
+    - `compile_applet` and `lint_applet` 100% error-free.
+
+---
+
+## [36.0.0-phase36-maker-selected-checker-assignment-and-notification-workflow] - 2026-10-03
+
+### Added & Enhanced
+- **Phase 36: Maker-Selected Checker Assignment & Notification Workflow (`36_MAKER_SELECTED_CHECKER_ASSIGNMENT_AND_NOTIFICATION_WORKFLOW.md`, `src/tests/phase36-maker-selected-checker-assignment-and-notification-workflow.test.ts`)**:
+  - **Server-Side Checker Eligibility & Filtering (`effectiveAccessEngine.ts`)**:
+    - Implemented `getEligibleCheckersForReport(reportKey, maker, submission)` and `validateCheckerSelection(reportKey, maker, selectedCheckerIds, submission)`.
+    - Server-side criteria strictly enforces:
+      1. Same-department assignment (or active Administrator-granted Special Cross-Department Access grant covering report/department).
+      2. Active account status (excludes `DISABLED`, `PENDING_APPROVAL`, `SUSPENDED`).
+      3. Designated `CHECKER` role.
+      4. Segregation of duties / conflict-of-interest rules: Maker is strictly prohibited from selecting themselves or reviewing their own submitted reports.
+      5. Safe reviewer representation: Only exposes safe, minimal profile data (`id`, `name`, `email`, `department`, `employeeId`, `status`, `authorizationReason`), with zero exposure of credentials, passwords, or biometrics.
+  - **Single & Multi-Reviewer Selection & Assignment Records (`src/types/regulatory.ts`, `submissionService.ts`)**:
+    - Added `ReviewerAssignment` interface and submission workflow record fields: `assignedCheckerIds`, `reviewerAssignments`, and `primaryCheckerId`.
+    - Maker may select a single Checker or multiple co-reviewers directly in the submission flow.
+    - Preserved a clear primary reviewer concept (`primaryCheckerId`, `isPrimary: boolean`, and backward-compatible `checkerId`, `checkerName`, `checkerEmail`, `checkerDepartment`).
+    - Validation rejects duplicate reviewer selections and forged/tampered IDs with explicit security audit logging.
+  - **4-Eyes Dual Control & Concurrency Governance**:
+    - Review actions remain governed by NBE 4-eyes approval rules.
+    - When specific reviewers are designated, unassigned Checkers are strictly blocked from reviewing the report.
+    - A single authoritative review action transitions the report state:
+      - When one assigned Checker approves, status transitions to `APPROVED`, recording the reviewing Checker and resolving secondary assignments as `SUPERSEDED`.
+      - Subsequent review attempts by other assigned Checkers are safely prevented by authoritative state resolution (`INVALID_WORKFLOW_STATE: Duplicate review prevented: Submission has already been APPROVED`).
+      - Conflicting actions (e.g. attempting to approve a rejected return) are blocked by authoritative workflow state rules.
+    - Implemented `acceptReview(id, checkerUser)` method enabling a Checker to accept/open the review, marking assignment status as `ACCEPTED` and recording the review start timestamp.
+  - **Authoritative Server-Generated Smart Notifications (`notificationService.ts`)**:
+    - On submission, smart notifications (`WORKFLOW`, `HIGH` priority) are emitted to all assigned Checkers with direct links to `CHECKER_INBOX`.
+    - Cross-department notification isolation strictly maintained (unauthorized Checkers receive zero assignment notifications).
+    - When a Checker accepts/opens review, Maker receives immediate `Review In Progress` notification.
+    - When review is completed, Maker receives instant review outcome notifications (Approval confirmation, Correction Request with reviewer notes, or Rejection reason).
+  - **UI Reviewer Selector (`src/components/CheckerSelector.tsx`)**:
+    - Embedded dynamic Checker Selector in both `DynamicReportForm.tsx` (report editor modal) and `MakerLibraryView.tsx` (library submission modal).
+    - Features: "Select Checker(s)" with eligible counter, selected reviewer chips list, primary reviewer badge and toggle, active status indicators, and clear explanatory guidance when no eligible same-department Checkers exist.
+  - **Authoritative Backend API Endpoints (`server.ts`)**:
+    - `GET /api/regulatory/reports/:reportKey/eligible-checkers`
+    - `POST /api/regulatory/submissions/:id/submit` (accepts `selectedCheckerIds: string[]`)
+    - `POST /api/regulatory/submissions/:id/accept-review`
+  - **Acceptance Testing Suite (`src/tests/phase36-maker-selected-checker-assignment-and-notification-workflow.test.ts`)**:
+    - 15 comprehensive automated test gates covering same-department filtering, inactive/disabled exclusions, other-department exclusions, self-selection prevention, forged ID rejection, duplicate selection prevention, multi-reviewer persistence, smart notifications dispatch, unauthorized review prevention, review acceptance, Maker outcome notifications, duplicate/conflicting concurrency prevention, correction request workflow, special access reviewer eligibility, and audit trail validation.
+    - Integrated into full regression harness `src/tests/run-all-tests.ts` with 100% pass rate.
+
+---
+
+## [35.0.0-phase35-role-locked-dashboards-and-notification-navigation] - 2026-10-03
+
+### Added & Enhanced
+- **Phase 35: Role-Locked Dashboards & Notification-Centered Navigation (`35_ROLE_LOCKED_DASHBOARDS_AND_NOTIFICATION_NAVIGATION.md`, `src/tests/phase35-role-locked-dashboards-and-notification-navigation.test.ts`)**:
+  - **Required Role Access Model (Single-Role Workspaces)**:
+    - `ADMIN` → Administrator Dashboard only (`ADMIN_DASHBOARD`, plus admin utilities `DEPT_REPORT_MANAGEMENT`, `NBE_SIMULATOR`, `PHASE2_SSOT`, `SYSTEM_HEALTH`). Cross-dashboard access to Maker Workspace, Checker Inbox, and Auditor Dashboard strictly prohibited.
+    - `MAKER` → Maker Workspace only (`MAKER_WORKSPACE`, plus `LIBRARY`, `DOCUMENTATION`). Cross-dashboard access to Admin, Checker, Auditor, and NBE Simulator strictly prohibited.
+    - `CHECKER` → Checker Inbox only (`CHECKER_INBOX`, plus `LIBRARY`, `AUDIT_TRAIL`, `DOCUMENTATION`). Cross-dashboard access to Admin, Maker, Auditor, and NBE Simulator strictly prohibited.
+    - `AUDITOR` → Auditor Dashboard only (`AUDITOR_DASHBOARD`, plus `LIBRARY`, `AUDIT_TRAIL`, `DOCUMENTATION`). Cross-dashboard access to Admin, Maker, Checker, and NBE Simulator strictly prohibited.
+  - **Rejection & Redirection Across All Navigation Channels**:
+    - Navbar controls, dropdowns, direct URL parameters (`?tab=...`), hash navigation, browser popstate history, universal command palette (`Ctrl+K`), sidebar navigation, mobile bottom navigation, and swipe gestures are strictly role-locked.
+    - Forged or unauthorized route access attempts trigger security audit logs and automatically redirect users to their role's authorized default dashboard.
+  - **NBE Simulator Segregation**:
+    - NBE Simulator completely removed from Maker, Checker, and Auditor dashboards.
+    - Retained strictly in Administrator dashboard.
+    - Backend endpoints (`/api/nbe-simulator/submissions`, `/api/nbe-simulator/logs`, `/api/nbe-simulator/scenario`) reject non-admin roles with 403 Forbidden.
+  - **Navbar Transformation & Notification Bell**:
+    - Eliminated the dashboard-switching dropdown (`<select aria-label="Switch User Role">`) from the authenticated navbar; replaced with authoritative read-only role indicator badge.
+    - Added notification bell icon with live unread count badge.
+    - Clicking the bell opens the user's accessible Notification Center dialog (`src/components/NotificationCenter.tsx`).
+    - Authoritative server-side notification service (`src/services/notificationService.ts`) with endpoints `GET /api/notifications`, `POST /api/notifications/:id/read`, `POST /api/notifications/read-all`.
+    - Sensible grouping into `WORKFLOW`, `GOVERNANCE`, `SECURITY`, and `SYSTEM` categories.
+    - Read/unread toggle and mark-all-read support.
+  - **Cross-Department Notification Leakage Protection**:
+    - Server-side filtering strictly shields other departments' report keys and sensitive metadata from unauthorized makers and checkers.
+  - **Maker Navbar Clutter Cleanup**:
+    - Removed the two specified unimportant icons beside the OB logo (`Building2` / "Financial Year 2026" ribbon and `pendingCheckerCount` awaiting review badge) for Maker while preserving required navigation drawer toggles and accessibility controls.
+  - **Accessibility & Touch Standards**:
+    - Complies with WCAG 2.1 AA touch targets (min 44×44px), ARIA dialog attributes, and keyboard shortcuts.
+
+---
+
 ## [30.0.0-phase30-full-integration-security-regression-acceptance] - 2026-10-02
 
 ### Added & Enhanced

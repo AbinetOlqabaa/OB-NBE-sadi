@@ -136,7 +136,7 @@ export async function runPhase27SsotAutosavePersistenceRecoveryTests(): Promise<
     const currentSub = submissionService.getById(draftId)!;
     const updated = submissionService.updateDraft(
       draftId,
-      { ...currentSub.values, ITEM_01: 25000 },
+      { ...currentSub.values, [targetFieldCode]: 25000 },
       currentSub.dynamicRows,
       makerUser,
       currentSub.version
@@ -291,7 +291,7 @@ export async function runPhase27SsotAutosavePersistenceRecoveryTests(): Promise<
   // Another tab concurrently updates the submission on server, advancing to v2
   const serverUpdatedSub = submissionService.updateDraft(
     conflictSubId,
-    { ...conflictTestSub.values, ITEM_01: 999999 },
+    { ...conflictTestSub.values, [targetFieldCode]: 999999 },
     conflictTestSub.dynamicRows,
     makerUser,
     clientExpectedVersion
@@ -305,7 +305,7 @@ export async function runPhase27SsotAutosavePersistenceRecoveryTests(): Promise<
   try {
     submissionService.updateDraft(
       conflictSubId,
-      { ...conflictTestSub.values, ITEM_01: 555555 },
+      { ...conflictTestSub.values, [targetFieldCode]: 555555 },
       conflictTestSub.dynamicRows,
       makerUser,
       clientExpectedVersion // Stale v1!
@@ -322,23 +322,23 @@ export async function runPhase27SsotAutosavePersistenceRecoveryTests(): Promise<
   // Conflict Resolution Path 1: Overwrite Server (Keep My Changes)
   const resolvedOverwrite = submissionService.updateDraft(
     conflictSubId,
-    { ...conflictTestSub.values, ITEM_01: 555555 },
+    { ...conflictTestSub.values, [targetFieldCode]: 555555 },
     conflictTestSub.dynamicRows,
     makerUser,
     2 // Explicitly passing current server version 2
   );
   assert(resolvedOverwrite.version === 3, 'Overwrite resolution saved new authoritative version v3');
-  assert(resolvedOverwrite.values['ITEM_01'] === 555555, 'User local edits successfully established as authoritative SSOT');
+  assert(resolvedOverwrite.values[targetFieldCode] === 555555, 'User local edits successfully established as authoritative SSOT');
 
   // Conflict Resolution Path 2: Discard Mine & Load Server Version
   const latestServerCopy = submissionService.getById(conflictSubId)!;
   const discardedLocalDraftValues = { ...latestServerCopy.values };
-  assert(discardedLocalDraftValues['ITEM_01'] === 555555, 'Loaded authoritative server state cleanly');
+  assert(discardedLocalDraftValues[targetFieldCode] === 555555, 'Loaded authoritative server state cleanly');
 
   // Conflict Resolution Path 3: Field-by-Field Merge
   const mergedValues = {
     ...latestServerCopy.values,
-    ITEM_01: 777777, // Merged selection
+    [targetFieldCode]: 777777, // Merged selection
   };
   const resolvedMerge = submissionService.updateDraft(
     conflictSubId,
@@ -348,7 +348,7 @@ export async function runPhase27SsotAutosavePersistenceRecoveryTests(): Promise<
     3 // Current server version
   );
   assert(resolvedMerge.version === 4, 'Merged values persisted as v4');
-  assert(resolvedMerge.values['ITEM_01'] === 777777, 'Merged values verified on server SSOT');
+  assert(resolvedMerge.values[targetFieldCode] === 777777, 'Merged values verified on server SSOT');
 
   // ---------------------------------------------------------------------------
   // Test 6: Subordinate Local Recovery State Reconciliation (Req 8)
@@ -362,14 +362,14 @@ export async function runPhase27SsotAutosavePersistenceRecoveryTests(): Promise<
   const obsoleteLocalDraft = {
     ...recoverySub,
     version: 1,
-    values: { ...recoverySub.values, ITEM_01: 111111 },
+    values: { ...recoverySub.values, [targetFieldCode]: 111111 },
     updatedAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
   };
 
   // Server advances to v2
   const serverV2 = submissionService.updateDraft(
     recoverySubId,
-    { ...recoverySub.values, ITEM_01: 222222 },
+    { ...recoverySub.values, [targetFieldCode]: 222222 },
     recoverySub.dynamicRows,
     makerUser,
     1
@@ -384,7 +384,7 @@ export async function runPhase27SsotAutosavePersistenceRecoveryTests(): Promise<
   const offlineSubordinateDraft: ReportSubmission = {
     ...serverV2,
     version: 2,
-    values: { ...serverV2.values, ITEM_01: 333333 },
+    values: { ...serverV2.values, [targetFieldCode]: 333333 },
     updatedAt: new Date(Date.now() + 1000).toISOString(),
     offlineSavedAt: new Date(Date.now() + 1000).toISOString(),
     syncStatus: 'LOCAL_DRAFT',
@@ -405,7 +405,7 @@ export async function runPhase27SsotAutosavePersistenceRecoveryTests(): Promise<
   );
 
   assert(reconciledSub.version === 3, 'Reconciled local edits persisted to server SSOT as v3');
-  assert(reconciledSub.values['ITEM_01'] === 333333, 'Reconciled values confirmed in backend database');
+  assert(reconciledSub.values[targetFieldCode] === 333333, 'Reconciled values confirmed in backend database');
 
   // Allow any pending async IndexedDB save to settle, then clean up
   await new Promise((r) => setTimeout(r, 50));
@@ -435,7 +435,7 @@ export async function runPhase27SsotAutosavePersistenceRecoveryTests(): Promise<
   // Update draft
   const libUpdated = submissionService.updateDraft(
     recoverySubId,
-    { ...reconciledSub.values, ITEM_01: 888888 },
+    { ...reconciledSub.values, [targetFieldCode]: 888888 },
     reconciledSub.dynamicRows,
     makerUser,
     3
@@ -449,7 +449,7 @@ export async function runPhase27SsotAutosavePersistenceRecoveryTests(): Promise<
   const libraryResult = submissionService.queryLibrary(makerUser, { search: recoverySubId });
   assert(libraryResult.items.length === 1, 'Library query returned the active return');
   assert(libraryResult.items[0].version === 4, 'Library instantly reflects latest authoritative version v4');
-  assert(libraryResult.items[0].values['ITEM_01'] === 888888, 'Library reflects latest persisted values');
+  assert(libraryResult.items[0].values[targetFieldCode] === 888888, 'Library reflects latest persisted values');
 
   realtimeSsotEngine.events.off('SSOT_EVENT', eventListener);
 

@@ -144,7 +144,7 @@ export async function runPhase28LogoutConfirmationAndDashboardResponsibilityClea
     institutionCode: '0000013',
   };
   const createdSub = submissionService.createSubmission('M_LCPLC001', testUser);
-  submissionService.updateDraft(createdSub.id, { CAP_PAID_UP: 500000000 }, {}, testUser);
+  submissionService.updateDraft(createdSub.id, { '122_00001': 500000000 }, {}, testUser);
 
   // Execute full logout purge
   const performFullLogoutCleanup = () => {
@@ -168,7 +168,7 @@ export async function runPhase28LogoutConfirmationAndDashboardResponsibilityClea
   // Verify persisted drafts remain intact
   const retrievedDraft = submissionService.getById(createdSub.id);
   assert(Boolean(retrievedDraft), 'Persisted drafts in local storage/IndexedDB/SSOT are strictly preserved on logout (Req 6)');
-  assert(retrievedDraft?.values.CAP_PAID_UP === 500000000, 'Draft return values preserved without data corruption');
+  assert(retrievedDraft?.values['122_00001'] === 500000000, 'Draft return values preserved without data corruption');
 
   // =========================================================================
   // 4. REMOVAL OF SYSTEM HEALTH FROM NON-ADMIN DASHBOARDS (Reqs 7, 8)
