@@ -391,6 +391,7 @@ import { runDataQualityHeatmapAndRegulatoryCalendarTests } from './data-quality-
 import { runAuditor12MonthHistoricalTrendTests } from './auditor-12month-historical-trend.test.ts';
 import { runPhase47VisibilityAndResponsiveAudit } from './phase47-dashboard-component-visibility-responsive-viewing-audit.test.ts';
 import { runPhase48Phase49Phase50Tests } from './phase48-49-50-auditor-batch-submission.test.ts';
+import { runPhase51ReportsOversightAudit } from './phase51-admin-reports-oversight-scrolling-visibility.test.ts';
 
 async function runFullApplicationTestSuite() {
   runRegulatoryCoreTests();
@@ -452,6 +453,7 @@ async function runFullApplicationTestSuite() {
   await runAuditor12MonthHistoricalTrendTests();
   await runPhase47VisibilityAndResponsiveAudit();
   await runPhase48Phase49Phase50Tests();
+  await runPhase51ReportsOversightAudit();
 
   console.log('\n========================================================================');
   console.log('✅ ALL COMPREHENSIVE AUTOMATED TEST SUITES PASSED CLEANLY (100% SUCCESS)');

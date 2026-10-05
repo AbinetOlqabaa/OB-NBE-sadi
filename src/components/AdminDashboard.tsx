@@ -155,6 +155,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Maximized View States (Phase 47 Full View & Contained Scrolling)
   const [isUsersTableMaximized, setIsUsersTableMaximized] = useState(false);
   const [isDeptTableMaximized, setIsDeptTableMaximized] = useState(false);
+  const [isReportsOversightMaximized, setIsReportsOversightMaximized] = useState(false);
 
   // Department Management States
   const [deptSearch, setDeptSearch] = useState('');
@@ -1076,7 +1077,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden space-y-2.5 font-sans">
+    <div className="min-h-full flex flex-col space-y-3 font-sans pb-6">
       {/* 1. Administrator Executive Oversight Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-ob-indigo-950 text-white rounded-xl p-3 shadow-sm border border-slate-800 shrink-0">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -1395,7 +1396,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* 4. Tab Content 1: REPORTS OVERSIGHT CENTER */}
       {activeSubTab === 'REPORTS_OVERSIGHT' && (
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xs transition-colors">
+        <div className="flex-1 min-h-[480px] overflow-hidden flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xs transition-colors">
           <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60 flex flex-wrap items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -1406,14 +1407,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <select
                 value={departmentFilter}
                 onChange={(e) => {
                   setDepartmentFilter(e.target.value);
                   setReportsPage(1);
                 }}
-                className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:ring-1 focus:ring-ob-indigo-500 cursor-pointer"
+                className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:ring-1 focus:ring-ob-indigo-500 cursor-pointer min-h-[34px]"
               >
                 <option value="ALL">All Departments</option>
                 {departments.map((d) => (
@@ -1429,7 +1430,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   setStatusFilter(e.target.value);
                   setReportsPage(1);
                 }}
-                className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:ring-1 focus:ring-ob-indigo-500 cursor-pointer"
+                className="text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-slate-300 font-medium focus:outline-none focus:ring-1 focus:ring-ob-indigo-500 cursor-pointer min-h-[34px]"
               >
                 <option value="ALL">All Status</option>
                 <option value="DRAFT">Draft</option>
@@ -1442,7 +1443,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <button
                 type="button"
                 onClick={() => setShowCalendarWidget(!showCalendarWidget)}
-                className={`text-xs border rounded-lg px-2.5 py-1 font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+                className={`text-xs border rounded-lg px-2.5 py-1.5 font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors min-h-[34px] touch-manipulation ${
                   showCalendarWidget
                     ? 'bg-ob-indigo-600 text-white border-ob-indigo-700 shadow-2xs'
                     : 'bg-ob-indigo-50 dark:bg-ob-indigo-950/70 hover:bg-ob-indigo-100 dark:hover:bg-ob-indigo-900 border-ob-indigo-200 dark:border-ob-indigo-800 text-ob-indigo-700 dark:text-ob-indigo-300'
@@ -1456,7 +1457,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <button
                 type="button"
                 onClick={() => setShowHeatmapWidget(!showHeatmapWidget)}
-                className={`text-xs border rounded-lg px-2.5 py-1 font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+                className={`text-xs border rounded-lg px-2.5 py-1.5 font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors min-h-[34px] touch-manipulation ${
                   showHeatmapWidget
                     ? 'bg-rose-600 text-white border-rose-700 shadow-2xs'
                     : 'bg-rose-50 dark:bg-rose-950/70 hover:bg-rose-100 dark:hover:bg-rose-900 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300'
@@ -1470,7 +1471,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <button
                 type="button"
                 onClick={() => setShowAnalyticsWidget(!showAnalyticsWidget)}
-                className={`text-xs border rounded-lg px-2.5 py-1 font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+                className={`text-xs border rounded-lg px-2.5 py-1.5 font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors min-h-[34px] touch-manipulation ${
                   showAnalyticsWidget
                     ? 'bg-ob-indigo-600 text-white border-ob-indigo-700 shadow-2xs'
                     : 'bg-ob-indigo-50 dark:bg-ob-indigo-950/70 hover:bg-ob-indigo-100 dark:hover:bg-ob-indigo-900 border-ob-indigo-200 dark:border-ob-indigo-800 text-ob-indigo-700 dark:text-ob-indigo-300'
@@ -1484,18 +1485,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveSubTab('ANALYTICS')}
-                className="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg px-2.5 py-1 font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                className="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg px-2.5 py-1.5 font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors min-h-[34px] touch-manipulation"
                 title="Open Full Regulatory Performance Suite & SLA Deep Dive"
               >
                 <span>Regulatory Suite</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
+
+              <MaximizeButton
+                onClick={() => setIsReportsOversightMaximized(true)}
+                title="Maximize Institutional Reporting Ledger (Esc to restore)"
+              />
             </div>
           </div>
 
-          {/* Embedded Regulatory Calendar Widget */}
+          {/* Embedded Regulatory Calendar Widget with Contained Scrolling */}
           {showCalendarWidget && (
-            <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 shrink-0">
+            <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 max-h-[500px] overflow-y-auto touch-scroll-y shrink-0">
               <RegulatoryCalendarCard
                 currentUser={currentUser}
                 onInspectSubmission={(sub) => setInspectingSub(sub)}
@@ -1511,9 +1517,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           )}
 
-          {/* Embedded Data Quality Heatmap Widget */}
+          {/* Embedded Data Quality Heatmap Widget with Contained Scrolling */}
           {showHeatmapWidget && (
-            <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 shrink-0">
+            <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 max-h-[500px] overflow-y-auto touch-scroll-y shrink-0">
               <DataQualityHeatmap
                 currentUser={currentUser}
                 onInspectReport={(rk) => {
@@ -1528,9 +1534,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           )}
 
-          {/* Embedded Regulatory Performance Widget */}
+          {/* Embedded Regulatory Performance Widget with Contained Scrolling */}
           {showAnalyticsWidget && (
-            <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 shrink-0">
+            <div className="p-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40 max-h-[500px] overflow-y-auto touch-scroll-y shrink-0">
               <ReportingPerformanceAnalytics
                 currentUser={currentUser}
                 compact={true}
@@ -1539,7 +1545,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           )}
 
-          <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="flex-1 min-h-[360px] max-h-[620px] overflow-y-auto touch-scroll-y">
             {paginatedReports.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-8">
                 <FileSpreadsheet className="w-10 h-10 text-slate-300 dark:text-slate-600 mb-2" />
@@ -1550,7 +1556,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             ) : (
               <div className="overflow-x-auto min-w-full touch-scroll-x">
-                <table className="min-w-[700px] w-full text-left border-collapse text-xs">
+                <table className="min-w-[850px] w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-semibold sticky top-0 z-10">
                     <th className="py-2.5 px-3">Return Code</th>
@@ -1595,9 +1601,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <button
                             type="button"
                             onClick={() => setInspectingSub(sub)}
-                            className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-lg transition-colors inline-flex items-center gap-1 cursor-pointer"
+                            className="min-h-[36px] px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-lg transition-colors inline-flex items-center gap-1.5 cursor-pointer touch-manipulation"
                           >
-                            <Eye className="w-3 h-3 text-ob-indigo-600 dark:text-ob-indigo-400" />
+                            <Eye className="w-3.5 h-3.5 text-ob-indigo-600 dark:text-ob-indigo-400" />
                             <span>Inspect Return</span>
                           </button>
                         </td>
@@ -1610,7 +1616,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           )}
           </div>
 
-          <div className="p-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
+          <div className="shrink-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-1 sm:p-1.5">
             <Pagination
               currentPage={reportsPage}
               totalItems={filteredSubmissions.length}
@@ -4636,6 +4642,174 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 setDeptPage(1);
               }}
               itemName="departments"
+            />
+          </div>
+        </MaximizedViewModal>
+      )}
+
+      {/* PHASE 47 / 51: FULL VIEW / MAXIMIZED REPORTS OVERSIGHT CENTER */}
+      {isReportsOversightMaximized && (
+        <MaximizedViewModal
+          isOpen={isReportsOversightMaximized}
+          onClose={() => setIsReportsOversightMaximized(false)}
+          title="Institutional Regulatory Reporting Ledger"
+          badge="Admin Oversight"
+          subtitle="Comprehensive institutional oversight across all 24 canonical NBE returns, maker-checker dual controls, and delivery states"
+          icon={FileSpreadsheet}
+          actions={
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setStudioReportKey(undefined);
+                  setIsStudioOpen(true);
+                  setIsReportsOversightMaximized(false);
+                }}
+                className="px-2.5 py-1.5 bg-ob-indigo-600 hover:bg-ob-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer min-h-[36px] touch-manipulation"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Open Template Studio</span>
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            {/* Filter toolbar inside maximized view */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                <Search className="w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Filter returns by code, report title, maker, or checker..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setReportsPage(1);
+                  }}
+                  className="w-full text-xs bg-transparent border-none text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={departmentFilter}
+                  onChange={(e) => {
+                    setDepartmentFilter(e.target.value);
+                    setReportsPage(1);
+                  }}
+                  className="text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-slate-300 font-medium cursor-pointer min-h-[34px]"
+                >
+                  <option value="ALL">All Departments</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.name}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setReportsPage(1);
+                  }}
+                  className="text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-slate-300 font-medium cursor-pointer min-h-[34px]"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="DRAFT">Draft</option>
+                  <option value="PENDING_CHECKER">Pending Checker</option>
+                  <option value="CORRECTION_REQUIRED">Needs Correction</option>
+                  <option value="APPROVED">Approved</option>
+                  <option value="SENT">Delivered to NBE</option>
+                </select>
+
+                <div className="text-xs text-slate-500 font-medium">
+                  Showing {filteredSubmissions.length} of {submissions.length} Total Filings
+                </div>
+              </div>
+            </div>
+
+            {/* Table in Maximized View with min-w-[850px] and contained horizontal scroll */}
+            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-xs">
+              <div className="overflow-x-auto min-w-full touch-scroll-x">
+                <table className="min-w-[850px] w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-800/90 text-slate-600 dark:text-slate-400 font-semibold sticky top-0 z-10">
+                      <th className="py-3 px-4">Return Code</th>
+                      <th className="py-3 px-4">Report Title</th>
+                      <th className="py-3 px-4">Responsible Department</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Period / Version</th>
+                      <th className="py-3 px-4">Maker Details</th>
+                      <th className="py-3 px-4">Checker Details</th>
+                      <th className="py-3 px-4 text-right">Oversight Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {paginatedReports.map((sub) => {
+                      const tpl = templates.find((t) => t.ReturnKey === sub.reportKey);
+                      return (
+                        <tr key={sub.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                          <td className="py-3 px-4 font-mono font-bold text-ob-indigo-700 dark:text-ob-indigo-400">
+                            {sub.reportKey}
+                          </td>
+                          <td className="py-3 px-4 font-bold text-slate-900 dark:text-white max-w-xs truncate">
+                            {tpl?.Title || sub.reportKey}
+                          </td>
+                          <td className="py-3 px-4 text-slate-600 dark:text-slate-400">
+                            {sub.department || getDepartmentForReport(sub.reportKey)}
+                          </td>
+                          <td className="py-3 px-4">{getStatusBadge(sub.status)}</td>
+                          <td className="py-3 px-4 font-mono text-[11px] text-slate-600 dark:text-slate-400">
+                            {sub.periodYear || '2026'} (v{sub.version || 1})
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="font-semibold text-slate-800 dark:text-slate-200">{sub.makerName}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">{sub.makerDepartment || 'Credit Operations'}</div>
+                          </td>
+                          <td className="py-3 px-4">
+                            {sub.checkerName ? (
+                              <div>
+                                <div className="font-semibold text-emerald-700 dark:text-emerald-400">{sub.checkerName}</div>
+                                <div className="text-[10px] text-slate-400 font-mono">{sub.checkerDepartment || 'Credit Operations'}</div>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 italic text-[11px]">Awaiting assignment</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsReportsOversightMaximized(false);
+                                setInspectingSub(sub);
+                              }}
+                              className="min-h-[36px] px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-lg transition-colors inline-flex items-center gap-1.5 cursor-pointer touch-manipulation"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-ob-indigo-600 dark:text-ob-indigo-400" />
+                              <span>Inspect Return</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Pagination Controls */}
+            <Pagination
+              currentPage={reportsPage}
+              pageSize={reportsPageSize}
+              totalItems={filteredSubmissions.length}
+              onPageChange={(p) => setReportsPage(p)}
+              onPageSizeChange={(sz) => {
+                setReportsPageSize(sz);
+                setReportsPage(1);
+              }}
+              pageSizeOptions={[6, 12, 24, 48]}
+              itemName="filings"
             />
           </div>
         </MaximizedViewModal>
