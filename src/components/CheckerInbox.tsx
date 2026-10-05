@@ -161,7 +161,7 @@ export const CheckerInbox: React.FC<CheckerInboxProps> = ({
   const toggleSelectCheckerSub = (subId: string) => {
     vibrate(15);
     setSelectedCheckerSubIds((prev) =>
-      prev.includes(subId) ? prev.filter((id) => id !== subId) : [...prev, id]
+      prev.includes(subId) ? prev.filter((id) => id !== subId) : [...prev, subId]
     );
   };
 
@@ -909,7 +909,7 @@ export const CheckerInbox: React.FC<CheckerInboxProps> = ({
                           </td>
                           <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300">
                             <div>{sub.makerName}</div>
-                            <div className="text-[10px] text-slate-400 font-mono">{sub.makerEmployeeId || 'EMP-REG'}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">{(sub as any).makerEmployeeId || 'EMP-REG'}</div>
                           </td>
                           <td className="py-2.5 px-3 font-mono text-slate-500">
                             {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : 'N/A'}

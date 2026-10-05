@@ -1805,7 +1805,7 @@ export const ReportingPerformanceAnalytics: React.FC<ReportingPerformanceAnalyti
               <div className="bg-ob-indigo-50/50 dark:bg-ob-indigo-950/20 border border-ob-indigo-200/80 dark:border-ob-indigo-800/60 rounded-xl p-3">
                 <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Avg Turnaround</span>
                 <div className="text-2xl font-bold font-mono text-ob-indigo-700 dark:text-ob-indigo-300 mt-1">
-                  {kpis.averageReviewTurnaroundHours}h
+                  {kpis.avgTurnaroundHours}h
                 </div>
                 <div className="text-[10px] text-slate-500 mt-0.5">SLA Target &le; 24h</div>
               </div>
@@ -1813,7 +1813,7 @@ export const ReportingPerformanceAnalytics: React.FC<ReportingPerformanceAnalyti
               <div className="bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/60 rounded-xl p-3">
                 <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Pending Review</span>
                 <div className="text-2xl font-bold font-mono text-amber-700 dark:text-amber-400 mt-1">
-                  {kpis.pendingReviewAgingCount}
+                  {kpis.pendingCheckerCount}
                 </div>
                 <div className="text-[10px] text-slate-500 mt-0.5">Awaiting Checker</div>
               </div>
@@ -1850,12 +1850,12 @@ export const ReportingPerformanceAnalytics: React.FC<ReportingPerformanceAnalyti
                 <h4 className="font-bold text-sm text-slate-900 dark:text-white mb-2">Daily Submission Volume Trend</h4>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={data.dailyVolumeTrend}>
+                    <AreaChart data={data.dailyTrends}>
                       <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                      <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                      <XAxis dataKey="dayLabel" tick={{ fontSize: 10 }} />
                       <YAxis tick={{ fontSize: 10 }} />
                       <Tooltip />
-                      <Area type="monotone" dataKey="count" stroke="#1d4ed8" fill="#3b82f6" fillOpacity={0.2} name="Submissions" />
+                      <Area type="monotone" dataKey="createdCount" stroke="#1d4ed8" fill="#3b82f6" fillOpacity={0.2} name="Submissions" />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -1868,7 +1868,7 @@ export const ReportingPerformanceAnalytics: React.FC<ReportingPerformanceAnalyti
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data.statusDistribution}>
                       <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                      <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                       <YAxis tick={{ fontSize: 10 }} />
                       <Tooltip />
                       <Bar dataKey="count" fill="#4f46e5" radius={[4, 4, 0, 0]} name="Submissions" />
@@ -1895,13 +1895,13 @@ export const ReportingPerformanceAnalytics: React.FC<ReportingPerformanceAnalyti
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
                     {data.departmentPerformance.map((dept) => (
-                      <tr key={dept.departmentId} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                        <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white">{dept.departmentName}</td>
+                      <tr key={dept.department} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                        <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white">{dept.department}</td>
                         <td className="py-2.5 px-3 text-center font-mono">{dept.totalSubmissions}</td>
                         <td className="py-2.5 px-3 text-center font-mono text-emerald-600">{dept.approvedCount}</td>
                         <td className="py-2.5 px-3 text-center font-mono text-amber-600">{dept.pendingCount}</td>
                         <td className="py-2.5 px-3 text-center font-mono">{dept.avgTurnaroundHours}h</td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-600">{dept.slaComplianceRate}%</td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-600">{dept.complianceRate}%</td>
                       </tr>
                     ))}
                   </tbody>

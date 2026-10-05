@@ -862,36 +862,36 @@ export const HistoricalSubmissionTrendChart: React.FC<HistoricalSubmissionTrendC
               <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">12-Month Mean</span>
                 <span className="text-base font-bold font-mono text-slate-900 dark:text-white mt-1 block">
-                  {formatCurrency(trendData.summary.mean)}
+                  {formatCurrency(trendData.summary.twelveMonthMean)}
                 </span>
                 <span className="text-[10px] text-slate-500">Benchmark baseline</span>
               </div>
               <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Peak Statutory Filing</span>
                 <span className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 block">
-                  {formatCurrency(trendData.summary.high)}
+                  {formatCurrency(trendData.summary.twelveMonthHigh.value)}
                 </span>
-                <span className="text-[10px] text-slate-500">{trendData.summary.highMonth}</span>
+                <span className="text-[10px] text-slate-500">{trendData.summary.twelveMonthHigh.month}</span>
               </div>
               <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Lowest Period Filing</span>
                 <span className="text-base font-bold font-mono text-amber-600 dark:text-amber-400 mt-1 block">
-                  {formatCurrency(trendData.summary.low)}
+                  {formatCurrency(trendData.summary.twelveMonthLow.value)}
                 </span>
-                <span className="text-[10px] text-slate-500">{trendData.summary.lowMonth}</span>
+                <span className="text-[10px] text-slate-500">{trendData.summary.twelveMonthLow.month}</span>
               </div>
               <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">12-Month Trajectory</span>
                 <span
                   className={`text-base font-bold font-mono mt-1 block ${
-                    trendData.summary.annualGrowthRate >= 0
+                    trendData.summary.twelveMonthAnnualGrowth >= 0
                       ? 'text-emerald-600 dark:text-emerald-400'
                       : 'text-rose-600 dark:text-rose-400'
                   }`}
                 >
-                  {trendData.summary.annualGrowthRate >= 0
-                    ? `+${trendData.summary.annualGrowthRate}%`
-                    : `${trendData.summary.annualGrowthRate}%`}
+                  {trendData.summary.twelveMonthAnnualGrowth >= 0
+                    ? `+${trendData.summary.twelveMonthAnnualGrowth}%`
+                    : `${trendData.summary.twelveMonthAnnualGrowth}%`}
                 </span>
                 <span className="text-[10px] text-slate-500">Annual statutory drift</span>
               </div>
@@ -930,11 +930,11 @@ export const HistoricalSubmissionTrendChart: React.FC<HistoricalSubmissionTrendC
                     />
                     <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
                     <ReferenceLine
-                      y={trendData.summary.mean}
+                      y={trendData.summary.twelveMonthMean}
                       stroke="#f59e0b"
                       strokeDasharray="4 4"
                       label={{
-                        value: `Mean: ${formatCurrency(trendData.summary.mean)}`,
+                        value: `Mean: ${formatCurrency(trendData.summary.twelveMonthMean)}`,
                         position: 'insideTopLeft',
                         fill: '#f59e0b',
                         fontSize: 11,

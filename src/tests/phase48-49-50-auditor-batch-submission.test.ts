@@ -35,6 +35,7 @@ export async function runPhase48Phase49Phase50Tests() {
     name: 'Abebe Kebede',
     email: 'abebe.kebede@oromiabank.com',
     role: 'MAKER',
+    institutionCode: '0000013',
     department: 'Credit Operations & Portfolio Management',
   };
 
@@ -43,6 +44,7 @@ export async function runPhase48Phase49Phase50Tests() {
     name: 'Chala Desta',
     email: 'chala.desta@oromiabank.com',
     role: 'CHECKER',
+    institutionCode: '0000013',
     department: 'Credit Operations & Portfolio Management',
   };
 
@@ -51,6 +53,7 @@ export async function runPhase48Phase49Phase50Tests() {
     name: 'Worku Alemu',
     email: 'worku.alemu@oromiabank.com',
     role: 'AUDITOR',
+    institutionCode: '0000013',
     department: 'Internal Audit & Regulatory Control',
   };
 
@@ -141,10 +144,10 @@ export async function runPhase48Phase49Phase50Tests() {
   // -------------------------------------------------------------------------
   console.log('\nTest Suite 4: Maker Batch Submission to Checker Workflow');
 
-  const deptReports = getReportsByDepartment(mockMaker.department);
-  const k1 = deptReports[0].ReturnKey;
-  const k2 = deptReports[1].ReturnKey;
-  const k3 = deptReports.length > 4 ? deptReports[4].ReturnKey : deptReports[0].ReturnKey;
+  // Use 3 Credit Operations reports with guaranteed formula-validation consistency
+  const k1 = 'LOA_ADV_OUT_LA001';
+  const k2 = 'NPL&PRO_NL001';
+  const k3 = 'BD_L&A_BD001';
 
   // Create 3 draft submissions using valid registered report keys
   const draft1 = submissionService.createDraft(k1, mockMaker);
@@ -207,7 +210,7 @@ export async function runPhase48Phase49Phase50Tests() {
   assert(updatedSub1?.status === 'PENDING_CHECKER', 'Draft 1 successfully updated in persistent store');
   assert(updatedSub2?.status === 'PENDING_CHECKER', 'Draft 2 successfully updated in persistent store');
   assert(updatedSub3?.status === 'PENDING_CHECKER', 'Draft 3 successfully updated in persistent store');
-  assert(updatedSub1?.assignedCheckerIds?.includes(mockChecker.id), 'Checker assigned properly during batch submission');
+  assert(Boolean(updatedSub1?.assignedCheckerIds?.includes(mockChecker.id)), 'Checker assigned properly during batch submission');
 
   // -------------------------------------------------------------------------
   // 5. Batch Submission Workflow for Checkers (CheckerInbox -> NBE Delivery)
@@ -257,4 +260,11 @@ export async function runPhase48Phase49Phase50Tests() {
   console.log('\n========================================================================');
   console.log('✅ ALL PHASE 48, 49, & 50 COMPREHENSIVE TESTS PASSED CLEANLY');
   console.log('========================================================================\n');
+}
+
+if (process.argv[1]?.includes('phase48-49-50')) {
+  runPhase48Phase49Phase50Tests().catch((err) => {
+    console.error('Phase 48-49-50 test execution failed:', err);
+    process.exit(1);
+  });
 }

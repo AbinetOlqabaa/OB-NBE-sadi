@@ -1192,11 +1192,11 @@ export const MakerWorkspace: React.FC<MakerWorkspaceProps> = ({
                             </td>
                             <td className="py-2.5 px-3">
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono">
-                                {tpl.ReportingFrequency}
+                                {tpl.Frequency || 'MONTHLY'}
                               </span>
                             </td>
                             <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300">
-                              {getDepartmentForReport(tpl.ReturnKey)?.name || 'Credit Operations'}
+                              {getDepartmentForReport(tpl.ReturnKey) || 'Credit Operations'}
                             </td>
                             <td className="py-2.5 px-3">
                               <span className="text-slate-500 dark:text-slate-400">{tpl.Category || 'Prudential'}</span>
@@ -1285,7 +1285,7 @@ export const MakerWorkspace: React.FC<MakerWorkspaceProps> = ({
                                 {sub.status}
                               </span>
                             </td>
-                            <td className="py-2.5 px-3 font-mono text-slate-500">{sub.reportingPeriod || 'Current'}</td>
+                            <td className="py-2.5 px-3 font-mono text-slate-500">{(sub as any).reportingPeriod || (sub as any).period || 'Current'}</td>
                             <td className="py-2.5 px-3 text-slate-600 dark:text-slate-300">{sub.makerName}</td>
                             <td className="py-2.5 px-3 text-right">
                               <div className="flex items-center justify-end gap-1.5">

@@ -382,23 +382,23 @@ export const DynamicAreaTable: React.FC<DynamicAreaTableProps> = ({
                       </tr>
                     ) : (
                       rows.map((row, idx) => (
-                        <tr key={row._rowId} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                        <tr key={row.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
                           <td className="py-2.5 px-3 text-center text-slate-400 dark:text-slate-500 font-mono">
                             {idx + 1}
                           </td>
                           {area.DynamicItems.map((col) => {
-                            const val = row[col.Code] !== undefined ? row[col.Code] : '';
+                            const val = (row.values && row.values[col.Code] !== undefined) ? row.values[col.Code] : ((row as any)[col.Code] ?? '');
                             return (
                               <td key={col.Code} className="py-2.5 px-3">
                                 {readOnly ? (
                                   <span className="font-mono text-slate-800 dark:text-slate-200">
-                                    {val || '—'}
+                                    {val !== '' ? String(val) : '—'}
                                   </span>
                                 ) : (
                                   <input
-                                    type={col.Type === 'Numeric' ? 'number' : 'text'}
+                                    type={col._dataType === 'NUMERIC' ? 'number' : 'text'}
                                     value={val}
-                                    onChange={(e) => onUpdateCell(row._rowId, col.Code, e.target.value)}
+                                    onChange={(e) => onUpdateCell(row.id, col.Code, col._dataType === 'NUMERIC' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
                                     placeholder={col._description}
                                     className="w-full text-xs p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-ob-indigo-500"
                                   />
@@ -410,7 +410,7 @@ export const DynamicAreaTable: React.FC<DynamicAreaTableProps> = ({
                             <td className="py-2.5 px-3 text-center">
                               <button
                                 type="button"
-                                onClick={() => onDeleteRow(row._rowId)}
+                                onClick={() => onDeleteRow(row.id)}
                                 className="p-1.5 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
                                 title="Delete Row"
                               >

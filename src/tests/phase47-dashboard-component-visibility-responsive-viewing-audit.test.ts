@@ -135,12 +135,12 @@ export async function runPhase47VisibilityAndResponsiveAudit() {
     React.createElement(
       ThemeProvider,
       null,
-      React.createElement(DynamicReportForm, {
-        metadata: sampleSubmission.templateSnapshot,
+      React.createElement(DynamicReportForm as any, {
+        metadata: sampleSubmission.templateSnapshot || {},
         submission: sampleSubmission,
         currentUser: makerUser,
         onBack: () => {},
-        onSave: async () => {},
+        onSave: async () => sampleSubmission,
         onSubmitToChecker: async () => {},
       })
     )
@@ -159,15 +159,15 @@ export async function runPhase47VisibilityAndResponsiveAudit() {
   // Test MaximizedViewModal Component
   const modalHtml = renderToString(
     React.createElement(
-      MaximizedViewModal,
+      MaximizedViewModal as any,
       {
         isOpen: true,
         onClose: () => {},
         title: 'Audit Trial Events Log (SSOT)',
         badge: 'Regulatory Grade',
         subtitle: 'Complete chronological audit log with cryptographic hash verification',
-      },
-      React.createElement('div', { id: 'test-maximized-content' }, 'Maximized Table Content')
+        children: React.createElement('div', { id: 'test-maximized-content' }, 'Maximized Table Content'),
+      }
     )
   );
 
@@ -293,8 +293,8 @@ export async function runPhase47VisibilityAndResponsiveAudit() {
 
     const window = dom.window;
     // Set viewport dimensions
-    window.innerWidth = vp.width;
-    window.innerHeight = vp.height;
+    Object.defineProperty(window, 'innerWidth', { value: vp.width, writable: true, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: vp.height, writable: true, configurable: true });
 
     // Verify viewport boundaries
     assert(window.innerWidth === vp.width, `Window innerWidth matches ${vp.width}px`);
